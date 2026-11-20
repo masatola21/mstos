@@ -149,6 +149,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
@@ -8088,6 +8089,16 @@ app.get('/api/public/materials', async (req, res) => {
   }
 });
 
+function getVercelRequestContextWaitUntil(): ((p: Promise<unknown>) => void) | null {
+  try {
+    const ctx = (globalThis as any)[Symbol.for('@vercel/request-context')]?.get?.();
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      return (p: Promise<unknown>) => ctx.waitUntil(p);
+    }
+  } catch {}
+  return null;
+}
+
 app.post(
   ['/api/public/forms/:slug/submissions', '/public/forms/:slug/submissions'],
   express.json({ limit: '50kb' }),
@@ -8159,13 +8170,74 @@ app.post(
   }
 
   try {
-    let { data: form, error: formError } = await lineSupabase
-      .from('diagnosis_forms')
-      .select('id, name, form_type, definition, status')
-      .eq('public_slug', slug)
-      .eq('status', 'published')
-      .maybeSingle();
-    if (formError) throw formError;
+    const effectiveCompanyName = companyName || (name ? `${name}様（個人）` : '新規反響企業（フォーム経由）');
+    const normalizedCompanyName = normalizePublicCompanyName(effectiveCompanyName);
+    const escapeLikePattern = (val: string) => val.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const companyCoreRaw = String(effectiveCompanyName || '')
+      .normalize('NFKC')
+      .trim()
+      .replace(/株式会社|有限会社|合同会社|\(株\)|\(有\)/g, '')
+      .trim();
+    const companyCoreNoSpace = companyCoreRaw.replace(/\s+/g, '');
+    const escapedEmail = escapeLikePattern(email);
+
+    // 【高速化 Batch A】フォーム定義・重複チェック・予約設定・公開資料・企業検索・連絡先検索を並列実行
+    const [
+      formInitialRes,
+      priorRes,
+      salesSettingsRes,
+      activeMaterialsRes,
+      companyCandidatesRes,
+      contactByIdRes,
+      contactByLineRes,
+      contactByEmailRes,
+    ] = await Promise.all([
+      lineSupabase
+        .from('diagnosis_forms')
+        .select('id, name, form_type, definition, status')
+        .eq('public_slug', slug)
+        .eq('status', 'published')
+        .maybeSingle(),
+      lineSupabase
+        .from('diagnosis_submissions')
+        .select('id, lead_id')
+        .eq('idempotency_key', requestId)
+        .maybeSingle(),
+      lineSupabase
+        .from('sales_workspace_settings')
+        .select('booking_page_url')
+        .maybeSingle(),
+      lineSupabase
+        .from('public_materials')
+        .select('key, label, public_url, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
+      normalizedCompanyName
+        ? (() => {
+            const p1 = escapeLikePattern(companyCoreRaw || normalizedCompanyName);
+            const p2 = escapeLikePattern(companyCoreNoSpace || normalizedCompanyName);
+            const q = lineSupabase.from('companies').select('id, company_name').limit(50);
+            return p1 && p2 && p1 !== p2
+              ? q.or(`company_name.ilike.%${p1}%,company_name.ilike.%${p2}%`)
+              : q.ilike('company_name', `%${p2 || p1}%`);
+          })()
+        : Promise.resolve({ data: [] as Array<{ id: string; company_name: string | null }>, error: null }),
+      contactId
+        ? lineSupabase.from('contacts').select('id, full_name, email, phone, company_id, line_user_id').eq('id', contactId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      lineUserId
+        ? lineSupabase.from('contacts').select('id, full_name, email, phone, company_id, line_user_id').eq('line_user_id', lineUserId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      lineSupabase
+        .from('contacts')
+        .select('id, full_name, email, phone, company_id, line_user_id')
+        .ilike('email', escapedEmail)
+        .order('created_at', { ascending: true })
+        .limit(1),
+    ]);
+
+    let form = formInitialRes.data;
+    if (formInitialRes.error) throw formInitialRes.error;
 
     // 標準HPフォーム（contact-inquiry, material-download, business-diagnosis等）が未作成の場合は自動初期化して再試行
     if (!form && ['care-package-inquiry', 'contact-inquiry', 'material-download', 'business-diagnosis'].includes(slug)) {
@@ -8181,11 +8253,7 @@ app.post(
 
     if (!form || !validPublicFormTypes.has(form.form_type)) return res.status(404).json({ error: 'このフォームは公開されていないか、受付を終了しています。' });
 
-    const { data: priorSubmission, error: priorError } = await lineSupabase
-      .from('diagnosis_submissions')
-      .select('id, lead_id')
-      .eq('idempotency_key', requestId)
-      .maybeSingle();
+    const { data: priorSubmission, error: priorError } = priorRes;
     if (priorError) throw priorError;
     if (priorSubmission) {
       let diagnosisId: string | null = null;
@@ -8282,30 +8350,32 @@ app.post(
       : (typeof cleanAnswers.industry === 'string' && cleanAnswers.industry.trim() ? cleanAnswers.industry.trim() : null);
     const industryColumn = industryAnswer ? { industry: industryAnswer } : {};
 
-    const effectiveCompanyName = companyName || (name ? `${name}様（個人）` : '新規反響企業（フォーム経由）');
     let matchedCompanyId: string | null = null;
-    let matchingCompanyNames: string[] = [];
-    if (effectiveCompanyName) {
-      const normalizedCompanyName = normalizePublicCompanyName(effectiveCompanyName);
-      const allCompanies: Array<{ id: string; company_name: string | null }> = [];
-      if (normalizedCompanyName) {
-        const pageSize = 1000;
-        for (let offset = 0; ; offset += pageSize) {
-          const { data: companyPage, error: companyLookupError } = await lineSupabase
-            .from('companies')
-            .select('id, company_name')
-            .range(offset, offset + pageSize - 1);
-          if (companyLookupError) throw companyLookupError;
-          allCompanies.push(...(companyPage || []));
-          if (!companyPage || companyPage.length < pageSize) break;
-        }
-      }
-      const matchingCompanies = allCompanies.filter((company) => normalizePublicCompanyName(company.company_name) === normalizedCompanyName);
-      matchingCompanyNames = matchingCompanies.map((company) => String(company.company_name || '')).filter(Boolean);
+    if (effectiveCompanyName && normalizedCompanyName) {
+      const companyLookupList = companyCandidatesRes.error ? [] : (companyCandidatesRes.data || []);
+      const matchingCompanies = companyLookupList.filter(
+        (company: { id: string; company_name: string | null }) =>
+          normalizePublicCompanyName(company.company_name) === normalizedCompanyName
+      );
       if (matchingCompanies.length >= 1) {
         matchedCompanyId = matchingCompanies[0].id;
-      } else {
-        // 会社が未登録の場合はCIDを自動採番してcompaniesテーブルへ確実に追加
+      }
+    }
+
+    // Batch Aで取得済みの連絡先（優先度: contactId -> lineUserId -> email）
+    let contact: any =
+      contactByIdRes?.data ||
+      contactByLineRes?.data ||
+      (contactByEmailRes?.data && contactByEmailRes.data[0]) ||
+      null;
+    if (contactByEmailRes?.error && !contact) {
+      throw contactByEmailRes.error;
+    }
+
+    // 【高速化 Batch B】未登録企業の新規作成 と 既存連絡先の既存リード検索 を並列実行
+    const [createdCompanyId, preExistingLeadsRes] = await Promise.all([
+      (async (): Promise<string | null> => {
+        if (matchedCompanyId || !effectiveCompanyName) return matchedCompanyId;
         try {
           const { data: existingCids } = await lineSupabase
             .from('companies')
@@ -8328,8 +8398,9 @@ app.post(
             .maybeSingle();
 
           if (!createCompanyErr && newCompany) {
-            matchedCompanyId = newCompany.id;
-          } else if (createCompanyErr) {
+            return newCompany.id;
+          }
+          if (createCompanyErr) {
             console.warn('[PublicForm] Company insert retry with unique timestamp:', createCompanyErr.message);
             const fallbackCid = `CID-${Date.now().toString().slice(-6)}`;
             const { data: fallbackCompany } = await lineSupabase
@@ -8344,44 +8415,24 @@ app.post(
               })
               .select('id, company_name')
               .maybeSingle();
-            if (fallbackCompany) matchedCompanyId = fallbackCompany.id;
+            if (fallbackCompany) return fallbackCompany.id;
           }
         } catch (e) {
           console.warn('[PublicForm] Company auto-creation exception:', e);
         }
-      }
-    }
-    // 1. LINE User ID または Contact ID が渡されていれば最優先で該当連絡先を特定
-    let contact: any = null;
-    if (contactId) {
-      const { data: cById } = await lineSupabase
-        .from('contacts')
-        .select('id, full_name, email, phone, company_id, line_user_id')
-        .eq('id', contactId)
-        .maybeSingle();
-      if (cById) contact = cById;
-    }
-    if (!contact && lineUserId) {
-      const { data: cByLine } = await lineSupabase
-        .from('contacts')
-        .select('id, full_name, email, phone, company_id, line_user_id')
-        .eq('line_user_id', lineUserId)
-        .maybeSingle();
-      if (cByLine) contact = cByLine;
-    }
+        return null;
+      })(),
+      contact?.id
+        ? lineSupabase
+            .from('leads')
+            .select('id, notes, source, status, service_type, meeting_date, company_id')
+            .eq('contact_id', contact.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+        : Promise.resolve({ data: null as any, error: null }),
+    ]);
 
-    // 2. まだ見つからなければ従来の email で検索
-    if (!contact) {
-      const escapedEmail = email.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-      const { data: matchingContacts, error: contactLookupError } = await lineSupabase
-          .from('contacts')
-          .select('id, full_name, email, phone, company_id, line_user_id')
-          .ilike('email', escapedEmail)
-          .order('created_at', { ascending: true })
-          .limit(1);
-      if (contactLookupError) throw contactLookupError;
-      contact = matchingContacts?.[0];
-    }
+    if (createdCompanyId) matchedCompanyId = createdCompanyId;
 
     let contactNameNote = '';
     if (contact) {
@@ -8392,47 +8443,30 @@ app.post(
       if (existingName && !isPlaceholderName && existingName !== name) contactNameNote = `申込時の氏名: ${name}`;
 
       const targetLineUserId = lineUserId || contact.line_user_id || null;
-      try {
-        const { data: updatedContact, error: updateContactError } = await lineSupabase
-          .from('contacts')
-          .update({
-            ...(isPlaceholderName || !existingName ? { full_name: name } : {}),
-            ...(!existingPhone && phone ? { phone } : {}),
-            ...(!existingEmail || isPlaceholderName ? { email } : {}),
-            ...(targetLineUserId && !contact.line_user_id ? { line_user_id: targetLineUserId } : {}),
-            ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
-          })
-          .eq('id', contact.id)
-          .select('id, full_name, email, phone, company_id, line_user_id')
-          .maybeSingle();
-
-        if (updateContactError) {
-          console.warn('[PublicForm] Contact update warning (non-fatal):', updateContactError);
-        } else if (updatedContact) {
-          contact = updatedContact;
-        }
-
-        // LINE友だち情報が関連付いている場合は名前・配信同意を同期
-        if (contact?.line_user_id) {
-          const { data: existingLf } = await lineSupabase
-            .from('line_friends')
-            .select('status, consent_status')
-            .eq('line_user_id', contact.line_user_id)
+      const contactPatch: Record<string, any> = {
+        ...(isPlaceholderName || !existingName ? { full_name: name } : {}),
+        ...(!existingPhone && phone ? { phone } : {}),
+        ...(!existingEmail || isPlaceholderName ? { email } : {}),
+        ...(targetLineUserId && !contact.line_user_id ? { line_user_id: targetLineUserId } : {}),
+        ...(matchedCompanyId && !contact.company_id ? { company_id: matchedCompanyId } : {}),
+      };
+      if (Object.keys(contactPatch).length > 0) {
+        try {
+          const { data: updatedContact, error: updateContactError } = await lineSupabase
+            .from('contacts')
+            .update(contactPatch)
+            .eq('id', contact.id)
+            .select('id, full_name, email, phone, company_id, line_user_id')
             .maybeSingle();
-          const keepStopped =
-            existingLf?.consent_status === 'opted_out' ||
-            existingLf?.status === 'blocked' ||
-            existingLf?.status === 'unfollowed';
-          await lineSupabase.from('line_friends').upsert({
-            line_user_id: contact.line_user_id,
-            display_name: name,
-            contact_id: contact.id,
-            ...(keepStopped ? {} : { status: 'active', consent_status: 'opted_in' }),
-            ...(existingLf ? {} : { source: 'public_form' }),
-          }, { onConflict: 'line_user_id' });
+
+          if (updateContactError) {
+            console.warn('[PublicForm] Contact update warning (non-fatal):', updateContactError);
+          } else if (updatedContact) {
+            contact = updatedContact;
+          }
+        } catch (cUpdateErr) {
+          console.warn('[PublicForm] Contact update exception (non-fatal):', cUpdateErr);
         }
-      } catch (cUpdateErr) {
-        console.warn('[PublicForm] Contact update exception (non-fatal):', cUpdateErr);
       }
     } else {
       try {
@@ -8459,25 +8493,6 @@ app.post(
           if (fallbackContact) contact = fallbackContact;
         } else if (insertedContact) {
           contact = insertedContact;
-        }
-
-        if (contact && lineUserId) {
-          const { data: existingLf } = await lineSupabase
-            .from('line_friends')
-            .select('status, consent_status')
-            .eq('line_user_id', lineUserId)
-            .maybeSingle();
-          const keepStopped =
-            existingLf?.consent_status === 'opted_out' ||
-            existingLf?.status === 'blocked' ||
-            existingLf?.status === 'unfollowed';
-          await lineSupabase.from('line_friends').upsert({
-            contact_id: contact.id,
-            line_user_id: lineUserId,
-            display_name: name,
-            ...(keepStopped ? {} : { status: 'active', consent_status: 'opted_in' }),
-            source: 'public_form',
-          }, { onConflict: 'line_user_id' });
         }
       } catch (cInsertErr) {
         console.warn('[PublicForm] Contact insert exception (non-fatal):', cInsertErr);
@@ -8597,33 +8612,15 @@ app.post(
       (slug === 'care-package-inquiry' && (carePackageChoice === '資料請求' || carePackageChoice === '両方希望')) ||
       (slug !== 'contact-inquiry' && slug !== 'business-diagnosis' && utm.inquiryType !== 'consultation' && requestedMaterialKeys.length > 0);
 
-    // public_materials から該当資料を検索（資料請求時のみ）
+    // public_materials から該当資料を検索（Batch A で事前取得済みの結果を利用）
     let resolvedMaterials: Array<{ key: string; label: string; url: string }> = [];
     if (wantsMaterials) {
-      try {
-        const { data: activeMaterials } = await lineSupabase
-          .from('public_materials')
-          .select('key, label, public_url, sort_order')
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true });
-
-        if (activeMaterials && activeMaterials.length > 0) {
-          if (requestedMaterialKeys.length > 0) {
-            resolvedMaterials = activeMaterials
-              .filter((m) => requestedMaterialKeys.includes(m.key))
-              .map((m) => ({
-                key: m.key,
-                label: (m.label || '')
-                  .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
-                  .replace(/収益シミュレーション[・\s]*/g, '')
-                  .replace(/[・\s]*シミュレーション[資料]*/g, '')
-                  .trim(),
-                url: m.public_url,
-              }));
-          }
-          // 資料キー未指定だが資料請求の場合、全有効資料を採用
-          if (resolvedMaterials.length === 0) {
-            resolvedMaterials = activeMaterials.map((m) => ({
+      const activeMaterials = activeMaterialsRes?.error ? [] : (activeMaterialsRes?.data || []);
+      if (activeMaterials.length > 0) {
+        if (requestedMaterialKeys.length > 0) {
+          resolvedMaterials = activeMaterials
+            .filter((m: any) => requestedMaterialKeys.includes(m.key))
+            .map((m: any) => ({
               key: m.key,
               label: (m.label || '')
                 .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
@@ -8632,10 +8629,19 @@ app.post(
                 .trim(),
               url: m.public_url,
             }));
-          }
         }
-      } catch (matLookupErr) {
-        console.warn('[PublicForm] Materials lookup exception:', matLookupErr);
+        // 資料キー未指定だが資料請求の場合、全有効資料を採用
+        if (resolvedMaterials.length === 0) {
+          resolvedMaterials = activeMaterials.map((m: any) => ({
+            key: m.key,
+            label: (m.label || '')
+              .replace(/[・\s]*収益シミュレーション[資料]*/g, '')
+              .replace(/収益シミュレーション[・\s]*/g, '')
+              .replace(/[・\s]*シミュレーション[資料]*/g, '')
+              .trim(),
+            url: m.public_url,
+          }));
+        }
       }
 
       // DB未初期化または未検索時のフォールバック（2資料を確実に返却）
@@ -8740,13 +8746,18 @@ app.post(
       answerSummary,
     ].filter(Boolean).join('\n');
 
-    const { data: existingLeads, error: leadLookupError } = await lineSupabase
-      .from('leads')
-      .select('id, notes, source, status, service_type, meeting_date, company_id')
-      .eq('contact_id', contact.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (leadLookupError) throw leadLookupError;
+    let existingLeads: any[] | null = preExistingLeadsRes?.data || null;
+    if (preExistingLeadsRes?.error) throw preExistingLeadsRes.error;
+    if (!existingLeads && contact.id) {
+      const { data: fetchedLeads, error: leadLookupError } = await lineSupabase
+        .from('leads')
+        .select('id, notes, source, status, service_type, meeting_date, company_id')
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (leadLookupError) throw leadLookupError;
+      existingLeads = fetchedLeads;
+    }
 
     // スキーマ互換性担保: leads テーブルのカラム不一致時に安全に再試行
     const safeUpsertLead = async (isUpdate: boolean, payload: Record<string, any>, targetId?: string): Promise<string> => {
@@ -8867,245 +8878,247 @@ app.post(
       utmInquiryType: utm.inquiryType,
     });
     const isActualDiagnosis = notificationKind === 'diagnosis';
-
-    let diagnosisId: string | null = null;
-    if (isActualDiagnosis) {
-      const { data, error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
-      if (error) console.error('Diagnosis handoff failed:', error.message);
-      else diagnosisId = data || null;
-    }
-
-    // ラウンド6-2: LINE友だちへの自動タグ付与（診断受検済み、資料請求、流入:<流入ラベル>）
-    try {
-      const targetFriendLineUserId = lineUserId || contact?.line_user_id || null;
-      let targetFriendId: string | null = null;
-      if (targetFriendLineUserId) {
-        const { data: lf } = await lineSupabase
-          .from('line_friends')
-          .select('id')
-          .eq('line_user_id', targetFriendLineUserId)
-          .maybeSingle();
-        targetFriendId = lf?.id || null;
-      } else if (contact?.id) {
-        const { data: lf } = await lineSupabase
-          .from('line_friends')
-          .select('id')
-          .eq('contact_id', contact.id)
-          .maybeSingle();
-        targetFriendId = lf?.id || null;
-      }
-
-      if (targetFriendId) {
-        const tagsToAssign: string[] = [];
-
-        // 1. 診断フォーム送信時
-        if (isActualDiagnosis) {
-          tagsToAssign.push('診断受検済み');
-        }
-        // 2. 資料請求時
-        const isMaterialRequestTag = notificationKind === 'material_download' || (notificationKind === 'care_package' && (inquiryType === '資料請求' || inquiryType === '両方希望'));
-        if (isMaterialRequestTag) {
-          tagsToAssign.push('資料請求');
-        }
-        // 3. 正規化済みの utm_source がある場合（HP直接除外）
-        if (normalizedUtm.source) {
-          const label = getInflowLabel(normalizedUtm.source);
-          tagsToAssign.push(`流入:${label}`);
-        } else if (hearAboutAnswer) {
-          // 4. UTMがない場合のみ「どこで知りましたか？」の回答からタグ付与
-          tagsToAssign.push(`流入:${hearAboutAnswer}`);
-        }
-
-        for (const tagName of tagsToAssign) {
-          try {
-            const tagId = await getOrCreateLineTag('system', tagName);
-            if (tagId) {
-              await lineSupabase.from('line_friend_tags').upsert({
-                line_friend_id: targetFriendId,
-                tag_id: tagId,
-                assigned_by: 'automation',
-              }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
-            }
-          } catch (tErr: any) {
-            console.warn(`[AutoTag] Could not assign tag '${tagName}':`, tErr?.message);
-          }
-        }
-      }
-    } catch (tagErr: any) {
-      console.warn('[AutoTag] Tag automation exception (non-fatal):', tagErr?.message);
-    }
-
     const isMaterialDownload = notificationKind === 'material_download' || (notificationKind === 'care_package' && (inquiryType === '資料請求' || inquiryType === '両方希望'));
-    if (contact?.id) {
-      if (meetingDate) {
-        await enqueueScenariosForContact(contact.id, 'booking_created');
-      } else if (isActualDiagnosis) {
-        await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
-      } else if (isMaterialDownload) {
-        await enqueueScenariosForContact(contact.id, 'material_requested', undefined, {
-          materialKeys: requestedMaterialKeys,
-          isCarePackage,
-        });
-        await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
-          isPublicFormSubmission: true,
-          skipDelayedEducationReschedule: true,
-        });
-      } else {
-        await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
-          isPublicFormSubmission: true,
-          scheduleDelayedEducationShiftDays: BRANCH_EDUCATION_DELAY_DAYS.public_form_consultation,
-        });
-      }
-    }
 
-    // 診断・相談・資料請求回答時の自動通知（LINE / Email）
+    // 予約URL・資料URLはBatch Aで既に確定済みのため、即時レスポンス用データをここで確定
     const formDef = form.definition && typeof form.definition === 'object' ? form.definition : {};
     let bookingUrl = typeof (formDef as any).booking_url === 'string' ? (formDef as any).booking_url.trim() : '';
     if (!bookingUrl) {
-      const { data: salesSettings } = await lineSupabase
-        .from('sales_workspace_settings')
-        .select('booking_page_url')
-        .maybeSingle();
-      bookingUrl = salesSettings?.booking_page_url || '';
+      bookingUrl = salesSettingsRes?.data?.booking_page_url || '';
     }
-    // ラウンド2-6: sales_workspace_settings が未設定でも TimeRex 公式URLにフォールバック
     if (!bookingUrl) {
       bookingUrl = 'https://timerex.net/s/mstcorp/c3dd3eea';
     }
 
     const rawMaterialUrl = typeof (formDef as any).material_url === 'string' ? (formDef as any).material_url.trim() : '';
     const fallbackMaterialUrl = Boolean(rawMaterialUrl && /^https?:\/\//i.test(rawMaterialUrl)) ? rawMaterialUrl : null;
-    
-    // ラウンド2-2: public_materials から引いた資料URLを最優先（複数なら改行区切りで展開）
-    const effectiveMaterialUrls = resolvedMaterials.length > 0
-      ? resolvedMaterials.map((m) => `▼ ${m.label}\n${m.url}`).join('\n\n')
-      : fallbackMaterialUrl || '';
     const singleMaterialUrl = resolvedMaterials[0]?.url || fallbackMaterialUrl || null;
     const materialReady = resolvedMaterials.length > 0 || Boolean(fallbackMaterialUrl);
     const bookingReady = Boolean(bookingUrl && /^https?:\/\//i.test(bookingUrl));
 
-    const quickBottleneck = isActualDiagnosis ? classifyBottleneck(cleanAnswers) : null;
+    const runPostSubmissionSideEffects = async () => {
+      if (!lineSupabase) return;
 
-    const isConsultationInquiry = notificationKind === 'consultation_inquiry';
-    const { consultationText, preferredDateText } = extractConsultationDetailsText({
-      userNotes,
-      answers: cleanAnswers,
-    });
-    const outboxSourceType =
-      notificationKind === 'material_download'
-        ? 'material_download'
-        : notificationKind === 'care_package'
-          ? 'care_package_inquiry'
-          : notificationKind === 'consultation_inquiry'
-            ? 'contact_inquiry'
-            : 'diagnosis_submission';
-
-    let customNotificationText = '';
-    let lineNotificationText = '';
-    let replyEmailSubject = '';
-
-    if (notificationKind === 'care_package') {
-      const careReply = buildCarePackageInstantReply({
-        name,
-        inquiryType,
-        requestedMaterials: resolvedMaterials,
-        fallbackMaterialUrl,
-        bookingUrl: bookingReady ? bookingUrl : null,
-        consultationText,
+      const quickBottleneck = isActualDiagnosis ? classifyBottleneck(cleanAnswers) : null;
+      const isConsultationInquiry = notificationKind === 'consultation_inquiry';
+      const { consultationText, preferredDateText } = extractConsultationDetailsText({
+        userNotes,
+        answers: cleanAnswers,
       });
-      replyEmailSubject = careReply.emailSubject;
-      customNotificationText = careReply.bodyText;
-      lineNotificationText = careReply.bodyText;
-    } else if (notificationKind === 'material_download') {
-      const fallbackChoiceLabel =
-        typeof cleanAnswers.choice_label === 'string' ? cleanAnswers.choice_label.trim() : '';
-      const materialReply = buildMaterialDownloadInstantReply({
-        name,
-        requestedMaterials: resolvedMaterials,
-        fallbackChoiceLabel,
-        fallbackMaterialUrl,
-        bookingUrl: bookingReady ? bookingUrl : null,
-      });
-      replyEmailSubject = materialReply.emailSubject;
-      customNotificationText = materialReply.bodyText;
-      lineNotificationText = materialReply.bodyText;
-    } else if (notificationKind === 'consultation_inquiry') {
-      const consultationReply = buildConsultationInstantReply({
-        name,
-        companyName,
-        inquiryType,
-        consultationText,
-        preferredDateText,
-        bookingUrl: bookingReady ? bookingUrl : null,
-      });
-      replyEmailSubject = consultationReply.emailSubject;
-      customNotificationText = consultationReply.bodyText;
-      lineNotificationText = consultationReply.bodyText;
-    } else {
-      const freeNotesText =
-        typeof cleanAnswers.q_free_notes === 'string' && cleanAnswers.q_free_notes.trim()
-          ? cleanAnswers.q_free_notes.trim()
-          : '';
-      const diagnosisReply = buildDiagnosisInstantReply({
-        name,
-        formName: form.name,
-        typeTitle: quickBottleneck?.typeTitle,
-        badge: quickBottleneck?.badge,
-        summary: quickBottleneck?.summary,
-        firstStep: quickBottleneck?.firstStep,
-        freeNotes: freeNotesText,
-        bookingUrl: bookingReady ? bookingUrl : null,
-      });
-      replyEmailSubject = diagnosisReply.emailSubject;
-      customNotificationText = diagnosisReply.emailBodyText;
-      lineNotificationText = diagnosisReply.lineBodyText;
-    }
+      const outboxSourceType =
+        notificationKind === 'material_download'
+          ? 'material_download'
+          : notificationKind === 'care_package'
+            ? 'care_package_inquiry'
+            : notificationKind === 'consultation_inquiry'
+              ? 'contact_inquiry'
+              : 'diagnosis_submission';
 
-    const sysOwnerId = lineSupabase ? await resolveSystemOwnerId((form as any)?.owner_id) : null;
-    const recipientEmail = (email || contact.email || '').trim().toLowerCase();
-    const shouldSendLineReply = Boolean(contact.line_user_id && lineChannelAccessToken);
-    // Webフォーム完了画面では入力メールアドレス宛ての受付・資料・診断結果メール送信を案内しているため、メール入力時はLINE連携済みでも自動送信を省略しない
-    const shouldSendEmailReply = Boolean(recipientEmail);
-    let lineAutoReplyOk = false;
-    let emailStatus = 'queued' as 'sent' | 'queued' | 'failed';
-    let emailErrorMessage: string | null = null;
+      let customNotificationText = '';
+      let lineNotificationText = '';
+      let replyEmailSubject = '';
 
-    // 【高速化】LINE自動返信とメール自動返信を並列実行して直列待ち時間を大幅短縮
-    await Promise.all([
-      (async () => {
-        if (!shouldSendLineReply) return;
-        try {
-          const lineText = lineNotificationText || customNotificationText;
-          const lineMsg = {
-            type: 'text',
-            text: lineText,
-          };
-          const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
-          });
-          const lineOk = lineResponse.ok;
-          lineAutoReplyOk = lineOk;
-          let lineErrorMessage: string | null = null;
-          if (!lineOk) {
-            const lineErrPayload = await lineResponse.json().catch(() => ({})) as { message?: string };
-            lineErrorMessage = lineErrPayload.message || `LINE送信エラー (HTTP ${lineResponse.status})`;
-            console.error('[PublicForm] LINE auto confirmation push failed:', lineErrorMessage);
-          }
-          if (lineSupabase) {
-            if (sysOwnerId) {
-              await lineSupabase.from('line_inbox_messages').insert({
-                owner_id: sysOwnerId,
-                line_event_id: `sub-${submission.id}`,
-                direction: 'outbound',
+      if (notificationKind === 'care_package') {
+        const careReply = buildCarePackageInstantReply({
+          name,
+          inquiryType,
+          requestedMaterials: resolvedMaterials,
+          fallbackMaterialUrl,
+          bookingUrl: bookingReady ? bookingUrl : null,
+          consultationText,
+        });
+        replyEmailSubject = careReply.emailSubject;
+        customNotificationText = careReply.bodyText;
+        lineNotificationText = careReply.bodyText;
+      } else if (notificationKind === 'material_download') {
+        const fallbackChoiceLabel =
+          typeof cleanAnswers.choice_label === 'string' ? cleanAnswers.choice_label.trim() : '';
+        const materialReply = buildMaterialDownloadInstantReply({
+          name,
+          requestedMaterials: resolvedMaterials,
+          fallbackChoiceLabel,
+          fallbackMaterialUrl,
+          bookingUrl: bookingReady ? bookingUrl : null,
+        });
+        replyEmailSubject = materialReply.emailSubject;
+        customNotificationText = materialReply.bodyText;
+        lineNotificationText = materialReply.bodyText;
+      } else if (notificationKind === 'consultation_inquiry') {
+        const consultationReply = buildConsultationInstantReply({
+          name,
+          companyName,
+          inquiryType,
+          consultationText,
+          preferredDateText,
+          bookingUrl: bookingReady ? bookingUrl : null,
+        });
+        replyEmailSubject = consultationReply.emailSubject;
+        customNotificationText = consultationReply.bodyText;
+        lineNotificationText = consultationReply.bodyText;
+      } else {
+        const freeNotesText =
+          typeof cleanAnswers.q_free_notes === 'string' && cleanAnswers.q_free_notes.trim()
+            ? cleanAnswers.q_free_notes.trim()
+            : '';
+        const diagnosisReply = buildDiagnosisInstantReply({
+          name,
+          formName: form.name,
+          typeTitle: quickBottleneck?.typeTitle,
+          badge: quickBottleneck?.badge,
+          summary: quickBottleneck?.summary,
+          firstStep: quickBottleneck?.firstStep,
+          freeNotes: freeNotesText,
+          bookingUrl: bookingReady ? bookingUrl : null,
+        });
+        replyEmailSubject = diagnosisReply.emailSubject;
+        customNotificationText = diagnosisReply.emailBodyText;
+        lineNotificationText = diagnosisReply.lineBodyText;
+      }
+
+      const sysOwnerId = await resolveSystemOwnerId((form as any)?.owner_id);
+      const recipientEmail = (email || contact.email || '').trim().toLowerCase();
+      const shouldSendLineReply = Boolean(contact.line_user_id && lineChannelAccessToken);
+      // Webフォーム完了画面では入力メールアドレス宛ての受付・資料・診断結果メール送信を案内しているため、メール入力時はLINE連携済みでも自動送信を省略しない
+      const shouldSendEmailReply = Boolean(recipientEmail);
+      let lineAutoReplyOk = false;
+      let emailStatus = 'queued' as 'sent' | 'queued' | 'failed';
+      let emailErrorMessage: string | null = null;
+
+      // 診断RPC・LINE同期＋タグ付与＋シナリオ投入・即時自動返信（LINE/Email）を全並列実行
+      await Promise.all([
+        (async () => {
+          if (!isActualDiagnosis) return;
+          const { error } = await lineSupabase.rpc('create_diagnosis_from_form_submission', { p_submission_id: submission.id });
+          if (error) console.error('Diagnosis handoff failed:', error.message);
+        })(),
+        (async () => {
+          // 1) line_friends 同期
+          const syncLineUserId = contact?.line_user_id || lineUserId || null;
+          if (contact?.id && syncLineUserId) {
+            try {
+              const { data: existingLf } = await lineSupabase
+                .from('line_friends')
+                .select('status, consent_status')
+                .eq('line_user_id', syncLineUserId)
+                .maybeSingle();
+              const keepStopped =
+                existingLf?.consent_status === 'opted_out' ||
+                existingLf?.status === 'blocked' ||
+                existingLf?.status === 'unfollowed';
+              await lineSupabase.from('line_friends').upsert({
+                line_user_id: syncLineUserId,
+                display_name: name,
                 contact_id: contact.id,
-                line_user_id: contact.line_user_id,
-                message_type: 'text',
-                body: lineMsg.text,
-                status: lineOk ? 'sent' : 'failed',
-                received_at: new Date().toISOString(),
+                ...(keepStopped ? {} : { status: 'active', consent_status: 'opted_in' }),
+                ...(existingLf ? {} : { source: 'public_form' }),
+              }, { onConflict: 'line_user_id' });
+            } catch (lfErr: any) {
+              console.warn('[PublicForm] line_friends sync warning (non-fatal):', lfErr?.message);
+            }
+          }
+
+          // 2) LINE友だちへの自動タグ付与（診断受検済み、資料請求、流入:<流入ラベル>）
+          try {
+            const targetFriendLineUserId = lineUserId || contact?.line_user_id || null;
+            let targetFriendId: string | null = null;
+            if (targetFriendLineUserId) {
+              const { data: lf } = await lineSupabase
+                .from('line_friends')
+                .select('id')
+                .eq('line_user_id', targetFriendLineUserId)
+                .maybeSingle();
+              targetFriendId = lf?.id || null;
+            } else if (contact?.id) {
+              const { data: lf } = await lineSupabase
+                .from('line_friends')
+                .select('id')
+                .eq('contact_id', contact.id)
+                .maybeSingle();
+              targetFriendId = lf?.id || null;
+            }
+
+            if (targetFriendId) {
+              const tagsToAssign: string[] = [];
+              if (isActualDiagnosis) {
+                tagsToAssign.push('診断受検済み');
+              }
+              const isMaterialRequestTag =
+                notificationKind === 'material_download' ||
+                (notificationKind === 'care_package' && (inquiryType === '資料請求' || inquiryType === '両方希望'));
+              if (isMaterialRequestTag) {
+                tagsToAssign.push('資料請求');
+              }
+              if (normalizedUtm.source) {
+                const label = getInflowLabel(normalizedUtm.source);
+                tagsToAssign.push(`流入:${label}`);
+              } else if (hearAboutAnswer) {
+                tagsToAssign.push(`流入:${hearAboutAnswer}`);
+              }
+
+              await Promise.all(
+                tagsToAssign.map(async (tagName) => {
+                  try {
+                    const tagId = await getOrCreateLineTag('system', tagName);
+                    if (tagId) {
+                      await lineSupabase.from('line_friend_tags').upsert({
+                        line_friend_id: targetFriendId,
+                        tag_id: tagId,
+                        assigned_by: 'automation',
+                      }, { onConflict: 'line_friend_id,tag_id', ignoreDuplicates: true });
+                    }
+                  } catch (tErr: any) {
+                    console.warn(`[AutoTag] Could not assign tag '${tagName}':`, tErr?.message);
+                  }
+                })
+              );
+            }
+          } catch (tagErr: any) {
+            console.warn('[AutoTag] Tag automation exception (non-fatal):', tagErr?.message);
+          }
+
+          // 3) ステップ配信シナリオ投入
+          if (contact?.id) {
+            if (meetingDate) {
+              await enqueueScenariosForContact(contact.id, 'booking_created');
+            } else if (isActualDiagnosis) {
+              await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
+            } else if (isMaterialDownload) {
+              await enqueueScenariosForContact(contact.id, 'material_requested', undefined, {
+                materialKeys: requestedMaterialKeys,
+                isCarePackage,
               });
+              await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
+                isPublicFormSubmission: true,
+                skipDelayedEducationReschedule: true,
+              });
+            } else {
+              await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
+                isPublicFormSubmission: true,
+                scheduleDelayedEducationShiftDays: BRANCH_EDUCATION_DELAY_DAYS.public_form_consultation,
+              });
+            }
+          }
+        })(),
+        (async () => {
+          if (!shouldSendLineReply) return;
+          try {
+            const lineText = lineNotificationText || customNotificationText;
+            const lineMsg = {
+              type: 'text',
+              text: lineText,
+            };
+            const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${lineChannelAccessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ to: contact.line_user_id, messages: [lineMsg] }),
+            });
+            const lineOk = lineResponse.ok;
+            lineAutoReplyOk = lineOk;
+            let lineErrorMessage: string | null = null;
+            if (!lineOk) {
+              const lineErrPayload = await lineResponse.json().catch(() => ({})) as { message?: string };
+              lineErrorMessage = lineErrPayload.message || `LINE送信エラー (HTTP ${lineResponse.status})`;
+              console.error('[PublicForm] LINE auto confirmation push failed:', lineErrorMessage);
             }
             const outboxPayload: any = {
               channel: 'line',
@@ -9127,80 +9140,92 @@ app.post(
               company_id: resolvedCompanyId,
             };
             if (sysOwnerId) outboxPayload.owner_id = sysOwnerId;
-            const { error: outboxErr } = await lineSupabase.from('communication_outbox').insert(outboxPayload);
-            if (outboxErr) {
-              console.error('[PublicForm] Failed to insert LINE communication_outbox:', outboxErr);
-            }
+
+            await Promise.all([
+              sysOwnerId
+                ? lineSupabase.from('line_inbox_messages').insert({
+                    owner_id: sysOwnerId,
+                    line_event_id: `sub-${submission.id}`,
+                    direction: 'outbound',
+                    contact_id: contact.id,
+                    line_user_id: contact.line_user_id,
+                    message_type: 'text',
+                    body: lineMsg.text,
+                    status: lineOk ? 'sent' : 'failed',
+                    received_at: new Date().toISOString(),
+                  })
+                : Promise.resolve(),
+              lineSupabase.from('communication_outbox').insert(outboxPayload).then(({ error: outboxErr }) => {
+                if (outboxErr) console.error('[PublicForm] Failed to insert LINE communication_outbox:', outboxErr);
+              }),
+            ]);
+          } catch (linePushErr) {
+            console.warn('LINE auto confirmation push warning:', linePushErr);
           }
-        } catch (linePushErr) {
-          console.warn('LINE auto confirmation push warning:', linePushErr);
-        }
-      })(),
-      (async () => {
-        if (!shouldSendEmailReply) return;
-        try {
-          const emailKey = process.env.RESEND_API_KEY || '';
-          const resolvedSender = await resolveEmailSender(sysOwnerId);
-          const emailFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
-          const senderAddr = (emailFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || emailFrom).trim();
-          const subject = replyEmailSubject;
-          // 署名は送信直前に共通処理で付ける（他のメールと同じ形式。受付完了は取引メールなので配信停止リンクなし）
-          const fallbackConsultationReply = !isActualDiagnosis
-            ? buildConsultationInstantReply({
-                name,
-                companyName,
-                inquiryType,
-                consultationText,
-                preferredDateText,
-                bookingUrl: bookingReady ? bookingUrl : null,
-              }).bodyText
-            : '';
-          const rawBodyText = customNotificationText || fallbackConsultationReply;
+        })(),
+        (async () => {
+          if (!shouldSendEmailReply) return;
+          try {
+            const emailKey = process.env.RESEND_API_KEY || '';
+            const resolvedSender = await resolveEmailSender(sysOwnerId);
+            const emailFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+            const senderAddr = (emailFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || emailFrom).trim();
+            const subject = replyEmailSubject;
+            const fallbackConsultationReply = !isActualDiagnosis
+              ? buildConsultationInstantReply({
+                  name,
+                  companyName,
+                  inquiryType,
+                  consultationText,
+                  preferredDateText,
+                  bookingUrl: bookingReady ? bookingUrl : null,
+                }).bodyText
+              : '';
+            const rawBodyText = customNotificationText || fallbackConsultationReply;
 
-          const emailPayload = prepareEmailPayloadContent(rawBodyText, {
-            senderEmail: senderAddr,
-            logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
-          });
-          const bodyText = emailPayload.text;
+            const emailPayload = prepareEmailPayloadContent(rawBodyText, {
+              senderEmail: senderAddr,
+              logoUrl: process.env.EMAIL_SIGNATURE_LOGO_URL,
+            });
+            const bodyText = emailPayload.text;
 
-          let sentAt: string | null = null;
-          let providerMessageId: string | null = null;
+            let sentAt: string | null = null;
+            let providerMessageId: string | null = null;
 
-          if (emailKey && emailFrom) {
-            try {
-              const emailResponse = await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  from: emailFrom,
-                  to: [recipientEmail],
-                  ...(resolvedSender.replyToEmail ? { reply_to: resolvedSender.replyToEmail } : {}),
-                  subject,
-                  text: emailPayload.text,
-                  html: emailPayload.html,
-                }),
-              });
-              const payload = await emailResponse.json().catch(() => ({})) as { id?: string; message?: string };
-              if (emailResponse.ok && payload.id) {
-                emailStatus = 'sent';
-                sentAt = new Date().toISOString();
-                providerMessageId = payload.id;
-              } else {
+            if (emailKey && emailFrom) {
+              try {
+                const emailResponse = await fetch('https://api.resend.com/emails', {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${emailKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    from: emailFrom,
+                    to: [recipientEmail],
+                    ...(resolvedSender.replyToEmail ? { reply_to: resolvedSender.replyToEmail } : {}),
+                    subject,
+                    text: emailPayload.text,
+                    html: emailPayload.html,
+                  }),
+                });
+                const payload = await emailResponse.json().catch(() => ({})) as { id?: string; message?: string };
+                if (emailResponse.ok && payload.id) {
+                  emailStatus = 'sent';
+                  sentAt = new Date().toISOString();
+                  providerMessageId = payload.id;
+                } else {
+                  emailStatus = 'failed';
+                  emailErrorMessage = payload.message || `メール送信エラー (HTTP ${emailResponse.status})`;
+                  console.error('[PublicForm] Email auto confirmation failed:', emailErrorMessage);
+                }
+              } catch (fetchErr: any) {
                 emailStatus = 'failed';
-                emailErrorMessage = payload.message || `メール送信エラー (HTTP ${emailResponse.status})`;
-                console.error('[PublicForm] Email auto confirmation failed:', emailErrorMessage);
+                emailErrorMessage = fetchErr?.message || 'メール送信ネットワークエラー';
+                console.error('[PublicForm] Email auto confirmation network error:', fetchErr);
               }
-            } catch (fetchErr: any) {
-              emailStatus = 'failed';
-              emailErrorMessage = fetchErr?.message || 'メール送信ネットワークエラー';
-              console.error('[PublicForm] Email auto confirmation network error:', fetchErr);
+            } else {
+              emailStatus = 'queued';
+              emailErrorMessage = !emailKey ? 'RESEND_API_KEY未設定' : 'RESEND_FROM_EMAIL未設定';
             }
-          } else {
-            emailStatus = 'queued';
-            emailErrorMessage = !emailKey ? 'RESEND_API_KEY未設定' : 'RESEND_FROM_EMAIL未設定';
-          }
 
-          if (lineSupabase) {
             const outboxPayload: any = {
               channel: 'email',
               recipient_contact_id: contact.id,
@@ -9224,146 +9249,167 @@ app.post(
             if (outboxErr) {
               console.error('[PublicForm] Failed to insert Email communication_outbox:', outboxErr);
             }
+          } catch (emailErr: any) {
+            emailStatus = 'failed';
+            emailErrorMessage = emailErr?.message || 'メール自動返信例外';
+            console.warn('Email auto confirmation warning:', emailErr);
           }
-        } catch (emailErr: any) {
-          emailStatus = 'failed';
-          emailErrorMessage = emailErr?.message || 'メール自動返信例外';
-          console.warn('Email auto confirmation warning:', emailErr);
-        }
-      })(),
-    ]);
+        })(),
+      ]);
 
-    // 【高速化】管理者向けタスク起票 ＆ 管理者向けバックアップ通知メールを並列実行
-    let resolvedFormOwnerId: string | null = sysOwnerId || null;
-    await Promise.all([
-      (async () => {
-        if (!lineSupabase) return;
-        try {
-          const formTaskOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
-          resolvedFormOwnerId = formTaskOwnerId || null;
-          if (!formTaskOwnerId) {
-            console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
-            return;
-          }
-          if (isMaterialDownload && !materialReady) {
-            const { error: warningTaskErr } = await lineSupabase.from('tasks').insert({
-              owner_id: formTaskOwnerId,
-              title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
-              description: `資料請求（${requestedMaterialText || slug}）を受領しましたが、公開資料マスタ（public_materials）およびフォーム定義に有効な資料URLが未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
-              status: 'todo',
-              priority: 'urgent',
-              due_date: new Date().toISOString().slice(0, 10),
-            });
-            if (warningTaskErr) {
-              console.error('[PublicForm] 資料URL未設定警告タスク起票エラー:', warningTaskErr.message, warningTaskErr.code);
+      // 管理者向けタスク起票 ＆ 管理者向けバックアップ通知メールを並列実行
+      await Promise.all([
+        (async () => {
+          try {
+            const formTaskOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
+            if (!formTaskOwnerId) {
+              console.error('[PublicForm] タスク起票スキップ: owner_id が解決できませんでした (form:', form?.name, slug, ')');
+              return;
             }
-          }
-
-          const taskTitle = isConsultationInquiry
-            ? `【要対応・Web相談（メール返信）】${name} 様（${companyName || '個人'}）`
-            : `【要対応・${isCarePackage ? '開業パッケージ申込' : isMaterialDownload ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`;
-
-          const autoEmailStatusText = shouldSendEmailReply
-            ? emailStatus === 'sent'
-              ? '自動受付メール送信済み'
-              : `自動受付メール未完了（${emailStatus}${emailErrorMessage ? `: ${emailErrorMessage}` : ''}）— 至急メール返信してください`
-            : lineAutoReplyOk
-              ? 'LINE自動返信送信済み'
-              : '自動受付メール対象外';
-
-          const taskDescription = isConsultationInquiry
-            ? [
-                `HP「${form.name}」よりWeb相談・お問い合わせが届きました。内容を確認のうえ、${recipientEmail} 宛てに個別メール返信を行ってください。`,
-                `■ 相談種別: ${inquiryType || '経営相談'}`,
-                `■ 返信先メール: ${recipientEmail}`,
-                ...(phone ? [`■ 電話番号: ${phone}`] : []),
-                ...(preferredDateText ? [`■ ご希望日時: ${preferredDateText}`] : []),
-                `■ 即時自動返信: ${autoEmailStatusText}`,
-                `■ 相談内容:\n${consultationText || '（自由記述なし）'}`,
-              ].join('\n')
-            : `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`;
-
-          const { error: responseTaskErr } = await lineSupabase.from('tasks').insert({
-            owner_id: formTaskOwnerId,
-            title: taskTitle,
-            description: taskDescription,
-            status: 'todo',
-            priority: isConsultationInquiry && emailStatus !== 'sent' ? 'urgent' : 'high',
-            due_date: new Date().toISOString().slice(0, 10),
-          });
-          if (responseTaskErr) {
-            console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
-          }
-        } catch (taskErr) {
-          console.warn('Task auto-creation warning:', taskErr);
-        }
-      })(),
-      (async () => {
-        if (!process.env.RESEND_API_KEY) return;
-        try {
-          const formOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
-          const resolvedSender = await resolveEmailSender(formOwnerId);
-          const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
-          const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
-          const backupRecipients = await resolvePublicFormBackupRecipients(formOwnerId, [adminSenderAddr]);
-          if (backupRecipients.length > 0 && adminFrom) {
-            const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
-            const questionLabels: Record<string, string> = {};
-            for (const q of configuredQuestions as any[]) {
-              if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
+            const taskInserts: PromiseLike<any>[] = [];
+            if (isMaterialDownload && !materialReady) {
+              taskInserts.push(
+                lineSupabase.from('tasks').insert({
+                  owner_id: formTaskOwnerId,
+                  title: `【未設定警告】資料URLが未登録です（${name} 様の資料請求）`,
+                  description: `資料請求（${requestedMaterialText || slug}）を受領しましたが、公開資料マスタ（public_materials）およびフォーム定義に有効な資料URLが未設定です。至急URLを設定し、申込者（${name}様 / ${email}）へ資料を送付してください。`,
+                  status: 'todo',
+                  priority: 'urgent',
+                  due_date: new Date().toISOString().slice(0, 10),
+                }).then(({ error: warningTaskErr }) => {
+                  if (warningTaskErr) {
+                    console.error('[PublicForm] 資料URL未設定警告タスク起票エラー:', warningTaskErr.message, warningTaskErr.code);
+                  }
+                })
+              );
             }
-            const adminBackup = buildPublicFormAdminBackupEmail({
-              notificationKind,
-              formName: form.name,
-              slug,
-              name,
-              companyName,
-              email: recipientEmail,
-              phone,
-              inquiryType,
-              consultationText,
-              preferredDateText,
-              answers: cleanAnswers,
-              questionLabels,
-              quickBottleneck,
-              requestedMaterials: resolvedMaterials,
-              hearAbout: hearAboutAnswer || null,
-              utmDetails: utmDetails || null,
-              lineAutoReplySent: lineAutoReplyOk,
-              emailAutoReplySent: shouldSendEmailReply,
-              emailAutoReplyStatus: emailStatus,
-              emailAutoReplyError: emailErrorMessage,
-              appUrl: appUrl || null,
-            });
-            const adminRes = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                from: adminFrom,
-                to: backupRecipients,
-                headers: { 'X-MST-Backup-Copy': '1' },
-                ...(recipientEmail ? { reply_to: recipientEmail } : {}),
-                subject: adminBackup.subject,
-                text: adminBackup.text,
-              }),
-            });
-            if (!adminRes.ok) {
-              const errBody = await adminRes.text().catch(() => '');
-              console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
-            }
+
+            const taskTitle = isConsultationInquiry
+              ? `【要対応・Web相談（メール返信）】${name} 様（${companyName || '個人'}）`
+              : `【要対応・${isCarePackage ? '開業パッケージ申込' : isMaterialDownload ? '資料請求' : 'レポート承認'}】${name} 様（${companyName || '個人'}）の回答`;
+
+            const autoEmailStatusText = shouldSendEmailReply
+              ? emailStatus === 'sent'
+                ? '自動受付メール送信済み'
+                : `自動受付メール未完了（${emailStatus}${emailErrorMessage ? `: ${emailErrorMessage}` : ''}）— 至急メール返信してください`
+              : lineAutoReplyOk
+                ? 'LINE自動返信送信済み'
+                : '自動受付メール対象外';
+
+            const taskDescription = isConsultationInquiry
+              ? [
+                  `HP「${form.name}」よりWeb相談・お問い合わせが届きました。内容を確認のうえ、${recipientEmail} 宛てに個別メール返信を行ってください。`,
+                  `■ 相談種別: ${inquiryType || '経営相談'}`,
+                  `■ 返信先メール: ${recipientEmail}`,
+                  ...(phone ? [`■ 電話番号: ${phone}`] : []),
+                  ...(preferredDateText ? [`■ ご希望日時: ${preferredDateText}`] : []),
+                  `■ 即時自動返信: ${autoEmailStatusText}`,
+                  `■ 相談内容:\n${consultationText || '（自由記述なし）'}`,
+                ].join('\n')
+              : `フォーム「${form.name}」の回答（希望: ${inquiryType || '未指定'}${requestedMaterialText ? ` / ${requestedMaterialText}` : ''}）が届きました。内容を確認し、案内または面談日程の調整を行ってください。`;
+
+            taskInserts.push(
+              lineSupabase.from('tasks').insert({
+                owner_id: formTaskOwnerId,
+                title: taskTitle,
+                description: taskDescription,
+                status: 'todo',
+                priority: isConsultationInquiry && emailStatus !== 'sent' ? 'urgent' : 'high',
+                due_date: new Date().toISOString().slice(0, 10),
+              }).then(({ error: responseTaskErr }) => {
+                if (responseTaskErr) {
+                  console.error('[PublicForm] フォーム回答対応タスク起票エラー:', responseTaskErr.message, responseTaskErr.code);
+                }
+              })
+            );
+
+            await Promise.all(taskInserts);
+          } catch (taskErr) {
+            console.warn('Task auto-creation warning:', taskErr);
           }
-        } catch (adminMailErr: any) {
-          console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
-        }
-      })(),
-    ]);
+        })(),
+        (async () => {
+          if (!process.env.RESEND_API_KEY) return;
+          try {
+            const formOwnerId = sysOwnerId || await resolveSystemOwnerId((form as any)?.owner_id);
+            const resolvedSender = await resolveEmailSender(formOwnerId);
+            const adminFrom = (process.env.RESEND_FROM_EMAIL || resolvedSender.fromString || '').trim();
+            const adminSenderAddr = (adminFrom.match(/<([^<>]+)>/)?.[1] || resolvedSender.senderEmail || adminFrom).trim().toLowerCase();
+            const backupRecipients = await resolvePublicFormBackupRecipients(formOwnerId, [adminSenderAddr]);
+            if (backupRecipients.length > 0 && adminFrom) {
+              const appUrl = (process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+              const questionLabels: Record<string, string> = {};
+              for (const q of configuredQuestions as any[]) {
+                if (q?.id && q?.label) questionLabels[String(q.id)] = String(q.label);
+              }
+              const adminBackup = buildPublicFormAdminBackupEmail({
+                notificationKind,
+                formName: form.name,
+                slug,
+                name,
+                companyName,
+                email: recipientEmail,
+                phone,
+                inquiryType,
+                consultationText,
+                preferredDateText,
+                answers: cleanAnswers,
+                questionLabels,
+                quickBottleneck,
+                requestedMaterials: resolvedMaterials,
+                hearAbout: hearAboutAnswer || null,
+                utmDetails: utmDetails || null,
+                lineAutoReplySent: lineAutoReplyOk,
+                emailAutoReplySent: shouldSendEmailReply,
+                emailAutoReplyStatus: emailStatus,
+                emailAutoReplyError: emailErrorMessage,
+                appUrl: appUrl || null,
+              });
+              const adminRes = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: adminFrom,
+                  to: backupRecipients,
+                  headers: { 'X-MST-Backup-Copy': '1' },
+                  ...(recipientEmail ? { reply_to: recipientEmail } : {}),
+                  subject: adminBackup.subject,
+                  text: adminBackup.text,
+                }),
+              });
+              if (!adminRes.ok) {
+                const errBody = await adminRes.text().catch(() => '');
+                console.warn('[PublicForm] Form backup alert email warning:', adminRes.status, errBody);
+              }
+            }
+          } catch (adminMailErr: any) {
+            console.warn('[PublicForm] Form backup alert exception:', adminMailErr?.message || adminMailErr);
+          }
+        })(),
+      ]);
+    };
+
+    const vercelWaitUntil = getVercelRequestContextWaitUntil();
+    const bgPromise = runPostSubmissionSideEffects().catch((bgErr: any) => {
+      console.error('[PublicForm] Post-submission background pipeline error:', bgErr?.message || bgErr);
+    });
+
+    if (vercelWaitUntil) {
+      vercelWaitUntil(bgPromise);
+    } else if (process.env.VERCEL) {
+      // Vercel環境で request-context が取得できない場合の安全フォールバック（並列化済み）
+      await bgPromise;
+    } else {
+      // Node.js / Cloud Run環境: レスポンス返却後にイベントループで継続実行
+      void bgPromise;
+    }
 
     return res.status(201).json({
       success: true,
       submissionId: submission.id,
       leadId,
-      diagnosisId,
-      diagnosisPending: isActualDiagnosis && !diagnosisId,
+      diagnosisId: null,
+      diagnosisPending: isActualDiagnosis,
       inquiryType: inquiryType || null,
       materialReady,
       materialUrl: singleMaterialUrl,

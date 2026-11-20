@@ -119,6 +119,14 @@ export const PublicIntakeForm: React.FC<{ slug: string }> = ({ slug }) => {
 
   const updateAnswer = (id: string, value: string | boolean) => setAnswers((current) => ({ ...current, [id]: value }));
 
+  useEffect(() => {
+    if (!submitted) return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [submitted]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form || submitting) return;

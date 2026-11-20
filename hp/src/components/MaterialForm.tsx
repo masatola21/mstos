@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { submitIntakeToCRM, resolveApiEndpoint, OFFICIAL_TIMEREX_BOOKING_URL } from '../lib/supabase';
 
 interface MaterialItem {
@@ -44,6 +44,22 @@ export default function MaterialForm() {
   const [bookingUrl, setBookingUrl] = useState('');
   const [downloadUrls, setDownloadUrls] = useState<Array<{ key?: string; label: string; url: string }>>([]);
   const [errorMsg, setErrorMsg] = useState('');
+  const resultRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!submitted || typeof window === 'undefined') return;
+    const id = requestAnimationFrame(() => {
+      const el = resultRef.current;
+      if (el) {
+        const docTop = el.getBoundingClientRect().top + window.scrollY;
+        const targetTop = docTop > 420 ? Math.max(0, docTop - 96) : 0;
+        window.scrollTo({ top: targetTop, behavior: 'smooth' });
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [submitted]);
 
   // 1. クライアント側でOSの /api/public/materials から公開資料マスタを動的取得
   useEffect(() => {
@@ -192,7 +208,7 @@ export default function MaterialForm() {
 
   if (submitted) {
     return (
-      <div className="bg-white p-8 sm:p-12 rounded-2xl border border-sand-300 shadow-xl space-y-8 animate-fadeIn">
+      <div ref={resultRef} className="bg-white p-8 sm:p-12 rounded-2xl border border-sand-300 shadow-xl space-y-8 animate-fadeIn">
         <div className="text-center space-y-3">
           <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-sm">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">

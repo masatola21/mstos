@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MST_OFFICIAL_BOTTLENECK_QUESTIONS,
   analyzeBottleneck,
   submitIntakeToCRM,
+  resolveApiEndpoint,
   OFFICIAL_TIMEREX_BOOKING_URL,
   MST_INDUSTRY_OPTIONS,
   MST_EMPLOYEE_COUNT_OPTIONS,
@@ -35,14 +36,37 @@ export default function DiagnosisForm() {
   const [result, setResult] = useState<DiagnosisAnalysisResult | null>(null);
   const [bookingUrl, setBookingUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const stepContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const s = params.get('source');
       if (s) setSource(s);
+      // APIサーバーのコールドスタート・TLS接続を事前ウォームアップして送信時間を短縮
+      fetch(resolveApiEndpoint('/health'), { method: 'GET', mode: 'cors' }).catch(() => {});
     }
   }, []);
+
+  // 診断結果表示時にページ最上部へ確実にスクロール
+  useEffect(() => {
+    if (!submitted || typeof window === 'undefined') return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [submitted]);
+
+  // 設問ステップ切替時にカード上端が画面外に隠れていたら戻す
+  useEffect(() => {
+    if (submitted || currentStep === 0 || typeof window === 'undefined') return;
+    const el = stepContainerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.top < 84) {
+      window.scrollTo({ top: Math.max(0, rect.top + window.scrollY - 96), behavior: 'smooth' });
+    }
+  }, [currentStep, submitted]);
 
   const totalQuestions = MST_OFFICIAL_BOTTLENECK_QUESTIONS.length; // 5問
 
@@ -317,7 +341,7 @@ export default function DiagnosisForm() {
   const activeQuestion = MST_OFFICIAL_BOTTLENECK_QUESTIONS[currentStep];
 
   return (
-    <div className="bg-white p-6 sm:p-10 rounded-3xl border border-sand-300 shadow-xl max-w-3xl mx-auto">
+    <div ref={stepContainerRef} className="bg-white p-6 sm:p-10 rounded-3xl border border-sand-300 shadow-xl max-w-3xl mx-auto">
       {/* プログレスバー */}
       <div className="mb-6">
         <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-2">
