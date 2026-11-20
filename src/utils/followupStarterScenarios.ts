@@ -252,6 +252,13 @@ export function getSupersededPhasesOnEvent(event: {
     };
   }
 
+  if (trigger === 'public_form_consultation') {
+    return {
+      cancelPhases: ['education_nurturing', 'sales_outreach'],
+      reason: '相談フォームを受信したため、一般短期教育・営業追客を停止し、長期育成（5日目〜）へ切替',
+    };
+  }
+
   return { cancelPhases: [], reason: '' };
 }
 
@@ -432,6 +439,7 @@ export const SCENARIO_TRIGGER_LABELS: Record<string, string> = {
   invoice_overdue: '請求期日超過時',
   retainer_period: '顧問サポート時期',
   project_milestone: '構築節目到達時',
+  public_form_consultation: '相談フォーム送信時',
   manual: '手動送信',
 };
 
@@ -441,6 +449,53 @@ export function formatScenarioTriggerLabel(trigger: string, targetTag?: string |
     return `タグ「${targetTag.trim()}」`;
   }
   return SCENARIO_TRIGGER_LABELS[key] || key || '未設定';
+}
+
+export function formatJobActionLabel(params: {
+  eventKey?: string | null;
+  scenarioTrigger?: string | null;
+  scenarioTargetTag?: string | null;
+  scenarioId?: string | null;
+}): string {
+  const eventKey = String(params.eventKey || '').trim();
+  const scenarioId = String(params.scenarioId || '').trim();
+  const trigger = String(params.scenarioTrigger || '').trim();
+
+  if (eventKey.startsWith('education_delayed:material_requested:')) return '資料請求フォーム（長期育成）';
+  if (eventKey.startsWith('education_delayed:diagnosis_completed:')) return '診断フォーム（長期育成）';
+  if (eventKey.startsWith('education_delayed:lead_created:')) return '相談フォーム（長期育成）';
+  if (eventKey.startsWith('material_requested:')) return '資料請求フォーム送信';
+  if (eventKey.startsWith('diagnosis_completed:')) return '診断フォーム完了';
+  if (eventKey.startsWith('lead_created:')) return '相談フォーム／見込み客登録';
+  if (eventKey.startsWith('booking_created:')) return '面談予約確定';
+  if (eventKey.startsWith('meeting_completed:')) return '面談完了';
+  if (eventKey.startsWith('report_or_proposal_sent:')) return '提案書・レポート送付';
+  if (eventKey.startsWith('report_sent:')) return '診断レポート送付';
+  if (eventKey.startsWith('proposal_sent:')) return '提案書送付';
+  if (eventKey.startsWith('contract_sent:')) return '契約書送付';
+  if (eventKey.startsWith('contract_signed:')) return '契約締結';
+  if (eventKey.startsWith('consultation_human_replied:')) return '個別相談への有人返信';
+  if (eventKey.startsWith('prospect_monitor_one_shot:') || scenarioId === 'prospect-monitor-one-shot') {
+    return '営業メール（モニター提案）';
+  }
+  if (eventKey.startsWith('prospect_one_shot:') || scenarioId === 'prospect-one-shot') {
+    return '営業メール（一発直球）';
+  }
+  if (
+    eventKey.startsWith('prospect_outreach_step1:') ||
+    eventKey.startsWith('outreach_first_sent:') ||
+    scenarioId.startsWith('prospect-outreach-step-')
+  ) {
+    return '営業メール（新規開拓）';
+  }
+  if (eventKey.startsWith('prospect_selected:')) return '営業対象選定';
+  if (eventKey.startsWith('tag_added:')) return formatScenarioTriggerLabel('tag_added', params.scenarioTargetTag);
+  if (eventKey.startsWith('line_registered:')) return 'LINE友だち登録';
+
+  if (trigger) {
+    return formatScenarioTriggerLabel(trigger, params.scenarioTargetTag);
+  }
+  return '';
 }
 
 export function formatScenarioWaitMinutes(waitMinutes?: number | null): string {

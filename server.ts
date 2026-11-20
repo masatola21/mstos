@@ -2113,20 +2113,31 @@ async function processLinePostback(event: any, contact: any, eventId: string, bo
   const isWc = Boolean(wcParam) || postbackData.startsWith('wc=');
   const isCareQ = postbackData.startsWith('care_q1=') || postbackData.startsWith('care_q2=');
 
-  // 1. 待機中LINEマーケティングジョブの自動スキップ判定
+  // 1. 待機中マーケティングジョブの自動スキップ判定
   // ※ wc= または care_package_form または care_q のときは実行しない（シナリオの誤停止防止）
   if (!isWc && !isCarePackage && !isCareQ) {
     try {
-      await lineSupabase
-        .from('marketing_automation_jobs')
-        .update({
-          status: 'skipped',
-          error_message: '顧客側からのアクション（ボタン・メニュータップ）があったため自動シナリオを停止',
-          updated_at: eventTime,
-        })
-        .eq('channel', 'line')
-        .eq('status', 'queued')
-        .eq('line_user_id', userId);
+      let targetContactId: string | null = contact?.id || null;
+      if (!targetContactId && userId) {
+        const { data: matchedContact } = await lineSupabase
+          .from('contacts')
+          .select('id')
+          .eq('line_user_id', userId)
+          .limit(1)
+          .maybeSingle();
+        targetContactId = matchedContact?.id || null;
+      }
+      if (targetContactId) {
+        await lineSupabase
+          .from('marketing_automation_jobs')
+          .update({
+            status: 'skipped',
+            error_message: '顧客側からのLINEアクション（ボタン・メニュータップ）があったため自動ステップシナリオを停止（LINE・メール共通／個別対応へ移行）',
+            updated_at: eventTime,
+          })
+          .eq('contact_id', targetContactId)
+          .eq('status', 'queued');
+      }
     } catch (skipErr) {
       console.warn('[LINE Postback] Skip queued jobs warning:', skipErr);
     }
@@ -3130,6 +3141,7 @@ async function enqueueScenariosForContact(
     applyPreferredOnZeroWait?: boolean;
     scheduleDelayedEducationShiftDays?: number;
     isPublicFormSubmission?: boolean;
+    isConsultationFormSubmission?: boolean;
     skipDelayedEducationReschedule?: boolean;
     materialKeys?: string[];
     isCarePackage?: boolean;
@@ -3147,7 +3159,7 @@ async function enqueueScenariosForContact(
     // 次ステージ進行時は手前フェーズの待機中ジョブを自動停止
     await cancelSupersededQueuedJobs(lineSupabase, {
       contactId: contact.id,
-      trigger: triggerName,
+      trigger: options?.isConsultationFormSubmission ? 'public_form_consultation' : triggerName,
       tagName: options?.tagName,
     });
 
@@ -3278,9 +3290,11 @@ async function enqueueScenariosForContact(
     }
 
     // Web相談フォーム経由などで手前の未送信教育ステップがあれば上書き整理してから新規投入する
+    // （isConsultationFormSubmission時は上のcancelSupersededQueuedJobsで既に統一メッセージで停止済み）
     if (
       triggerName === 'lead_created' &&
       options?.isPublicFormSubmission &&
+      !options?.isConsultationFormSubmission &&
       resolvedEducationShiftDays !== null
     ) {
       const { data: oldEduJobs } = await lineSupabase
@@ -3300,7 +3314,7 @@ async function enqueueScenariosForContact(
             .from('marketing_automation_jobs')
             .update({
               status: 'skipped',
-              error_message: 'Webフォーム経路の長期育成スケジュールへ再配置するため旧教育予定を整理',
+              error_message: '相談フォームを受信したため、一般短期教育を停止し長期育成（5日目〜）へ切替',
               updated_at: new Date().toISOString(),
             })
             .in('id', idsToCancel)
@@ -6447,7 +6461,7 @@ app.get('/api/marketing/jobs', requireAuth, async (req, res) => {
 
     let jobQuery = lineSupabase
       .from('marketing_automation_jobs')
-      .select('id, owner_id, status, scenario_id, contact_id, channel, subject, due_at, error_message, hidden_at, created_at, updated_at')
+      .select('id, owner_id, event_key, status, scenario_id, contact_id, channel, subject, due_at, error_message, hidden_at, created_at, updated_at')
       .in('owner_id', ownerIds)
       .order('created_at', { ascending: false })
       .limit(200);
@@ -6459,7 +6473,7 @@ app.get('/api/marketing/jobs', requireAuth, async (req, res) => {
     if (jobRes.error && jobRes.error.message && jobRes.error.message.includes('hidden_at')) {
       jobRes = await lineSupabase
         .from('marketing_automation_jobs')
-        .select('id, owner_id, status, scenario_id, contact_id, channel, subject, due_at, error_message, created_at, updated_at')
+        .select('id, owner_id, event_key, status, scenario_id, contact_id, channel, subject, due_at, error_message, created_at, updated_at')
         .in('owner_id', ownerIds)
         .order('created_at', { ascending: false })
         .limit(200) as any;
@@ -6535,6 +6549,7 @@ app.get('/api/marketing/jobs', requireAuth, async (req, res) => {
         hasLineLinked: Boolean(contact?.line_user_id),
         scenarioName: String(scenCfg?.name || row.scenario_id || 'シナリオ不明'),
         scenarioTrigger: scenCfg?.trigger ? String(scenCfg.trigger) : null,
+        scenarioTargetTag: scenCfg?.targetTag ? String(scenCfg.targetTag) : null,
       };
     });
 
@@ -9101,6 +9116,7 @@ app.post(
             } else {
               await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
                 isPublicFormSubmission: true,
+                isConsultationFormSubmission: true,
                 scheduleDelayedEducationShiftDays: BRANCH_EDUCATION_DELAY_DAYS.public_form_consultation,
               });
             }

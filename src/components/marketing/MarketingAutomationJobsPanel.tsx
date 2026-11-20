@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
+import { formatJobActionLabel } from '../../utils/followupStarterScenarios';
 
 export interface MarketingAutomationHealth {
   emailConfigured: boolean;
@@ -44,6 +45,7 @@ type JobStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped' | 'cancele
 type JobChannelFilter = 'all' | 'email' | 'line';
 type JobRow = {
   id: string;
+  event_key?: string | null;
   status: JobStatus;
   scenario_id: string;
   contact_id: string;
@@ -54,6 +56,7 @@ type JobRow = {
 type JobView = JobRow & {
   scenarioName: string;
   scenarioTrigger?: string | null;
+  scenarioTargetTag?: string | null;
   contactName: string;
   contactEmail?: string | null;
   hasLineLinked?: boolean;
@@ -65,7 +68,7 @@ type JobsDiagnostics = {
 };
 
 const statusLabels: Record<JobStatus, string> = {
-  queued: '待機中', sending: '送信中', sent: '送信済み', failed: '失敗', skipped: 'スキップ', canceled: '取消済み',
+  queued: '待機中', sending: '送信中', sent: '送信済み', failed: '失敗', skipped: '切替・停止', canceled: '取消済み',
 };
 const statuses: JobStatus[] = ['queued', 'sending', 'sent', 'failed', 'skipped', 'canceled'];
 const activeStatuses: JobStatus[] = ['queued', 'sending', 'sent', 'failed', 'skipped'];
@@ -243,7 +246,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
 
       // サーバーAPIが利用できない場合のフォールバック（直接Supabase参照）
       let query = db.from('marketing_automation_jobs')
-        .select('id,status,scenario_id,contact_id,channel,due_at,error_message,hidden_at')
+        .select('id,event_key,status,scenario_id,contact_id,channel,due_at,error_message,hidden_at')
         .order('created_at', { ascending: false });
 
       if (!showHidden) {
@@ -256,7 +259,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
       const res = await query.limit(200);
       if (res.error && res.error.message && res.error.message.includes('hidden_at')) {
         const fallback = await db.from('marketing_automation_jobs')
-          .select('id,status,scenario_id,contact_id,channel,due_at,error_message')
+          .select('id,event_key,status,scenario_id,contact_id,channel,due_at,error_message')
           .order('created_at', { ascending: false })
           .limit(200);
         jobRows = fallback.data;
@@ -319,6 +322,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
           hasLineLinked: Boolean(c?.line_user_id),
           scenarioName: String(sCfg?.name || row.scenario_id || 'シナリオ不明'),
           scenarioTrigger: sCfg?.trigger || null,
+          scenarioTargetTag: sCfg?.targetTag || null,
         };
       }));
       setChannelCounts({
@@ -779,7 +783,26 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
           <p className="p-8 text-center text-sm text-slate-400">該当する配信ジョブはありません。</p>
         ) : (
           <div className="divide-y divide-slate-100">
-            {visibleJobs.map((job) => (
+            {visibleJobs.map((job) => {
+              const actionLabel = formatJobActionLabel({
+                eventKey: job.event_key,
+                scenarioTrigger: job.scenarioTrigger,
+                scenarioTargetTag: job.scenarioTargetTag,
+                scenarioId: job.scenario_id,
+              });
+              const reasonBoxClass =
+                job.status === 'failed'
+                  ? 'text-rose-700 bg-rose-50 border-rose-200'
+                  : job.status === 'skipped'
+                    ? 'text-sky-900 bg-sky-50/70 border-sky-200'
+                    : 'text-slate-600 bg-slate-50 border-slate-200';
+              const reasonPrefix =
+                job.status === 'failed'
+                  ? 'エラー：'
+                  : job.status === 'skipped'
+                    ? '切替・自動停止：'
+                    : '整理理由：';
+              return (
               <article key={job.id} className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center hover:bg-slate-50/70 transition">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -787,6 +810,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
                       job.status === 'queued' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                       job.status === 'sent' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                       job.status === 'failed' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                      job.status === 'skipped' ? 'bg-sky-50 text-sky-800 border-sky-200' :
                       'bg-slate-100 text-slate-700 border-slate-200'
                     }`}>
                       {statusLabels[job.status] || job.status}
@@ -798,6 +822,11 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
                     }`}>
                       {job.channel === 'email' ? '✉️ メール' : '💬 LINE'}
                     </span>
+                    {actionLabel && (
+                      <span className="rounded-full px-2.5 py-0.5 text-[11px] font-medium border bg-slate-50 text-slate-700 border-slate-200">
+                        起点: {actionLabel}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 truncate text-sm font-bold text-slate-900">{job.scenarioName}</p>
                   <p className="mt-1 text-xs text-slate-500">
@@ -807,7 +836,12 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
                     {' · 予定 '}
                     {new Date(job.due_at).toLocaleString('ja-JP')}
                   </p>
-                  {job.error_message && <p className="mt-2 break-words text-xs text-rose-600 font-medium bg-rose-50 p-2 rounded-lg border border-rose-200">{job.error_message}</p>}
+                  {job.error_message && (
+                    <p className={`mt-2 break-words text-xs font-medium p-2 rounded-lg border ${reasonBoxClass}`}>
+                      <span className="font-bold">{reasonPrefix}</span>
+                      {job.error_message}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   {job.status === 'failed' && (
@@ -832,7 +866,8 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
                   )}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

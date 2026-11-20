@@ -46,6 +46,7 @@ import {
   classifyScenarioFunnelPhase,
   classifyScenarioTrack,
   doesScenarioMatchRequestedMaterials,
+  formatJobActionLabel,
   formatScenarioStopCondition,
   formatScenarioTriggerLabel,
   formatScenarioWaitMinutes,
@@ -1014,6 +1015,20 @@ const monitorSort = getScenarioSortKey(monitorScenarioMock);
 const step1Sort = getScenarioSortKey(step1ScenarioMock);
 assert.ok(oneShotSort.stepNumber < monitorSort.stepNumber, 'モニター提案は一発直球の直後に並ぶ');
 assert.ok(monitorSort.stepNumber < step1Sort.stepNumber, 'モニター提案はステップ第1通より前に並ぶ');
+console.log('  ✓ passed');
+
+console.log('Test 39: public_form_consultation supersedes outreach/short education & formatJobActionLabel aligns job action labels');
+const onConsultForm = getSupersededPhasesOnEvent({ trigger: 'public_form_consultation' });
+assert.deepEqual(onConsultForm.cancelPhases, ['education_nurturing', 'sales_outreach']);
+assert.match(onConsultForm.reason, /^相談フォームを受信したため/);
+
+assert.equal(formatJobActionLabel({ eventKey: 'material_requested:c1:s1:email' }), '資料請求フォーム送信');
+assert.equal(formatJobActionLabel({ eventKey: 'diagnosis_completed:c1:s1:line' }), '診断フォーム完了');
+assert.equal(formatJobActionLabel({ eventKey: 'education_delayed:lead_created:c1:s1:email' }), '相談フォーム（長期育成）');
+assert.equal(formatJobActionLabel({ eventKey: 'prospect_monitor_one_shot:p1:c1:2026-11-20', scenarioId: 'prospect-monitor-one-shot' }), '営業メール（モニター提案）');
+assert.equal(formatJobActionLabel({ eventKey: 'booking_created:c1:s1:email' }), '面談予約確定');
+assert.equal(formatJobActionLabel({ eventKey: 'tag_added:c1:s1:line', scenarioTrigger: 'tag_added', scenarioTargetTag: '選択:診断' }), 'タグ「選択:診断」');
+assert.equal(formatJobActionLabel({ scenarioTrigger: 'meeting_completed' }), '面談完了時');
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');
