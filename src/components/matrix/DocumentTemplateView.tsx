@@ -21,8 +21,11 @@ import {
   Sparkles,
   ClipboardList,
   ExternalLink,
-  Link2
+  Link2,
+  Trash2,
+  X
 } from 'lucide-react';
+import { deleteTableRecord, bulkDeleteTableRecords } from '../../services/dataService';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import {
   getEndOfNextMonthDate,
@@ -162,6 +165,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [savedDocIds, setSavedDocIds] = useState<Record<string, string>>({});
   const autosavedDocumentIds = useRef<Record<string, string>>({});
   const autosaveQueues = useRef<Record<string, Promise<void>>>({});
+  const [companyCleanupOpen, setCompanyCleanupOpen] = useState(false);
+  const [selectedCleanupCompanyIds, setSelectedCleanupCompanyIds] = useState<string[]>([]);
+  const [confirmDeleteSingleCompany, setConfirmDeleteSingleCompany] = useState<{ id: string; company_name: string } | null>(null);
+  const [isDeletingCompanies, setIsDeletingCompanies] = useState(false);
+  const [companyCleanupError, setCompanyCleanupError] = useState('');
 
   // Active template resolution
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
@@ -240,6 +248,65 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       window.removeEventListener('mst:documents-changed', reload);
     };
   }, [loadCrmEntities]);
+
+  const resetSelectionAfterCompanyRemoval = (removedIds: string[]) => {
+    if (companyId && removedIds.includes(companyId)) {
+      setCompanyId('');
+      setContactId('');
+      setLeadId('');
+      setDealId('');
+      setDraftCtx(null);
+      setMeetingCtx(null);
+      setDraftRec(null);
+      setSavedDocIds({});
+      autosavedDocumentIds.current = {};
+      setVariableValues(getTemplateDefaultValues(selectedTemplateId, todayJst(), paymentMode, invoiceSubtype));
+    }
+  };
+
+  const handleConfirmSingleCompanyDelete = async () => {
+    if (!confirmDeleteSingleCompany) return;
+    setIsDeletingCompanies(true);
+    setCompanyCleanupError('');
+    const target = confirmDeleteSingleCompany;
+    const result = await deleteTableRecord('companies', { id: target.id }, {
+      force: true,
+      deleteDocuments: true,
+      deleteLinkedCrm: true,
+    });
+    setIsDeletingCompanies(false);
+    if (result.error) {
+      setCompanyCleanupError(result.error.message || '会社の削除に失敗しました。');
+      return;
+    }
+    setConfirmDeleteSingleCompany(null);
+    resetSelectionAfterCompanyRemoval([target.id]);
+    setSelectedCleanupCompanyIds((prev) => prev.filter((id) => id !== target.id));
+    setSaveMessage(`「${target.company_name}」および関連する担当者・リード・商談・重要書類を削除しました。`);
+    await loadCrmEntities();
+  };
+
+  const handleBulkCompanyDelete = async (targetIds: string[]) => {
+    if (targetIds.length === 0) return;
+    setIsDeletingCompanies(true);
+    setCompanyCleanupError('');
+    const result = await bulkDeleteTableRecords('companies', targetIds, {
+      force: true,
+      deleteDocuments: true,
+      deleteLinkedCrm: true,
+    });
+    setIsDeletingCompanies(false);
+    if (result.error && result.successCount === 0) {
+      setCompanyCleanupError(result.error.message || '会社の一括削除に失敗しました。');
+      return;
+    }
+    const deletedIds = result.deletedIds?.length ? result.deletedIds : targetIds;
+    resetSelectionAfterCompanyRemoval(deletedIds);
+    setSelectedCleanupCompanyIds([]);
+    setCompanyCleanupOpen(false);
+    setSaveMessage(`${result.successCount} 社の会社データと関連する担当者・リード・商談・重要書類を削除しました。`);
+    await loadCrmEntities();
+  };
 
   // Sync templates on mount
   useEffect(() => {
@@ -1372,34 +1439,70 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
       {/* Customer / Deal Relationship Bar */}
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
           <h2 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-purple-600"></span>
             書類の紐付け（会社・担当者・商談を選ぶと自動流し込み）
           </h2>
-          {saveMessage && <p role="status" className="text-xs text-purple-700 font-medium">{saveMessage}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            {saveMessage && <p role="status" className="text-xs text-purple-700 font-medium">{saveMessage}</p>}
+            {!initialCompanyId && !initialLeadId && !initialDealId && companies.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCompanyCleanupError('');
+                  setSelectedCleanupCompanyIds([]);
+                  setCompanyCleanupOpen(true);
+                }}
+                className="px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                title="会社リストに残っている不要な会社データを選択削除・全削除します"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>残っている会社を整理・削除 ({companies.length}社)</span>
+              </button>
+            )}
+          </div>
         </div>
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
           <label className="text-xs font-semibold text-slate-700">
             会社（顧客企業）
-            <select
-              value={companyId}
-              disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)}
-              onChange={(e) => {
-                const nextId = e.target.value;
-                if (nextId) setHasStartedDocument(true);
-                setCompanyId(nextId);
-                setContactId('');
-                setLeadId('');
-                setDealId('');
-              }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
-            >
-              <option value="">未選択</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.company_name}</option>
-              ))}
-            </select>
+            <div className="mt-1 flex items-center gap-1.5">
+              <select
+                value={companyId}
+                disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  if (nextId) setHasStartedDocument(true);
+                  setCompanyId(nextId);
+                  setContactId('');
+                  setLeadId('');
+                  setDealId('');
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+              >
+                <option value="">未選択</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.company_name}</option>
+                ))}
+              </select>
+              {companyId && !initialCompanyId && !initialLeadId && !initialDealId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = companies.find((c) => c.id === companyId);
+                    if (target) {
+                      setCompanyCleanupError('');
+                      setConfirmDeleteSingleCompany(target);
+                    }
+                  }}
+                  title="選択中の会社と関連データを削除"
+                  aria-label="選択中の会社と関連データを削除"
+                  className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 shrink-0 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </label>
           <label className="text-xs font-semibold text-slate-700">
             担当者
@@ -1857,6 +1960,177 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             setPopulateSeq((n) => n + 1);
           }}
         />
+      )}
+
+      {confirmDeleteSingleCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">会社データの削除確認</h3>
+                  <p className="text-xs text-slate-500">関連する担当者・リード・商談・重要書類も連動削除</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteSingleCompany(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                aria-label="閉じる"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              「<span className="font-bold text-slate-900">{confirmDeleteSingleCompany.company_name}</span>」を削除しますか？
+              紐づく担当者・リード・商談・顧客・契約・請求・重要書類・診断データも連動して削除されます（メール・LINE送信履歴は紐付け解除の上で保持されます）。
+            </p>
+            {companyCleanupError && (
+              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {companyCleanupError}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteSingleCompany(null)}
+                disabled={isDeletingCompanies}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmSingleCompanyDelete()}
+                disabled={isDeletingCompanies}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingCompanies ? '削除中…' : '削除を実行する'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {companyCleanupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">会社データの整理・削除</h3>
+                  <p className="text-xs text-slate-500">以前の登録や商談未紐付けで残った会社をまとめて削除できます</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompanyCleanupOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                aria-label="閉じる"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={companies.length > 0 && selectedCleanupCompanyIds.length === companies.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedCleanupCompanyIds(companies.map((c) => c.id));
+                      } else {
+                        setSelectedCleanupCompanyIds([]);
+                      }
+                    }}
+                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span>すべて選択 ({selectedCleanupCompanyIds.length} / {companies.length}社)</span>
+                </label>
+                <span className="text-[11px] text-slate-500">関連する担当者・リード・商談・書類も連動削除</span>
+              </div>
+
+              <div className="max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-1">
+                {companies.map((c) => {
+                  const checked = selectedCleanupCompanyIds.includes(c.id);
+                  return (
+                    <label
+                      key={c.id}
+                      className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs cursor-pointer transition ${
+                        checked ? 'bg-rose-50/70 text-slate-900 border border-rose-200' : 'hover:bg-white text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCleanupCompanyIds((prev) => [...prev, c.id]);
+                            } else {
+                              setSelectedCleanupCompanyIds((prev) => prev.filter((id) => id !== c.id));
+                            }
+                          }}
+                          className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                        />
+                        <span className="font-medium truncate">{c.company_name}</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0">{c.id}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                ※ メール・LINEの送信履歴自体は証跡保全のため削除されず、会社・担当者等との紐付けのみ解除されます。
+              </p>
+            </div>
+
+            {companyCleanupError && (
+              <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {companyCleanupError}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setCompanyCleanupOpen(false)}
+                disabled={isDeletingCompanies}
+                className="px-3.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBulkCompanyDelete(selectedCleanupCompanyIds)}
+                disabled={isDeletingCompanies || selectedCleanupCompanyIds.length === 0}
+                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>選択した {selectedCleanupCompanyIds.length} 社を削除</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBulkCompanyDelete(companies.map((c) => c.id))}
+                disabled={isDeletingCompanies || companies.length === 0}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingCompanies ? '削除実行中…' : `全 ${companies.length} 社を削除`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

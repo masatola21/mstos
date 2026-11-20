@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ClipboardList,
   Target,
+  X,
 } from 'lucide-react';
 import { CharacterConfig, ChatMessage, UserProfile, ProposedPlan, ApiUsageData } from '../types';
 import { ChatMessageContent } from './ChatMessageContent';
@@ -65,6 +66,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [inputText, setInputText] = useState('');
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isExtractingMemory, setIsExtractingMemory] = useState(false);
   const [memoryNotification, setMemoryNotification] = useState<string | null>(null);
@@ -72,6 +75,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+  const baseInputRef = useRef<string>('');
 
   const scheme = getColorScheme(character.avatarColor);
   const selectedWorkMode = resolveWorkMode(getAIWorkMode(selectedWorkModeId), roleOverrides);
@@ -84,47 +88,94 @@ export const ChatView: React.FC<ChatViewProps> = ({
   // Handle Speech Recognition (Web Speech API)
   useEffect(() => {
     const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'ja-JP';
-
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
-          .join('');
-        setInputText(transcript);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognition.onerror = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
+      typeof window !== 'undefined'
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
     }
+
+    setSpeechSupported(true);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'ja-JP';
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result?.[0]?.transcript || '')
+        .join('');
+      const base = baseInputRef.current;
+      setInputText(base ? `${base}${transcript}` : transcript);
+      setVoiceError(null);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      const code = String(event?.error || '');
+      if (code === 'aborted') return;
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setVoiceError('マイクの使用が許可されていません。ブラウザの権限設定をご確認ください。');
+      } else if (code === 'no-speech') {
+        setVoiceError('音声を検出できませんでした。マイクに近づいて再度お試しください。');
+      } else if (code === 'audio-capture') {
+        setVoiceError('マイクが見つかりません。機器の接続をご確認ください。');
+      } else if (code === 'network') {
+        setVoiceError('音声認識の通信エラーが発生しました。');
+      } else {
+        setVoiceError('音声認識を完了できませんでした。もう一度お試しください。');
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      try {
+        recognition.abort();
+      } catch {
+        // ignore cleanup error
+      }
+      recognitionRef.current = null;
+    };
   }, []);
 
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore if already stopped
+      }
+    }
+    setIsListening(false);
+  };
+
   const toggleListening = () => {
+    setVoiceError(null);
     if (!recognitionRef.current) {
-      alert('お使いのブラウザは音声入力に対応していません。');
+      setVoiceError('お使いのブラウザは音声入力に対応していません（Chrome・Edge・Safari等でご利用ください）。');
       return;
     }
     if (isListening) {
-      recognitionRef.current.stop();
+      stopListening();
+      return;
+    }
+    try {
+      baseInputRef.current = inputText;
+      recognitionRef.current.start();
+      setIsListening(true);
+    } catch {
       setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (err) {
-        console.error(err);
-      }
+      setVoiceError('音声入力を開始できませんでした。少し待ってから再度お試しください。');
     }
   };
 
@@ -151,16 +202,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    stopListening();
+    setVoiceError(null);
     if (!inputText.trim() || isStreaming) return;
     onSendMessage(inputText.trim(), selectedWorkModeId);
     setInputText('');
+    baseInputRef.current = '';
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSubmit();
     }
@@ -550,6 +604,36 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           </div>
 
+          {isListening && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                <span>音声入力中… 話しかけてください</span>
+              </div>
+              <button
+                type="button"
+                onClick={stopListening}
+                className="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline cursor-pointer"
+              >
+                停止
+              </button>
+            </div>
+          )}
+
+          {voiceError && (
+            <div role="alert" className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+              <span>{voiceError}</span>
+              <button
+                type="button"
+                onClick={() => setVoiceError(null)}
+                className="text-amber-600 hover:text-amber-900 p-0.5 cursor-pointer"
+                aria-label="閉じる"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-white rounded-2xl border border-slate-200 focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all p-1.5 shadow-2xs">
             <textarea
               ref={textareaRef}
@@ -557,7 +641,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               value={inputText}
               onChange={handleTextareaChange}
               onKeyDown={handleKeyDown}
-              placeholder={`${selectedWorkMode.name} に指示・相談を入力してください...`}
+              placeholder={speechSupported ? `${selectedWorkMode.name} に指示・相談を入力（マイクで音声入力も可能）...` : `${selectedWorkMode.name} に指示・相談を入力してください...`}
               disabled={isStreaming}
               className="w-full resize-none bg-transparent px-3 py-2 text-sm md:text-[15px] text-slate-900 placeholder-slate-400 focus:outline-none min-h-[44px] max-h-[180px] leading-relaxed disabled:opacity-50"
             />
@@ -567,11 +651,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <button
                 type="button"
                 onClick={toggleListening}
+                disabled={isStreaming}
                 title={isListening ? '音声入力を停止' : '音声で入力'}
-                className={`p-2 rounded-xl transition-all cursor-pointer ${
+                aria-label={isListening ? '音声入力を停止' : '音声で入力'}
+                className={`p-2 rounded-xl transition-all cursor-pointer disabled:opacity-40 ${
                   isListening
                     ? 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse'
-                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-purple-700 hover:bg-purple-50'
                 }`}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}

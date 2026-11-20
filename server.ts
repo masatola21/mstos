@@ -11119,14 +11119,18 @@ async function cascadeDeleteByCompanyIds(companyIds: string[]): Promise<{
   if (leadIds.length) await safeDeleteDocumentsByField('lead_id', leadIds);
   if (contactIds.length) await safeDeleteDocumentsByField('contact_id', contactIds);
 
-  // 3. 診断・フォーム回答・AIレポート
+  // 3. 診断・フォーム回答・AIレポート・商談シート/提案書下書き
   if (diagnosisIds.length) {
     await Promise.allSettled([
+      lineSupabase.from('proposal_drafts').delete().in('diagnosis_id', diagnosisIds),
+      lineSupabase.from('hearing_sheets').delete().in('diagnosis_id', diagnosisIds),
       lineSupabase.from('ai_reports').delete().in('diagnosis_id', diagnosisIds),
       lineSupabase.from('diagnosis_submissions').delete().in('diagnosis_id', diagnosisIds),
     ]);
   }
   await Promise.allSettled([
+    lineSupabase.from('proposal_drafts').delete().in('company_id', uniqueCompanyIds),
+    lineSupabase.from('hearing_sheets').delete().in('company_id', uniqueCompanyIds),
     lineSupabase.from('diagnosis_submissions').delete().in('company_id', uniqueCompanyIds),
     leadIds.length ? lineSupabase.from('diagnosis_submissions').delete().in('lead_id', leadIds) : Promise.resolve(),
     lineSupabase.from('diagnoses').delete().in('company_id', uniqueCompanyIds),
