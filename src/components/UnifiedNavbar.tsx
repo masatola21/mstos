@@ -243,7 +243,7 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               { id: 'pipeline', label: '反響・商談', items: (['leads', 'deals', 'mst_diagnoses'] as UnifiedNavTab[]) },
               { id: 'contracts', label: '書類・契約', items: (['document_templates'] as UnifiedNavTab[]) },
               { id: 'customers', label: '顧客・支援', items: (['customers', 'customer_operations', 'products', 'companies'] as UnifiedNavTab[]) },
-              { id: 'management', label: '管理・配信設定', items: (['communication_send', 'ai_knowledge', 'deal_invitations', 'customer_meeting_invitations', 'custom_lists'] as UnifiedNavTab[]) },
+              { id: 'management', label: '管理・配信設定', items: (['ai_knowledge', 'deal_invitations', 'customer_meeting_invitations', 'custom_lists'] as UnifiedNavTab[]) },
             ];
             const activeGroup = groups.find((group) => group.items.includes(currentTab)) || groups[0];
             const labelFor = (tab: UnifiedNavTab) => {
@@ -270,13 +270,31 @@ export const UnifiedNavbar: React.FC<UnifiedNavbarProps> = ({
               if (tab === 'custom_lists') return '配信対象セグメント';
               return TABLE_CONFIGS[tab as TableKey]?.label || String(tab);
             };
+            const isSendCenterActive =
+              currentTab === 'communication_send' ||
+              currentTab === 'deal_invitations' ||
+              currentTab === 'customer_meeting_invitations';
             return <div className="space-y-2">
-              <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="営業・顧客管理の機能グループ">
-                {groups.map((group) => <button key={group.id} onClick={() => onTabChange(group.items[0])} aria-current={activeGroup.id === group.id ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${activeGroup.id === group.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{group.label}</button>)}
+              <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="営業・顧客管理の機能グループ">
+                {groups.map((group) => <button key={group.id} onClick={() => onTabChange(group.items[0])} aria-current={!isSendCenterActive && activeGroup.id === group.id ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors cursor-pointer ${!isSendCenterActive && activeGroup.id === group.id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>{group.label}</button>)}
+                <button
+                  type="button"
+                  onClick={() => onTabChange('communication_send')}
+                  aria-current={currentTab === 'communication_send' ? 'page' : undefined}
+                  className={`ml-auto rounded-lg px-3 py-1.5 font-semibold border transition-colors cursor-pointer ${
+                    isSendCenterActive
+                      ? 'bg-teal-600 text-white border-teal-400 shadow-sm'
+                      : 'bg-teal-950/60 text-teal-200 border-teal-700/60 hover:bg-teal-900/70 hover:text-white'
+                  }`}
+                >
+                  📤 メール・LINE送信管理（全工程）
+                </button>
               </div>
-              <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1" aria-label={activeGroup.label}>
-                {activeGroup.items.map((tab) => <button key={tab} onClick={() => onTabChange(tab)} aria-current={currentTab === tab ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${currentTab === tab ? 'bg-blue-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>{labelFor(tab)}</button>)}
-              </div>
+              {!isSendCenterActive && (
+                <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1" aria-label={activeGroup.label}>
+                  {activeGroup.items.map((tab) => <button key={tab} onClick={() => onTabChange(tab)} aria-current={currentTab === tab ? 'page' : undefined} className={`rounded-lg px-3 py-1.5 transition-colors ${currentTab === tab ? 'bg-blue-600 font-semibold text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>{labelFor(tab)}</button>)}
+                </div>
+              )}
             </div>;
           })()}
 

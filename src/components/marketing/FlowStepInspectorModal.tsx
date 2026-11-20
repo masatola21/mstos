@@ -31,6 +31,7 @@ import { ONE_SHOT_SCENARIO_ID, getOneShotOutreachTemplate } from '../../utils/sa
 import { EmailHtmlPreviewCard } from '../common/EmailHtmlPreviewCard';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
 import { ScenarioDryRunModal } from './ScenarioDryRunModal';
+import { inferScenarioTargetMaterial } from '../../utils/followupStarterScenarios';
 
 interface FlowStepInspectorModalProps {
   isOpen: boolean;
@@ -86,6 +87,9 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   const [channel, setChannel] = useState<MarketingChannel>(scenario.channel);
   const [trigger, setTrigger] = useState<MarketingTrigger>(scenario.trigger);
   const [targetTag, setTargetTag] = useState<string>(scenario.targetTag || '');
+  const [targetMaterial, setTargetMaterial] = useState<'all' | 'management' | 'care'>(
+    inferScenarioTargetMaterial(scenario)
+  );
   const [waitDaysInput, setWaitDaysInput] = useState(Math.round((scenario.waitMinutes || 0) / 1440));
   const [sendTimeWindow, setSendTimeWindow] = useState(scenario.sendTimeWindow || '09:00-20:00');
   const [preferredSendTime, setPreferredSendTime] = useState(scenario.preferredSendTime || '');
@@ -188,6 +192,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
     setChannel(scenario.channel);
     setTrigger(scenario.trigger);
     setTargetTag(scenario.targetTag || '');
+    setTargetMaterial(inferScenarioTargetMaterial(scenario));
     setWaitDaysInput(Math.round((scenario.waitMinutes || 0) / 1440));
     setSendTimeWindow(scenario.sendTimeWindow || '09:00-20:00');
     setPreferredSendTime(scenario.preferredSendTime || '');
@@ -267,6 +272,7 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
       channel,
       trigger,
       targetTag: trigger === 'tag_added' ? targetTag.trim() || undefined : undefined,
+      targetMaterial: trigger === 'material_requested' ? targetMaterial : undefined,
       waitMinutes: resolvedWaitMinutes,
       sendTimeWindow,
       preferredSendTime: preferredSendTime.trim() || '',
@@ -795,24 +801,40 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
                       </select>
                     </div>
                   ) : (
-                    <div>
-                      <label className="text-slate-600 font-semibold block mb-1">希望配信時刻（JST）</label>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="time"
-                          value={preferredSendTime}
-                          onChange={(e) => setPreferredSendTime(e.target.value)}
-                          className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-purple-500"
-                        />
-                        {preferredSendTime && (
-                          <button
-                            type="button"
-                            onClick={() => setPreferredSendTime('')}
-                            className="px-2 py-1.5 text-[11px] rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                    <div className="space-y-2">
+                      {trigger === 'material_requested' && (
+                        <div>
+                          <label className="text-slate-600 font-semibold block mb-1">対象資料パターン</label>
+                          <select
+                            value={targetMaterial}
+                            onChange={(e) => setTargetMaterial(e.target.value as 'all' | 'management' | 'care')}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-purple-500"
                           >
-                            解除
-                          </button>
-                        )}
+                            <option value="management">経営改善実務ガイド向け</option>
+                            <option value="care">介護保険外開業向け</option>
+                            <option value="all">両方の資料（共通）</option>
+                          </select>
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-slate-600 font-semibold block mb-1">希望配信時刻（JST）</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="time"
+                            value={preferredSendTime}
+                            onChange={(e) => setPreferredSendTime(e.target.value)}
+                            className="flex-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-purple-500"
+                          />
+                          {preferredSendTime && (
+                            <button
+                              type="button"
+                              onClick={() => setPreferredSendTime('')}
+                              className="px-2 py-1.5 text-[11px] rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 cursor-pointer"
+                            >
+                              解除
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

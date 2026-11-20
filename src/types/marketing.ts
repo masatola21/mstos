@@ -33,6 +33,7 @@ export interface MarketingScenario {
   name: string;
   trigger: MarketingTrigger;
   targetTag?: string;
+  targetMaterial?: 'all' | 'management' | 'care';
   channel: MarketingChannel;
   audience: string;
   waitMinutes: number;

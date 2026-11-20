@@ -513,7 +513,7 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const applyMaterialFollowupStarterSet = () => {
     const { merged, addedCount, updatedCount } = mergeStarterScenarios(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS);
     onScenariosChange(merged);
-    setNotice(`資料請求後の自動追客（1・3・7日後／LINE+メール全3本）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
+    setNotice(`資料請求後の自動追客（経営改善3本＋介護保険外開業3本／30分無料相談案内）を反映しました（新規導入: ${addedCount}件、最新更新: ${updatedCount}件）。`);
   };
 
   const applyPostMeetingStarterSet = () => {

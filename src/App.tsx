@@ -1077,6 +1077,46 @@ function AppContent() {
     saveMarketingScenarios(deduped);
   };
 
+  // アプリ起動・シナリオ更新時にバックエンド参照先(marketing_automation_scenarios)を同期し、マーケティングタブ未訪問でもHPフォームから即座に待機ジョブを生成できるようにする
+  useEffect(() => {
+    if (!workspaceReady || !user || marketingScenarios.length === 0) return;
+    let cancelled = false;
+    const syncScenariosToRuntime = async () => {
+      const db = getSupabase();
+      if (!db) return;
+      const nowIso = new Date().toISOString();
+      const rows = marketingScenarios.map((scenario) => ({
+        owner_id: user.id,
+        scenario_id: scenario.id,
+        config: scenario,
+        updated_at: nowIso,
+      }));
+      const { error } = await db
+        .from('marketing_automation_scenarios')
+        .upsert(rows, { onConflict: 'owner_id,scenario_id' });
+      if (error || cancelled) return;
+
+      const { data: saved, error: loadErr } = await db
+        .from('marketing_automation_scenarios')
+        .select('scenario_id')
+        .eq('owner_id', user.id);
+      if (loadErr || cancelled) return;
+      const keep = new Set(marketingScenarios.map((s) => s.id));
+      const stale = (saved || []).map((r: any) => r.scenario_id).filter((id: string) => !keep.has(id));
+      if (stale.length > 0) {
+        await db
+          .from('marketing_automation_scenarios')
+          .delete()
+          .eq('owner_id', user.id)
+          .in('scenario_id', stale);
+      }
+    };
+    void syncScenariosToRuntime();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceReady, user?.id, marketingScenarios]);
+
   // Active character
   const activeCharacter =
     characters.find((c) => c.id === activeCharacterId) || characters[0] || PRESET_CHARACTERS[0];

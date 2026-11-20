@@ -129,7 +129,7 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
         .select('id, status, meeting_date')
         .eq('contact_id', contactId)
         .order('created_at', { ascending: false })
-        .limit(5),
+        .limit(1),
       db
         .from('contact_tags')
         .select('tag_id')
@@ -143,13 +143,15 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
       return { progressed: true, reason: '既に個別相談予約済みのため長期教育ステップをスキップ' };
     }
 
-    const progressedLead = (leadRes.data || []).find(
-      (l: any) =>
-        Boolean(l.meeting_date) ||
-        ['面談予約済', '面談実施済', 'ヒアリング済', '商談化', '成約', '受注', '失注', '見送り', '失注・対象外'].includes(
-          String(l.status || '').trim()
-        )
-    );
+    const latestLead = (leadRes.data || [])[0] as any;
+    const progressedLead = latestLead && (
+      Boolean(latestLead.meeting_date) ||
+      ['面談予約済', '面談実施済', 'ヒアリング済', '商談化', '成約', '受注', '失注', '見送り', '失注・対象外'].includes(
+        String(latestLead.status || '').trim()
+      )
+    )
+      ? latestLead
+      : null;
     if (progressedLead) {
       return {
         progressed: true,
@@ -158,50 +160,63 @@ export async function hasContactAlreadyProgressedBeyondNurturing(
     }
 
     if (companyId) {
-      const [{ data: deals }, { data: meetings }] = await Promise.all([
-        db
-          .from('deals')
-          .select('id, proposal_status, meeting_date')
-          .eq('company_id', companyId)
-          .limit(5),
-        db
-          .from('customer_service_meetings')
-          .select('id')
-          .eq('company_id', companyId)
-          .limit(1),
-      ]);
-      if (meetings && meetings.length > 0) {
-        return {
-          progressed: true,
-          reason: '既に面談記録があるため教育ステップをスキップ',
-        };
-      }
-      const progressedDeal = (deals || []).find(
-        (d: any) =>
-          Boolean(d.meeting_date) ||
-          [
-            '日程確定',
-            '初回面談',
-            '面談完了',
-            '要件提案',
-            '商談中',
-            '提案中',
-            '見積提示',
-            '見積提出',
-            '最終交渉',
-            '成約',
-            '受注',
-            '失注',
-            '見送り',
-            'won',
-            'lost',
-          ].includes(String(d.proposal_status || '').trim())
-      );
-      if (progressedDeal) {
-        return {
-          progressed: true,
-          reason: `商談ステージ進行済み（${progressedDeal.proposal_status || progressedDeal.meeting_date}）のため教育ステップをスキップ`,
-        };
+      const { data: comp } = await db
+        .from('companies')
+        .select('company_name')
+        .eq('id', companyId)
+        .maybeSingle();
+      const compName = String(comp?.company_name || '').trim();
+      const isSyntheticPersonalCompany =
+        !compName ||
+        compName.endsWith('様（個人）') ||
+        compName === '新規反響企業（フォーム経由）';
+
+      if (!isSyntheticPersonalCompany) {
+        const [{ data: deals }, { data: meetings }] = await Promise.all([
+          db
+            .from('deals')
+            .select('id, proposal_status, meeting_date')
+            .eq('company_id', companyId)
+            .limit(5),
+          db
+            .from('customer_service_meetings')
+            .select('id')
+            .eq('company_id', companyId)
+            .limit(1),
+        ]);
+        if (meetings && meetings.length > 0) {
+          return {
+            progressed: true,
+            reason: '既に面談記録があるため教育ステップをスキップ',
+          };
+        }
+        const progressedDeal = (deals || []).find(
+          (d: any) =>
+            Boolean(d.meeting_date) ||
+            [
+              '日程確定',
+              '初回面談',
+              '面談完了',
+              '要件提案',
+              '商談中',
+              '提案中',
+              '見積提示',
+              '見積提出',
+              '最終交渉',
+              '成約',
+              '受注',
+              '失注',
+              '見送り',
+              'won',
+              'lost',
+            ].includes(String(d.proposal_status || '').trim())
+        );
+        if (progressedDeal) {
+          return {
+            progressed: true,
+            reason: `商談ステージ進行済み（${progressedDeal.proposal_status || progressedDeal.meeting_date}）のため教育ステップをスキップ`,
+          };
+        }
       }
     }
   } catch (err) {

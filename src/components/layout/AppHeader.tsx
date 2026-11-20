@@ -11,7 +11,8 @@ import {
   AlertCircle,
   RefreshCw,
   ExternalLink,
-  Inbox
+  Inbox,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UnifiedNavTab } from '../UnifiedNavbar';
@@ -91,7 +92,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       case 'communication_send':
       case 'deal_invitations':
       case 'customer_meeting_invitations':
-        return { category: '営業・顧客管理', page: 'メール・LINE送信管理' };
+        return { category: '全社共通・送受信', page: 'メール・LINE送信管理' };
       case 'unified_calendar':
         return { category: 'デイリー業務', page: '予定カレンダー（Google同期・全社日程）' };
       case 'product_hub':
@@ -180,6 +181,25 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               {inboxAlertSummary!.totalAttentionCount > 99 ? '99+' : inboxAlertSummary!.totalAttentionCount}
             </span>
           )}
+        </button>
+
+        {/* Quick Send / Log Management Jump */}
+        <button
+          type="button"
+          onClick={() => onSelectTab('communication_send')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+            currentTab === 'communication_send' || currentTab === 'deal_invitations' || currentTab === 'customer_meeting_invitations'
+              ? 'bg-teal-600 text-white border-teal-700 font-bold shadow-xs'
+              : 'bg-teal-50/80 text-teal-900 border-teal-200 hover:bg-teal-100'
+          }`}
+          title="全工程のメール・LINE送信および配信ログを確認・送信"
+        >
+          <Send className={`w-3.5 h-3.5 ${
+            currentTab === 'communication_send' || currentTab === 'deal_invitations' || currentTab === 'customer_meeting_invitations'
+              ? 'text-white'
+              : 'text-teal-600'
+          }`} />
+          <span className="hidden sm:inline">送信管理</span>
         </button>
 
         {/* LINE要返信アラート */}

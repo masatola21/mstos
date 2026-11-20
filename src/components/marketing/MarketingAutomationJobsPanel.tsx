@@ -41,6 +41,7 @@ export interface MarketingAutomationHealth {
 }
 
 type JobStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped' | 'canceled';
+type JobChannelFilter = 'all' | 'email' | 'line';
 type JobRow = {
   id: string;
   status: JobStatus;
@@ -50,7 +51,18 @@ type JobRow = {
   due_at: string;
   error_message: string | null;
 };
-type JobView = JobRow & { scenarioName: string; contactName: string };
+type JobView = JobRow & {
+  scenarioName: string;
+  scenarioTrigger?: string | null;
+  contactName: string;
+  contactEmail?: string | null;
+  hasLineLinked?: boolean;
+};
+type JobsDiagnostics = {
+  activeScenarioCount: number;
+  triggers: Record<string, number>;
+  syncedFromMst?: number;
+};
 
 const statusLabels: Record<JobStatus, string> = {
   queued: '待機中', sending: '送信中', sent: '送信済み', failed: '失敗', skipped: 'スキップ', canceled: '取消済み',
@@ -112,7 +124,10 @@ interface Props {
 export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealthChange }) => {
   const [jobs, setJobs] = useState<JobView[]>([]);
   const [jobCounts, setJobCounts] = useState<Record<JobStatus, number>>({ queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0, canceled: 0 });
+  const [channelCounts, setChannelCounts] = useState<{ email: number; line: number }>({ email: 0, line: 0 });
+  const [diagnostics, setDiagnostics] = useState<JobsDiagnostics | null>(null);
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
+  const [channelFilter, setChannelFilter] = useState<JobChannelFilter>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [authBlocked, setAuthBlocked] = useState(false);
@@ -156,7 +171,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     if (!db || hidingCanceled) return;
     const count = jobCounts.canceled || 0;
     if (count === 0) {
-      alert('非表示にする取消済みジョブはありません。');
+      setManualNotice('非表示にする取消済みジョブはありません。');
       return;
     }
     if (!window.confirm(`取消済みのジョブ（${count}件）を非表示にして整理しますか？\n※ 過去の配信履歴データはDBに保持され、同一トリガーの誤った再作成を防ぎます。`)) {
@@ -194,6 +209,39 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     setLoading(true);
 
     try {
+      const { data: { session }, error: sessionError } = await db.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        authBlockedRef.current = true;
+        setAuthBlocked(true);
+        setError('権限エラー（401）: ログイン状態を確認できません。');
+        setLoading(false);
+        return;
+      }
+
+      const apiRes = await fetch(`/api/marketing/jobs?showHidden=${showHidden ? 'true' : 'false'}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (apiRes.status === 401 || apiRes.status === 403) {
+        authBlockedRef.current = true;
+        setAuthBlocked(true);
+        setError('権限エラー（401）: 配信ジョブへのアクセス権限がありません。');
+        setLoading(false);
+        return;
+      }
+
+      if (apiRes.ok) {
+        const payload = await apiRes.json();
+        setJobs(Array.isArray(payload.jobs) ? payload.jobs : []);
+        if (payload.statusCounts) setJobCounts(payload.statusCounts);
+        if (payload.channelCounts) setChannelCounts(payload.channelCounts);
+        if (payload.diagnostics) setDiagnostics(payload.diagnostics);
+        setError('');
+        setLoading(false);
+        return;
+      }
+
+      // サーバーAPIが利用できない場合のフォールバック（直接Supabase参照）
       let query = db.from('marketing_automation_jobs')
         .select('id,status,scenario_id,contact_id,channel,due_at,error_message,hidden_at')
         .order('created_at', { ascending: false });
@@ -235,18 +283,18 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
       const contactIds = [...new Set(rows.map((row) => row.contact_id).filter(Boolean))];
       const scenarioIds = [...new Set(rows.map((row) => row.scenario_id).filter(Boolean))];
       const [contactsResult, scenariosResult, ...countResults] = await Promise.all([
-        contactIds.length ? db.from('contacts').select('id,full_name').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
+        contactIds.length ? db.from('contacts').select('id,full_name,email,line_user_id').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
         scenarioIds.length ? db.from('marketing_automation_scenarios').select('scenario_id,config').in('scenario_id', scenarioIds) : Promise.resolve({ data: [], error: null }),
         ...statuses.map(async (status) => {
           let q = db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status);
           if (!showHidden) {
             q = q.is('hidden_at', null);
           }
-          const res = await q;
-          if (res.error && res.error.message && res.error.message.includes('hidden_at')) {
+          const r = await q;
+          if (r.error && r.error.message && r.error.message.includes('hidden_at')) {
             return db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status);
           }
-          return res;
+          return r;
         }),
       ]);
 
@@ -259,9 +307,24 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
         return;
       }
 
-      const contactsById = new Map((contactsResult.data || []).map((contact: any) => [contact.id, contact.full_name]));
-      const scenariosById = new Map((scenariosResult.data || []).map((scenario: any) => [scenario.scenario_id, scenario.config?.name || scenario.scenario_id]));
-      setJobs(rows.map((row) => ({ ...row, contactName: String(contactsById.get(row.contact_id) || '連絡先不明'), scenarioName: String(scenariosById.get(row.scenario_id) || row.scenario_id || 'シナリオ不明') })));
+      const contactsById = new Map((contactsResult.data || []).map((contact: any) => [contact.id, contact]));
+      const scenariosById = new Map((scenariosResult.data || []).map((scenario: any) => [scenario.scenario_id, scenario.config]));
+      setJobs(rows.map((row) => {
+        const c = contactsById.get(row.contact_id);
+        const sCfg = scenariosById.get(row.scenario_id);
+        return {
+          ...row,
+          contactName: String(c?.full_name || '連絡先不明'),
+          contactEmail: c?.email || null,
+          hasLineLinked: Boolean(c?.line_user_id),
+          scenarioName: String(sCfg?.name || row.scenario_id || 'シナリオ不明'),
+          scenarioTrigger: sCfg?.trigger || null,
+        };
+      }));
+      setChannelCounts({
+        email: rows.filter((r) => r.channel === 'email').length,
+        line: rows.filter((r) => r.channel === 'line').length,
+      });
       setJobCounts(Object.fromEntries(statuses.map((status, index) => [status, countResults[index]?.count || 0])) as Record<JobStatus, number>);
       setError(contactsResult.error || scenariosResult.error ? '連絡先またはシナリオ名を取得できないジョブがあります。' : '');
     } catch (err: any) {
@@ -333,6 +396,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
   };
 
   const visibleJobs = jobs.filter((job) => {
+    if (channelFilter !== 'all' && job.channel !== channelFilter) return false;
     if (filter === 'all') {
       return showHidden || job.status !== 'canceled';
     }
@@ -548,13 +612,56 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
         )}
       </section>
 
+      {diagnostics && (
+        diagnostics.activeScenarioCount === 0 ||
+        (diagnostics.triggers.diagnosis_completed || 0) === 0 ||
+        (diagnostics.triggers.material_requested || 0) === 0 ||
+        (diagnostics.triggers.line_registered || 0) === 0
+      ) && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 space-y-1.5">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>ホームページ経由の自動配信シナリオが一部未登録または停止中です</span>
+          </div>
+          <p className="text-[11px] leading-relaxed text-amber-900">
+            稼働中の自動ステップ数 — 診断完了後: <strong>{diagnostics.triggers.diagnosis_completed || 0}本</strong> ／ 資料請求後: <strong>{diagnostics.triggers.material_requested || 0}本</strong> ／ Web相談・LINE未反応後（教育7話）: <strong>{diagnostics.triggers.line_registered || 0}本</strong>。<br />
+            0本の経路はホームページ送信後も待機ジョブが作られません。「導線管理」タブの各セクションにある「導入 / 最新化」または一括導入を実行してください。
+          </p>
+        </div>
+      )}
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4 bg-slate-50/50">
-          <div>
+          <div className="max-w-3xl">
             <h2 className="font-bold text-slate-900">配信ジョブ</h2>
-            <p className="mt-0.5 text-xs text-slate-500">最新200件。状態とエラーを確認し、失敗ジョブを再実行・取消できます。※ シナリオの配信チャネルが「LINE & メール両方（both）」の場合、1回のトリガーでLINE用とメール用の2つのジョブが作成されます。</p>
+            <p className="mt-0.5 text-xs text-slate-500 leading-relaxed">
+              最新200件。状態とエラーを確認し、失敗ジョブを再実行・取消できます。<br />
+              ※「LINE＋メール（both）」設定のステップは二重送信防止のため、<strong>LINE友だち連携済みの相手にはLINEのみ</strong>、<strong>LINE未連携・ブロック時はメールのみ</strong>でジョブが作成されます（HP送信直後の自動返信メールは即時送信されるため待機ジョブには並びません）。
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs shadow-2xs">
+              {(
+                [
+                  { id: 'all', label: `全媒体` },
+                  { id: 'email', label: `✉️ メール ${channelCounts.email}` },
+                  { id: 'line', label: `💬 LINE ${channelCounts.line}` },
+                ] as const
+              ).map((ch) => (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => setChannelFilter(ch.id)}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+                    channelFilter === ch.id
+                      ? 'bg-purple-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {ch.label}
+                </button>
+              ))}
+            </div>
             <select
               aria-label="状態で絞り込み"
               value={filter}
@@ -694,7 +801,11 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
                   </div>
                   <p className="mt-2 truncate text-sm font-bold text-slate-900">{job.scenarioName}</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {job.contactName} · 予定 {new Date(job.due_at).toLocaleString('ja-JP')}
+                    {job.contactName}
+                    {job.contactEmail ? ` (${job.contactEmail})` : ''}
+                    {job.hasLineLinked ? ' · LINE連携済' : ''}
+                    {' · 予定 '}
+                    {new Date(job.due_at).toLocaleString('ja-JP')}
                   </p>
                   {job.error_message && <p className="mt-2 break-words text-xs text-rose-600 font-medium bg-rose-50 p-2 rounded-lg border border-rose-200">{job.error_message}</p>}
                 </div>

@@ -116,7 +116,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       defaultOpen: true,
       items: [
         { id: 'leads', label: '商談パイプライン' },
-        { id: 'communication_send', label: 'メール・LINE送信管理' },
         { id: 'document_templates', label: '重要書類・見積・契約' },
         { id: 'customer_operations', label: '契約・請求・顧問支援' },
       ],
@@ -310,7 +309,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             const GroupIcon = group.icon;
 
             return (
-              <div key={group.id} className="space-y-1">
+              <React.Fragment key={group.id}>
+              <div className="space-y-1">
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.id)}
@@ -358,6 +358,35 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   </div>
                 )}
               </div>
+              {group.id === 'sales' && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleItemClick('communication_send')}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                      isTabActive('communication_send')
+                        ? 'bg-teal-600 text-white font-bold border-teal-700 shadow-xs'
+                        : 'bg-teal-50/75 text-teal-900 border-teal-200/90 hover:bg-teal-100/80'
+                    }`}
+                    title="全工程のメール・LINE送信および配信ログ横断管理"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Send className={`w-3.5 h-3.5 shrink-0 ${isTabActive('communication_send') ? 'text-white' : 'text-teal-600'}`} />
+                      <span className="truncate">📤 メール・LINE送信管理</span>
+                    </div>
+                    <span
+                      className={`ml-1.5 px-1.5 py-0.5 text-[10px] font-bold rounded border shrink-0 ${
+                        isTabActive('communication_send')
+                          ? 'bg-teal-700/80 text-teal-50 border-teal-500'
+                          : 'bg-white text-teal-700 border-teal-200'
+                      }`}
+                    >
+                      全工程
+                    </span>
+                  </button>
+                </div>
+              )}
+            </React.Fragment>
             );
           })}
 

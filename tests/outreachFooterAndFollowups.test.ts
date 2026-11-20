@@ -40,15 +40,18 @@ import {
   MST_POST_MEETING_STARTER_SCENARIOS,
   classifyScenarioFunnelPhase,
   classifyScenarioTrack,
+  doesScenarioMatchRequestedMaterials,
   formatScenarioStopCondition,
   formatScenarioTriggerLabel,
   formatScenarioWaitMinutes,
   getEducationStartDayForShift,
   getSupersededPhasesOnEvent,
+  inferScenarioTargetMaterial,
   isConsultationLeadEligibleForHumanReplyEducation,
   isEligibleSourceTypeForConsultationHumanReply,
   isLegacyBranchAScenarioName,
   isLegacyBranchBScenario,
+  isLegacyMaterialScenarioName,
   isLegacyPostMeetingScenarioName,
   isOverlappingEducationStepForBranch,
   mergeStarterScenarioBatch,
@@ -233,11 +236,15 @@ assert.ok(unsafeLogoHtml.includes(SENDER_PROFILE.logoUrl));
 assert.ok(!unsafeLogoHtml.includes('javascript:alert(1)'));
 console.log('  ✓ passed');
 
-console.log('Test 14: material request followups have 3 dual-channel steps at 1d, 3d, 7d with booking/deal stops');
-assert.equal(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS.length, 3);
+console.log('Test 14: material request followups have 6 dual-pattern steps (3 management + 3 care) at 1d, 3d, 7d targeting 30-min free consultation');
+assert.equal(MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS.length, 6);
 assert.deepEqual(
   MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS.map((s) => s.waitMinutes),
-  [1440, 4320, 10080]
+  [1440, 4320, 10080, 1440, 4320, 10080]
+);
+assert.deepEqual(
+  MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS.map((s) => s.targetMaterial),
+  ['management', 'management', 'management', 'care', 'care', 'care']
 );
 for (const s of MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS) {
   assert.equal(s.trigger, 'material_requested');
@@ -248,6 +255,8 @@ for (const s of MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS) {
   assert.equal(s.status, 'prepared');
   assert.ok(s.emailSubject.trim().length > 0 && s.emailBody.trim().length > 0);
   assert.ok(s.messageBody.trim().length > 0);
+  assert.ok(s.emailBody.includes('{booking_url}') || s.flexButtonUrl === '{booking_url}');
+  assert.ok(s.messageBody.includes('{booking_url}') || s.flexButtonUrl === '{booking_url}');
 }
 console.log('  ✓ passed');
 
@@ -302,22 +311,33 @@ assert.equal(shouldStopScenarioForDeal({ trigger: 'meeting_completed', dealPropo
 assert.equal(shouldStopScenarioForDeal({ trigger: 'proposal_sent', dealProposalStatus: '失注' }).stop, true);
 console.log('  ✓ passed');
 
-console.log('Test 18: mergeStarterScenarioBatch is idempotent and auto-replaces legacy split report/proposal scenarios');
+console.log('Test 18: mergeStarterScenarioBatch is idempotent and auto-replaces legacy split report/proposal & legacy material scenarios');
 const firstApply = mergeStarterScenarioBatch([], [
   ...MST_DIAGNOSIS_STARTER_SCENARIOS,
   ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   ...MST_POST_MEETING_STARTER_SCENARIOS,
 ], { replaceLegacyBranchA: true, nowMs: 1000 });
-assert.equal(firstApply.addedCount, 10);
-assert.equal(firstApply.merged.length, 10);
+assert.equal(firstApply.addedCount, 13);
+assert.equal(firstApply.merged.length, 13);
 const secondApply = mergeStarterScenarioBatch(firstApply.merged, [
   ...MST_DIAGNOSIS_STARTER_SCENARIOS,
   ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS,
   ...MST_POST_MEETING_STARTER_SCENARIOS,
 ], { replaceLegacyBranchA: true, nowMs: 2000 });
 assert.equal(secondApply.addedCount, 0);
-assert.equal(secondApply.updatedCount, 10);
-assert.equal(secondApply.merged.length, 10);
+assert.equal(secondApply.updatedCount, 13);
+assert.equal(secondApply.merged.length, 13);
+
+assert.equal(isLegacyMaterialScenarioName('【資料請求①】1日後：資料ご確認のお伺い ＆ 無料相談のご案内'), true);
+assert.equal(isLegacyMaterialScenarioName('【資料請求・経営改善①】1日後：ガイドブックご確認 ＆ 30分無料相談のご案内'), false);
+const legacyMaterialMix = [
+  { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[0], id: 'old-mat-1', targetMaterial: undefined, name: '【資料請求①】1日後：資料ご確認のお伺い ＆ 無料相談のご案内', updatedAt: 100 },
+  { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[1], id: 'old-mat-2', targetMaterial: undefined, name: '【資料請求②】3日後：3分診断・具体策のご提案', updatedAt: 100 },
+  { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[2], id: 'old-mat-3', targetMaterial: undefined, name: '【資料請求③】7日後：今後のご検討状況お伺い（自動フォロー最終）', updatedAt: 100 },
+];
+const cleanedMaterialMerge = mergeStarterScenarioBatch(legacyMaterialMix, MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS, { nowMs: 3000 });
+assert.equal(cleanedMaterialMerge.merged.length, 6);
+assert.ok(cleanedMaterialMerge.merged.every((s) => !isLegacyMaterialScenarioName(s.name)));
 
 assert.equal(isLegacyPostMeetingScenarioName('【レポート後】3日後：詳細診断レポートのご感想・ご不明点'), true);
 assert.equal(isLegacyPostMeetingScenarioName('【提案後①】3日後：ご提案書のご確認状況・ご質問のお伺い'), true);
@@ -624,6 +644,7 @@ const mixedFunnelScenarios = [
   { ...MST_POST_MEETING_STARTER_SCENARIOS[2], id: 'post-2', updatedAt: 1 },
   { ...MST_POST_MEETING_STARTER_SCENARIOS[0], id: 'post-0', updatedAt: 1 },
   { ...MST_POST_MEETING_STARTER_SCENARIOS[1], id: 'post-1', updatedAt: 1 },
+  { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[3], id: 'mat-care-1', updatedAt: 1 },
   { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[2], id: 'mat-3', updatedAt: 1 },
   { ...MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[0], id: 'mat-1', updatedAt: 1 },
   { ...MST_LINE_NURTURING_STARTER_SCENARIOS[6], id: 'edu-7', updatedAt: 1 },
@@ -642,6 +663,7 @@ assert.deepEqual(sortedFunnelIds, [
   'edu-7',
   'mat-1',
   'mat-3',
+  'mat-care-1',
   'post-0',
   'post-1',
   'post-2',
@@ -850,6 +872,89 @@ console.log('  ✓ passed');
 
 console.log('Test 36: line_registered trigger label clearly shows follow-up +4 days timing');
 assert.equal(formatScenarioTriggerLabel('line_registered'), 'LINE登録された時 ＋ フォロー4日後');
+console.log('  ✓ passed');
+
+console.log('Test 37: dual-pattern material request matching routes management vs care-package vs both cleanly');
+const mgmtStep = MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[0];
+const careStep = MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS[3];
+assert.equal(inferScenarioTargetMaterial(mgmtStep), 'management');
+assert.equal(inferScenarioTargetMaterial(careStep), 'care');
+assert.equal(inferScenarioTargetMaterial({ name: '【資料請求①】1日後：汎用資料フォロー' }), 'all');
+
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: mgmtStep.targetMaterial,
+    name: mgmtStep.name,
+    materialKeys: ['management-guide'],
+    isCarePackage: false,
+  }),
+  true
+);
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: careStep.targetMaterial,
+    name: careStep.name,
+    materialKeys: ['management-guide'],
+    isCarePackage: false,
+  }),
+  false
+);
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: mgmtStep.targetMaterial,
+    name: mgmtStep.name,
+    materialKeys: ['care-package-overview'],
+    isCarePackage: true,
+  }),
+  false
+);
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: careStep.targetMaterial,
+    name: careStep.name,
+    materialKeys: ['care-package-overview'],
+    isCarePackage: true,
+  }),
+  true
+);
+// 両方請求時は二重配信防止のため1系統（isCarePackage=false時はmanagement、true時はcare）のみ起動
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: mgmtStep.targetMaterial,
+    name: mgmtStep.name,
+    materialKeys: ['management-guide', 'care-package-overview'],
+    isCarePackage: false,
+  }),
+  true
+);
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: careStep.targetMaterial,
+    name: careStep.name,
+    materialKeys: ['management-guide', 'care-package-overview'],
+    isCarePackage: false,
+  }),
+  false
+);
+// care-package専用ページからの資料請求（キー省略時でも isCarePackage=true なら care に振り分け）
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: careStep.targetMaterial,
+    name: careStep.name,
+    materialKeys: [],
+    isCarePackage: true,
+  }),
+  true
+);
+assert.equal(
+  doesScenarioMatchRequestedMaterials({
+    targetMaterial: mgmtStep.targetMaterial,
+    name: mgmtStep.name,
+    materialKeys: [],
+    isCarePackage: true,
+  }),
+  false
+);
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

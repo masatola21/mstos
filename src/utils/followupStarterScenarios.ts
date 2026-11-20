@@ -373,9 +373,9 @@ export const SCENARIO_TRACK_META: Record<ScenarioTrackCategory, ScenarioTrackMet
   material_followup: {
     id: 'material_followup',
     order: 5,
-    label: '⑤ 資料請求後フォロー',
+    label: '⑤ 資料請求後フォロー（経営改善・介護開業 両パターン）',
     shortLabel: '資料請求後',
-    description: '資料ダウンロード後の自動追客（1・3・7日後／LINE優先・メール補完）',
+    description: '経営改善ガイド／介護保険外開業の両資料に対応した自動追客（1・3・7日後）→ ゴール：30分無料相談',
     badgeClass: 'bg-teal-50 text-teal-700 border-teal-200',
     headerBgClass: 'bg-teal-50/70 border-teal-200',
   },
@@ -576,6 +576,13 @@ export function getScenarioSortKey(scenario: MarketingScenario): {
     } else {
       stepNumber = 100 + baseSubStep;
     }
+  } else if (track === 'material_followup') {
+    const baseSubStep = numMatch ? parseInt(numMatch[1], 10) : 1;
+    const isCare =
+      (scenario as any).targetMaterial === 'care' ||
+      name.includes('介護開業') ||
+      name.includes('介護保険外');
+    stepNumber = (isCare ? 20 : 0) + baseSubStep;
   } else if (track === 'branch_diagnosis' && isLegacyBranchAScenarioName(name)) {
     // 旧数字パターン（1〜5）や旧A1〜A5は現行A1〜A4の後ろにまとめて表示し、交互混在を防ぐ
     stepNumber += 100;
@@ -726,29 +733,32 @@ export const MST_DIAGNOSIS_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'up
 ];
 
 // ---------------------------------------------------------------------------
-// 2. 資料請求後の自動追客ステップ（1日後・3日後・7日後）
+// 2. 資料請求後の自動追客ステップ（経営改善・介護保険外開業 両パターン × 1・3・7日後）
+//    ※ どちらの資料請求も最終ゴールは「30分無料オンライン相談（{booking_url}）」
 // ---------------------------------------------------------------------------
 export const MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS: Omit<MarketingScenario, 'id' | 'updatedAt'>[] = [
+  // ── パターン1：経営改善実務ガイドブック請求者向け ────────────────────────
   {
-    name: '【資料請求①】1日後：資料をご覧いただけましたか？（ポイント解説）',
+    name: '【資料請求・経営改善①】1日後：ガイドブックの読みどころ ＆ 30分無料相談のご案内',
     trigger: 'material_requested',
+    targetMaterial: 'management',
     channel: 'both',
-    audience: '資料請求者（LINE・メール両対応／返信・予約で停止）',
+    audience: '経営改善ガイド資料の請求者（LINE優先・メール補完／返信・予約で停止）',
     waitMinutes: 1440,
-    emailSubject: '【MST】先日は資料をご請求いただきありがとうございました（読みどころのご案内）',
+    emailSubject: '【MST】先日は「経営改善実務ガイドブック」をご請求いただきありがとうございました',
     emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n昨日は弊社資料をご請求いただき、誠にありがとうございました。\n\n資料は無事お手元でご覧いただけましたでしょうか。\nお忙しい中かと思いますので、特に経営者様から「参考になった」とよくいただくポイントを1点だけお伝えします。\n\nそれは「現場の属人化や利益の漏れを直すときは、ツールを足す前に“いま詰まっている1箇所の業務フロー”を見極めるだけで大きく変わる」という点です。\n\nもし「自社だとどこが詰まっているか、まずは手軽に確認してみたい」という場合は、3分で結果が分かる無料経営診断もご活用いただけます。\n\n▼ 資料の再確認・ダウンロードはこちら\n{material_url}\n\n▼ 3分無料経営診断はこちら\n{link_url}\n\n▼ 個別のご相談・30分オンライン相談（TimeRex面談予約）はこちら\n{booking_url}\n\n資料内容についてご質問がございましたら、このままご返信いただければすぐにお答えいたします。',
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n昨日は「経営改善実務ガイドブック」をご請求いただき、誠にありがとうございました。\n\n資料は無事お手元でご覧いただけましたでしょうか。\nお忙しい中かと思いますので、特に経営者様から「参考になった」とよくいただくポイントを1点だけお伝えします。\n\nそれは「現場の属人化や利益の漏れを直すときは、新しいツールを足す前に“いま詰まっている1箇所の業務フロー”を見極めるだけで大きく変わる」という点です。\n\n資料の内容をもとに「自社ならどこから着手すると一番効果が出るか」を30分の無料オンライン相談で直接整理することも可能です。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}\n\n▼ 資料の再確認・ダウンロードはこちら\n{material_url}\n\n資料内容についてご質問がございましたら、このままご返信いただければすぐにお答えいたします。',
     messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n昨日は資料をご請求いただきありがとうございました！無事ご覧いただけましたでしょうか？\n\n「自社の場合はどこから改善するのが一番効果的か整理したい」という場合は、約3分で簡易診断結果が出る無料診断や、30分の個別オンライン相談もお気軽にご活用ください。\n\n▼ 資料のダウンロード・確認はこちら\n{material_url}\n\n▼ 3分無料経営診断はこちら\n{link_url}\n\n▼ 30分無料オンライン相談（面談予約）はこちら\n{booking_url}\n\n※資料に関するご質問も、このままLINEにご返信ください！',
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n昨日は「経営改善実務ガイドブック」をご請求いただきありがとうございました！無事ご覧いただけましたでしょうか？\n\n資料の内容をふまえ「自社ならどこから仕組み化すると一番利益・時間が戻りそうか」を30分の無料オンライン相談で一緒に整理しております。\n\n▼ 30分無料オンライン相談（面談予約）はこちら\n{booking_url}\n\n▼ 資料のダウンロード・再確認はこちら\n{material_url}\n\n※資料に関するご質問も、このままLINEにご返信ください！',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【資料請求フォロー】資料はご覧いただけましたか？（無料診断・相談案内）',
-    flexTitle: '📘 資料のご確認ありがとうございます',
+    flexAltText: '【資料請求フォロー】経営改善ガイドのご確認＆30分無料相談のご案内',
+    flexTitle: '📘 経営改善ガイドのご確認ありがとうございます',
     flexBody:
-      '{recipient_name} 様\n先日の資料はご覧いただけましたでしょうか？「自社ならどこから改善できるか」を手軽に把握できる3分無料診断もご用意しています。',
-    flexButtonLabel: '3分無料診断を試す',
-    flexButtonUrl: '{link_url}',
+      '{recipient_name} 様\n先日のガイドブックはご覧いただけましたか？「自社ならどこから直すのが効果的か」を30分の無料オンライン相談で一緒に整理いたします。',
+    flexButtonLabel: '30分無料相談を予約する',
+    flexButtonUrl: '{booking_url}',
     status: 'prepared',
     automationEnabled: true,
     sendTimeWindow: '09:00-19:00',
@@ -758,23 +768,24 @@ export const MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS: Omit<MarketingScenario, 'i
     consentBasis: '資料請求フォーム送信時の同意に基づく',
   },
   {
-    name: '【資料請求②】3日後：同規模企業様の改善事例 ＆ 30分無料相談のご案内',
+    name: '【資料請求・経営改善②】3日後：同規模企業様の改善事例 ＆ 30分無料・個別作戦会議',
     trigger: 'material_requested',
+    targetMaterial: 'management',
     channel: 'both',
-    audience: '資料請求者（商談未予約者／返信・予約で停止）',
+    audience: '経営改善ガイド資料の請求者（商談未予約者／返信・予約で停止）',
     waitMinutes: 4320,
-    emailSubject: '【MST改善事例】資料の活用例と「30分無料・個別作戦会議」のご案内',
+    emailSubject: '【MST改善事例】ガイドブックの実践例と「30分無料・個別作戦会議」のご案内',
     emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n先日の資料に続けて、実際に仕組み化に取り組まれた企業様の変化を1つご紹介いたします。\n\n「日々の見積・請求・顧客管理に追われて本来やりたい事業に時間が割けない」とお悩みだった企業様でも、業務の流れを棚卸しして不要な二重作業を整理したことで、社長や現場の負担を大きく減らすことができました。\n\n資料の内容を「自社に当てはめるとどうなるか」を30分の無料オンライン相談で一緒に整理することも可能ですので、ご都合のよろしいタイミングでご活用ください。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}\n\nもちろん売り込みなどは一切いたしませんので、現状の壁打ちとしてお気軽にお使いください。',
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n先日のガイドブックに続けて、実際に仕組み化に取り組まれた企業様の変化を1つご紹介いたします。\n\n「日々の見積・請求・顧客管理に追われて本来やりたい事業に時間が割けない」とお悩みだった企業様でも、業務の流れを棚卸しして不要な二重作業を整理したことで、社長や現場の負担を大きく減らし、利益が残る体制を整えられました。\n\n資料の内容を「御社に当てはめるとどうなるか」を30分の無料オンライン相談で一緒に整理できますので、ご都合のよろしいタイミングでご活用ください。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}\n\n売り込みなどは一切いたしませんので、現状整理の壁打ちとしてお気軽にお使いください。',
     messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n資料でお伝えしている仕組み化について、「自社に当てはめるとどこから取り組むのが良いか」を30分の無料オンライン相談で一緒に整理することも可能です。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}\n\nまだ具体的な検討段階でない場合も、壁打ちとしてお気軽にご活用ください。',
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n経営改善ガイドでお伝えしている仕組み化について、「自社に当てはめるとどこから取り組むのが良いか」を30分の無料オンライン相談で一緒に整理しております。\n\n▼ 30分無料オンライン相談の日程を選ぶ\n{booking_url}\n\nまだ具体的な検討段階でない場合も、壁打ちとしてお気軽にご活用ください。',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
     flexAltText: '【資料活用】自社に当てはめて整理できる30分無料オンライン相談のご案内',
-    flexTitle: '💡 30分無料・改善作戦会議のご案内',
+    flexTitle: '💡 30分無料・経営改善作戦会議のご案内',
     flexBody:
-      '{recipient_name} 様\n資料の内容を「御社ならどこから着手すべきか」に落とし込む30分の無料オンライン相談をご案内しております。',
+      '{recipient_name} 様\nガイドブックの内容を「御社ならどこから着手すべきか」に落とし込む30分の無料オンライン相談をご案内しております。',
     flexButtonLabel: '30分相談の日程を選ぶ',
     flexButtonUrl: '{booking_url}',
     status: 'prepared',
@@ -786,23 +797,112 @@ export const MST_MATERIAL_FOLLOWUP_STARTER_SCENARIOS: Omit<MarketingScenario, 'i
     consentBasis: '資料請求フォーム送信時の同意に基づく',
   },
   {
-    name: '【資料請求③】7日後：もしお困りの点があれば一言ご返信ください',
+    name: '【資料請求・経営改善③】7日後：資料請求から1週間・30分無料相談のご案内',
     trigger: 'material_requested',
+    targetMaterial: 'management',
     channel: 'both',
-    audience: '資料請求者（最終フォロー／返信・予約で停止）',
+    audience: '経営改善ガイド資料の請求者（最終フォロー／返信・予約で停止）',
     waitMinutes: 10080,
-    emailSubject: '【MST】資料請求から1週間：お困りごとやご相談はございませんか？',
+    emailSubject: '【MST】資料請求から1週間：お困りごとや個別相談のご希望はございませんか？',
     emailBody:
-      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n資料をご請求いただいてから1週間が経過いたしました。\nその後、社内でのお取り組みやご検討状況はいかがでしょうか。\n\nもし「資料を読んで気になる点があった」「具体的な事例や費用感について少し聞いてみたい」ということがございましたら、本メールへ一言ご返信いただくか、下記より個別相談をご利用ください。\n\n▼ 30分無料オンライン相談のご予約\n{booking_url}\n\nまたお役に立てることがございましたら、いつでもお声がけください。今後ともよろしくお願いいたします。',
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n「経営改善実務ガイドブック」をご請求いただいてから1週間が経過いたしました。\nその後、社内でのお取り組みやご検討状況はいかがでしょうか。\n\nもし「資料を読んで気になる点があった」「自社の場合の進め方を少し相談してみたい」ということがございましたら、本メールへ一言ご返信いただくか、下記より30分無料相談をご利用ください。\n\n▼ 30分無料オンライン相談のご予約\n{booking_url}\n\nまたお役に立てることがございましたら、いつでもお声がけください。今後ともよろしくお願いいたします。',
     messageBody:
-      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n資料をご請求いただいてから1週間が経ちました。資料の内容や今後の進め方について気になる点がございましたら、いつでも一言LINEでお送りください。\n\n▼ 30分無料オンライン相談のご予約はこちら\n{booking_url}',
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n資料をご請求いただいてから1週間が経ちました。内容や今後の進め方について気になる点がございましたら、いつでも一言LINEでお送りいただくか、30分無料相談をご活用ください。\n\n▼ 30分無料オンライン相談のご予約はこちら\n{booking_url}',
     lineMessageType: 'flex',
     lineImageUrl: '',
     linePreviewImageUrl: '',
-    flexAltText: '【資料請求1週間フォロー】ご不明点・個別相談のご案内',
-    flexTitle: '📅 資料に関するご質問・個別相談',
+    flexAltText: '【資料請求1週間フォロー】ご不明点・30分無料相談のご案内',
+    flexTitle: '📅 経営改善・30分無料相談のご案内',
     flexBody:
-      '{recipient_name} 様\n資料請求から1週間が経過しました。気になる点のご質問や個別相談のご希望があれば、いつでもお気軽にご連絡ください。',
+      '{recipient_name} 様\n資料請求から1週間が経過しました。気になる点のご質問や30分無料相談のご希望があれば、いつでもお気軽にご連絡ください。',
+    flexButtonLabel: '相談枠を確認する',
+    flexButtonUrl: '{booking_url}',
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-19:00',
+    preferredSendTime: '10:00',
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '資料請求フォーム送信時の同意に基づく',
+  },
+  // ── パターン2：介護保険外サービス開業パッケージ請求者向け ────────────────
+  {
+    name: '【資料請求・介護開業①】1日後：開業パッケージ資料のポイント ＆ 30分無料相談',
+    trigger: 'material_requested',
+    targetMaterial: 'care',
+    channel: 'both',
+    audience: '介護保険外開業パッケージ資料の請求者（LINE優先・メール補完／返信・予約で停止）',
+    waitMinutes: 1440,
+    emailSubject: '【MST】先日は「介護保険外サービス開業パッケージ資料」をご請求いただきありがとうございました',
+    emailBody:
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n昨日は「介護保険外サービス開業パッケージ資料」をご請求いただき、誠にありがとうございました。\n\n資料は無事お手元でご覧いただけましたでしょうか。\n介護保険外ビジネスの立ち上げでは、制度の制約がない分「どの自費メニューと単価帯から始めるか」「どうやって保険適用外のお客様を集客するか」の初期設計で初年度の黒字化スピードが大きく変わります。\n\n資料の内容をふまえ「御社の地域や強み・既存事業に合わせてどう立ち上げるか」を30分の無料オンライン相談で直接アドバイスさせていただいております。\n\n▼ 30分無料・介護保険外開業オンライン相談の日程を選ぶ\n{booking_url}\n\n▼ 資料の再確認・ダウンロードはこちら\n{material_url}\n\n「未経験でも始められるか」「既存介護事業と両立できるか」など、気になる点がございましたらこのままご返信ください。',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋真人です。\n\n昨日は「介護保険外サービス開業パッケージ資料」をご請求いただきありがとうございました！無事ご覧いただけましたでしょうか？\n\n介護保険外サービスは「メニュー設計」と「集客導線」を最初に整理することで早期の安定収益化がしやすくなります。\n御社の状況に合わせた進め方を30分の無料オンライン相談でお話しできますので、ぜひご活用ください。\n\n▼ 30分無料・開業オンライン相談の日程を選ぶ\n{booking_url}\n\n▼ 資料のダウンロード・再確認はこちら\n{material_url}\n\n※ご質問もこのままLINEにご返信ください！',
+    lineMessageType: 'flex',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '【資料請求フォロー】介護保険外開業パッケージのご確認＆30分無料相談',
+    flexTitle: '🌿 介護保険外開業資料のご確認ありがとうございます',
+    flexBody:
+      '{recipient_name} 様\n先日の開業パッケージ資料はご覧いただけましたか？御社の地域・事業に合わせた開業ステップを30分の無料相談で一緒に整理いたします。',
+    flexButtonLabel: '30分無料相談を予約する',
+    flexButtonUrl: '{booking_url}',
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-19:00',
+    preferredSendTime: '10:00',
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '資料請求フォーム送信時の同意に基づく',
+  },
+  {
+    name: '【資料請求・介護開業②】3日後：直営「アシスタ大垣」の黒字化設計 ＆ 無料作戦会議',
+    trigger: 'material_requested',
+    targetMaterial: 'care',
+    channel: 'both',
+    audience: '介護保険外開業パッケージ資料の請求者（商談未予約者／返信・予約で停止）',
+    waitMinutes: 4320,
+    emailSubject: '【MST】直営「アシスタ大垣」の実践データに基づく開業設計 ＆ 30分無料相談のご案内',
+    emailBody:
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n先日の開業パッケージ資料に続けて、弊社直営の介護保険外サービス「アシスタ大垣」の現場で重視してきたポイントをお伝えいたします。\n\n失敗しない開業のためには、最初から大きな投資や複雑なメニューを作るのではなく、\n① 地域の困りごとに直結した基本プランの選定\n② リピート・定期利用につながる単価・回数設計\n③ 紹介頼みにしないWeb・LINE集客とカルテ管理の仕組み化\nこの3点をシンプルに整えてスタートすることが鍵となります。\n\n30分の無料オンライン相談では、御社のご状況に合わせて「初期に必要な準備と収益の組み立て方」を具体的に整理いたします。\n\n▼ 30分無料・開業作戦会議の日程を選ぶ\n{booking_url}\n\n情報収集の段階でも歓迎ですので、お気軽にご活用ください。',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n弊社直営「アシスタ大垣」の実務経験をもとに、介護保険外サービスで失敗しないメニュー設計・集客の仕組み化を30分の無料相談でお伝えしております。\n\n▼ 30分無料・介護保険外開業相談の日程を選ぶ\n{booking_url}\n\n初期費用や準備手順の壁打ちとしてお気軽にご予約ください！',
+    lineMessageType: 'flex',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '【直営モデル共有】30分無料・介護保険外開業 作戦会議のご案内',
+    flexTitle: '🌿 直営モデルで学ぶ・30分無料開業作戦会議',
+    flexBody:
+      '{recipient_name} 様\n直営「アシスタ大垣」の実践データをもとに、御社の条件に合うサービス設計・開業手順を30分の無料相談で一緒に具体化しませんか？',
+    flexButtonLabel: '無料開業相談を予約する',
+    flexButtonUrl: '{booking_url}',
+    status: 'prepared',
+    automationEnabled: true,
+    sendTimeWindow: '09:00-19:00',
+    preferredSendTime: '10:00',
+    stopOnBooking: true,
+    stopOnDeal: true,
+    consentBasis: '資料請求フォーム送信時の同意に基づく',
+  },
+  {
+    name: '【資料請求・介護開業③】7日後：開業資料から1週間・30分無料相談のご案内',
+    trigger: 'material_requested',
+    targetMaterial: 'care',
+    channel: 'both',
+    audience: '介護保険外開業パッケージ資料の請求者（最終フォロー／返信・予約で停止）',
+    waitMinutes: 10080,
+    emailSubject: '【MST】開業資料のご請求から1週間：30分無料オンライン相談のご案内',
+    emailBody:
+      '{recipient_name} 様\n\n有限会社MSTの大橋真人です。\n\n「介護保険外サービス開業パッケージ資料」をご請求いただいてから1週間が経過いたしました。\nその後、新規立ち上げや自費サービス追加のご検討状況はいかがでしょうか。\n\nもし「収益イメージや必要書類について少し確認したい」「自社の業態で参入できるか相談したい」ということがございましたら、本メールへのご返信または下記より30分無料相談をご利用ください。\n\n▼ 30分無料オンライン相談のご予約はこちら\n{booking_url}\n\n今後ともお役に立てる機会がございましたら、いつでもお声がけください。',
+    messageBody:
+      '{recipient_name} 様\n有限会社MSTの大橋です。\n\n介護保険外開業の資料をご請求いただいてから1週間が経ちました。進め方や支援内容について気になる点がございましたら、一言LINEをお送りいただくか30分無料相談をご利用ください。\n\n▼ 30分無料オンライン相談のご予約はこちら\n{booking_url}',
+    lineMessageType: 'flex',
+    lineImageUrl: '',
+    linePreviewImageUrl: '',
+    flexAltText: '【資料請求1週間フォロー】介護保険外開業・30分無料相談のご案内',
+    flexTitle: '📅 介護保険外開業・30分無料相談のご案内',
+    flexBody:
+      '{recipient_name} 様\n開業資料のご請求から1週間が経過しました。条件の確認や立ち上げの進め方など、30分の無料相談でお気軽にご相談ください。',
     flexButtonLabel: '相談枠を確認する',
     flexButtonUrl: '{booking_url}',
     status: 'prepared',
@@ -923,6 +1023,12 @@ export const LEGACY_POST_MEETING_PREFIXES = [
   '【レポート＆提案書送付後②】',
 ];
 
+export const LEGACY_MATERIAL_PREFIXES = [
+  '【資料請求①】',
+  '【資料請求②】',
+  '【資料請求③】',
+];
+
 export function isLegacyBranchAScenarioName(name: string): boolean {
   const trimmed = (name || '').trim();
   if (!trimmed) return false;
@@ -936,6 +1042,63 @@ export function isLegacyPostMeetingScenarioName(name: string): boolean {
   const trimmed = (name || '').trim();
   if (!trimmed) return false;
   return LEGACY_POST_MEETING_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+export function isLegacyMaterialScenarioName(name: string): boolean {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return false;
+  return LEGACY_MATERIAL_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+export function inferScenarioTargetMaterial(cfg: {
+  targetMaterial?: string | null;
+  name?: string | null;
+}): 'all' | 'management' | 'care' {
+  const explicit = String(cfg.targetMaterial || '').trim();
+  if (explicit === 'management' || explicit === 'care' || explicit === 'all') {
+    return explicit;
+  }
+  const name = String(cfg.name || '').trim();
+  if (name.includes('介護開業') || name.includes('介護保険外')) {
+    return 'care';
+  }
+  if (name.includes('経営改善')) {
+    return 'management';
+  }
+  return 'all';
+}
+
+export function doesScenarioMatchRequestedMaterials(params: {
+  targetMaterial?: string | null;
+  name?: string | null;
+  materialKeys?: readonly string[] | null;
+  isCarePackage?: boolean;
+}): boolean {
+  const target = inferScenarioTargetMaterial({
+    targetMaterial: params.targetMaterial,
+    name: params.name,
+  });
+  if (target === 'all') return true;
+
+  const keys = Array.isArray(params.materialKeys) ? params.materialKeys : [];
+  const hasCare =
+    keys.some((k) => k === 'care-package-overview' || k.includes('care')) ||
+    (keys.length === 0 && Boolean(params.isCarePackage));
+  const hasMgmt =
+    keys.some((k) => k === 'management-guide' || k.includes('management'));
+
+  if (hasCare && !hasMgmt) {
+    return target === 'care';
+  }
+  if (hasMgmt && !hasCare) {
+    return target === 'management';
+  }
+  if (hasCare && hasMgmt) {
+    // 両方の資料を同時に請求した場合は、同一タイミングでの二重送信（6通連打）を防ぐため1系統のみ起動
+    return target === (params.isCarePackage ? 'care' : 'management');
+  }
+  // 請求資料が特定できない汎用トリガー時は経営改善を既定とする
+  return target === 'management';
 }
 
 export function isLegacyBranchBScenario(
@@ -1013,6 +1176,7 @@ export function mergeStarterScenarioBatch(
     replaceLegacyBranchA?: boolean;
     replaceLegacyBranchB?: boolean;
     replaceLegacyPostMeeting?: boolean;
+    replaceLegacyMaterial?: boolean;
     nowMs?: number;
   }
 ): { merged: MarketingScenario[]; addedCount: number; updatedCount: number } {
@@ -1023,6 +1187,9 @@ export function mergeStarterScenarioBatch(
   const shouldReplaceBranchB =
     options?.replaceLegacyBranchB ??
     presets.some((p) => p.trigger === 'tag_added' && p.targetTag === '選択:個別相談');
+  const shouldReplaceMaterial =
+    options?.replaceLegacyMaterial ??
+    presets.some((p) => p.trigger === 'material_requested' && Boolean(p.targetMaterial));
   const extractStoryEp = (s: { name?: string; trigger?: string }) => {
     if (s.trigger !== 'line_registered') return null;
     const m = /^【第([1-7])話(?:[・\s]*最終話)?】/.exec((s.name || '').trim());
@@ -1037,6 +1204,7 @@ export function mergeStarterScenarioBatch(
     if (options?.replaceLegacyBranchA && isLegacyBranchAScenarioName(nm)) return false;
     if (shouldReplaceBranchB && isLegacyBranchBScenario(s) && !presetNames.has(nm)) return false;
     if (shouldReplacePostMeeting && isLegacyPostMeetingScenarioName(nm)) return false;
+    if (shouldReplaceMaterial && isLegacyMaterialScenarioName(nm) && !presetNames.has(nm)) return false;
     const ep = extractStoryEp(s);
     if (ep !== null && presetStoryEpisodes.has(ep) && !presetNames.has(nm)) {
       return false;

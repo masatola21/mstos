@@ -41,6 +41,8 @@ import {
 import {
   BRANCH_EDUCATION_DELAY_DAYS,
   classifyScenarioFunnelPhase,
+  doesScenarioMatchRequestedMaterials,
+  inferScenarioTargetMaterial,
   isOverlappingEducationStepForBranch,
   shouldStopScenarioForDeal,
 } from './src/utils/followupStarterScenarios.js';
@@ -1067,6 +1069,68 @@ export async function resolveSystemOwnerId(fallbackOwnerId?: string | null): Pro
     if (userData?.users?.[0]?.id) return userData.users[0].id;
   } catch {}
   return null;
+}
+
+async function resolveWorkspaceOwnerIds(primaryUserId?: string | null): Promise<string[]> {
+  const ids = new Set<string>();
+  if (primaryUserId) ids.add(String(primaryUserId));
+  if (!lineSupabase) return Array.from(ids);
+
+  try {
+    const sysOwner = await resolveSystemOwnerId();
+    if (sysOwner) ids.add(sysOwner);
+  } catch {}
+
+  const lookups = await Promise.all([
+    lineSupabase.from('line_channel_integrations').select('owner_id').limit(5),
+    lineSupabase.from('email_channel_integrations').select('owner_id').limit(5),
+    lineSupabase.from('marketing_automation_scenarios').select('owner_id').limit(10),
+    lineSupabase.from('mst_marketing_scenarios').select('user_id').limit(10),
+  ].map((p) => p.then((r) => r, () => ({ data: null }))));
+
+  for (const row of (lookups[0]?.data || []) as any[]) if (row?.owner_id) ids.add(String(row.owner_id));
+  for (const row of (lookups[1]?.data || []) as any[]) if (row?.owner_id) ids.add(String(row.owner_id));
+  for (const row of (lookups[2]?.data || []) as any[]) if (row?.owner_id) ids.add(String(row.owner_id));
+  for (const row of (lookups[3]?.data || []) as any[]) if (row?.user_id) ids.add(String(row.user_id));
+
+  return Array.from(ids).filter((id) => isPublicUuid(id));
+}
+
+async function syncMarketingScenariosFromMstFallback(onlyOwnerId?: string): Promise<number> {
+  if (!lineSupabase) return 0;
+  try {
+    let query = lineSupabase.from('mst_marketing_scenarios').select('user_id, id, payload');
+    if (onlyOwnerId) query = query.eq('user_id', onlyOwnerId);
+    const { data: mstRows, error } = await query;
+    if (error || !mstRows || mstRows.length === 0) return 0;
+
+    const nowIso = new Date().toISOString();
+    const rowsToUpsert = mstRows
+      .filter((r: any) => r?.user_id && (r?.payload?.id || r?.id))
+      .map((r: any) => {
+        const cfg = (r.payload && typeof r.payload === 'object') ? r.payload : {};
+        const scenarioId = String(cfg.id || r.id);
+        return {
+          owner_id: r.user_id,
+          scenario_id: scenarioId,
+          config: cfg,
+          updated_at: nowIso,
+        };
+      });
+    if (rowsToUpsert.length === 0) return 0;
+
+    const { error: upsertErr } = await lineSupabase
+      .from('marketing_automation_scenarios')
+      .upsert(rowsToUpsert, { onConflict: 'owner_id,scenario_id' });
+    if (upsertErr) {
+      console.warn('[Automation] mst_marketing_scenarios fallback sync error:', upsertErr.message);
+      return 0;
+    }
+    return rowsToUpsert.length;
+  } catch (err: any) {
+    console.warn('[Automation] syncMarketingScenariosFromMstFallback exception:', err?.message);
+    return 0;
+  }
 }
 
 const memoryEmailBackupSettings: Record<string, { address: string; enabled: boolean }> = {};
@@ -3063,6 +3127,8 @@ async function enqueueScenariosForContact(
     scheduleDelayedEducationShiftDays?: number;
     isPublicFormSubmission?: boolean;
     skipDelayedEducationReschedule?: boolean;
+    materialKeys?: string[];
+    isCarePackage?: boolean;
   }
 ): Promise<number> {
   if (!lineSupabase || !contactId || !triggerName) return 0;
@@ -3081,10 +3147,24 @@ async function enqueueScenariosForContact(
       tagName: options?.tagName,
     });
 
-    const { data: scenarios, error: scenErr } = await lineSupabase
+    let { data: scenarios, error: scenErr } = await lineSupabase
       .from('marketing_automation_scenarios')
       .select('owner_id, scenario_id, config');
-    if (scenErr || !scenarios || scenarios.length === 0) return 0;
+
+    if (!scenErr && (!scenarios || scenarios.length === 0)) {
+      const synced = await syncMarketingScenariosFromMstFallback(onlyOwnerId);
+      if (synced > 0) {
+        const retryRes = await lineSupabase
+          .from('marketing_automation_scenarios')
+          .select('owner_id, scenario_id, config');
+        scenarios = retryRes.data;
+        scenErr = retryRes.error;
+      }
+    }
+    if (scenErr || !scenarios || scenarios.length === 0) {
+      console.warn('[Automation] No scenarios found in marketing_automation_scenarios for trigger:', triggerName, scenErr?.message || '');
+      return 0;
+    }
 
     // A案（長期育成型）: 分岐やWeb相談フォーム経由で教育7話をいつ開始するか（基準2日への加算日数）
     let resolvedEducationShiftDays: number | null = null;
@@ -3108,6 +3188,30 @@ async function enqueueScenariosForContact(
 
     const isDocSentTrigger = triggerName === 'report_sent' || triggerName === 'proposal_sent' || triggerName === 'report_or_proposal_sent';
 
+    // 資料請求時は、請求資料パターン外のシナリオ（DBトリガー先行投入分）をキャンセル対象として検出
+    if (triggerName === 'material_requested') {
+      const mismatchedScenarioIds = (scenarios as any[])
+        .filter((s) => (s.config?.trigger === 'material_requested') && !doesScenarioMatchRequestedMaterials({
+          targetMaterial: s.config?.targetMaterial,
+          name: s.config?.name,
+          materialKeys: options?.materialKeys,
+          isCarePackage: options?.isCarePackage,
+        }))
+        .map((s) => s.scenario_id);
+      if (mismatchedScenarioIds.length > 0) {
+        await lineSupabase
+          .from('marketing_automation_jobs')
+          .update({
+            status: 'canceled',
+            error_message: '請求された資料パターンと異なるシナリオのため自動整理',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('contact_id', contact.id)
+          .eq('status', 'queued')
+          .in('scenario_id', mismatchedScenarioIds);
+      }
+    }
+
     const matchedScenarios: Array<{ row: any; isDelayedEducation: boolean; isUnifiedPostMeeting: boolean }> = [];
     for (const s of scenarios as any[]) {
       const cfg = s.config || {};
@@ -3129,6 +3233,14 @@ async function enqueueScenariosForContact(
           if (!options?.tagName || String(cfg.targetTag).trim() !== String(options.tagName).trim()) {
             continue;
           }
+        }
+        if (triggerName === 'material_requested' && !doesScenarioMatchRequestedMaterials({
+          targetMaterial: cfg.targetMaterial,
+          name: cfg.name,
+          materialKeys: options?.materialKeys,
+          isCarePackage: options?.isCarePackage,
+        })) {
+          continue;
         }
         matchedScenarios.push({
           row: s,
@@ -3156,7 +3268,10 @@ async function enqueueScenariosForContact(
       }
     }
 
-    if (matchedScenarios.length === 0) return 0;
+    if (matchedScenarios.length === 0) {
+      console.info(`[Automation] 0 matched scenarios for trigger=${triggerName} contact=${contact.id}`);
+      return 0;
+    }
 
     // Web相談フォーム経由などで手前の未送信教育ステップがあれば上書き整理してから新規投入する
     if (
@@ -3231,6 +3346,7 @@ async function enqueueScenariosForContact(
     const resolvedChannelsCache = new Map<string, ('line' | 'email')[]>();
 
     let enqueued = 0;
+    let skippedReasonSummary = '';
     const nowMs = Date.now();
     for (const { row: s, isDelayedEducation, isUnifiedPostMeeting } of matchedScenarios) {
       const cfg = s.config || {};
@@ -3241,6 +3357,7 @@ async function enqueueScenariosForContact(
         progressionState.progressed &&
         (phase === 'education_nurturing' || (cfg.trigger === 'tag_added' && cfg.targetTag === '選択:診断'))
       ) {
+        skippedReasonSummary = progressionState.reason || 'progressed_beyond_nurturing';
         continue;
       }
 
@@ -3374,10 +3491,13 @@ async function enqueueScenariosForContact(
 
         if (!bodyText && !linePayload) continue;
 
-        // 【重複防止 1】すでに queued または processing 状態の同一シナリオ・チャネルジョブがあればスキップ
+        const nowIso = new Date(nowMs).toISOString();
+
+        // 【重複防止 1】すでに queued または processing 状態の同一シナリオ・チャネルジョブがあれば原則スキップ
+        // ただし直前（30秒以内）にDBトリガーが先行投入したジョブは preferredSendTime / line_message_payload を補完更新する
         const { data: existingActive } = await lineSupabase
           .from('marketing_automation_jobs')
-          .select('id')
+          .select('id, status, created_at, due_at, line_message_payload')
           .eq('contact_id', contact.id)
           .eq('scenario_id', s.scenario_id)
           .eq('channel', ch)
@@ -3386,6 +3506,29 @@ async function enqueueScenariosForContact(
           .maybeSingle();
 
         if (existingActive) {
+          const createdAgeMs = existingActive.created_at ? (nowMs - Date.parse(existingActive.created_at)) : Number.POSITIVE_INFINITY;
+          const needsTriggerReconcile =
+            existingActive.status === 'queued' &&
+            createdAgeMs >= 0 &&
+            createdAgeMs < 30_000 &&
+            (
+              (linePayload !== null && existingActive.line_message_payload == null) ||
+              existingActive.due_at !== dueAt
+            );
+          if (needsTriggerReconcile) {
+            const { error: reconcileErr } = await lineSupabase
+              .from('marketing_automation_jobs')
+              .update({
+                due_at: dueAt,
+                subject: ch === 'email' ? (cfg.emailSubject || null) : null,
+                body_text: bodyText,
+                line_message_payload: linePayload,
+                updated_at: nowIso,
+              })
+              .eq('id', existingActive.id)
+              .eq('status', 'queued');
+            if (!reconcileErr) enqueued++;
+          }
           continue;
         }
 
@@ -3409,7 +3552,6 @@ async function enqueueScenariosForContact(
           }
         }
 
-        const nowIso = new Date(nowMs).toISOString();
         const eventKey = isDelayedEducation
           ? `education_delayed:${triggerName}:${contact.id}:${s.scenario_id}:${ch}`
           : isUnifiedPostMeeting
@@ -3439,9 +3581,18 @@ async function enqueueScenariosForContact(
             ignoreDuplicates: triggerName !== 'consultation_human_replied',
           });
 
-        if (!insErr) enqueued++;
+        if (insErr) {
+          console.error(`[Automation] Job upsert error (trigger=${triggerName}, scenario=${s.scenario_id}, ch=${ch}):`, insErr.message);
+        } else {
+          enqueued++;
+        }
       }
     }
+
+    console.info(
+      `[Automation] enqueueScenariosForContact done: trigger=${triggerName} contact=${contact.id} matched=${matchedScenarios.length} enqueued=${enqueued}` +
+      (skippedReasonSummary ? ` skipped=${skippedReasonSummary}` : '')
+    );
 
     if (enqueued > 0) {
       try {
@@ -5043,6 +5194,7 @@ function resolveMessageVars(
     salesSettings?: { booking_page_url?: string | null } | null;
     defaultForm?: { public_slug?: string | null; definition?: any } | null;
     allForms?: any[] | null;
+    publicMaterials?: Array<{ key?: string; public_url?: string }> | null;
     latestApprovedDoc?: { id: string } | null;
     company?: { company_name?: string | null } | null;
     appUrl?: string;
@@ -5059,7 +5211,22 @@ function resolveMessageVars(
     : '';
   const resolvedBookingUrl = bookingPageUrl || formBookingUrl || 'https://timerex.net/s/mstcorp/c3dd3eea';
 
-  // {material_url}: 資料のURL。フォーム定義（diagnosis_forms.definition.material_url）に設定された公開URL。未設定なら公開資料ページ。
+  // {material_url}: シナリオの対象資料（経営改善 / 介護開業）に応じて public_materials またはフォーム定義から解決
+  const scenarioCfg = (scenarioOrJob as any)?.config || scenarioOrJob || {};
+  const targetMaterial = inferScenarioTargetMaterial({
+    targetMaterial: scenarioCfg?.targetMaterial,
+    name: scenarioCfg?.name,
+  });
+  let matchedPublicMaterialUrl = '';
+  if (Array.isArray(ownerSettings?.publicMaterials) && ownerSettings.publicMaterials.length > 0) {
+    if (targetMaterial === 'care') {
+      matchedPublicMaterialUrl =
+        ownerSettings.publicMaterials.find((m) => String(m.key || '').includes('care'))?.public_url?.trim() || '';
+    } else if (targetMaterial === 'management') {
+      matchedPublicMaterialUrl =
+        ownerSettings.publicMaterials.find((m) => String(m.key || '').includes('management'))?.public_url?.trim() || '';
+    }
+  }
   let formMaterialUrl = typeof ownerSettings?.defaultForm?.definition?.material_url === 'string'
     ? ownerSettings.defaultForm.definition.material_url.trim()
     : '';
@@ -5069,7 +5236,13 @@ function resolveMessageVars(
       formMaterialUrl = formWithMaterial.definition.material_url.trim();
     }
   }
-  const resolvedMaterialUrl = formMaterialUrl || `${appBaseUrl || 'https://corp.mstcorp.info'}/materials`;
+  const defaultMaterialFallback =
+    targetMaterial === 'care'
+      ? 'https://corp.mstcorp.info/materials/care-package-proposal.pdf'
+      : targetMaterial === 'management'
+        ? 'https://corp.mstcorp.info/materials/mst-management-guide.pdf'
+        : `${appBaseUrl || 'https://corp.mstcorp.info'}/materials`;
+  const resolvedMaterialUrl = matchedPublicMaterialUrl || formMaterialUrl || defaultMaterialFallback;
 
   // {document_url}: その連絡先の、最新の承認済み/送信済み書類のWeb確認・お申し込みURL（/docs/<書類ID>）
   const resolvedDocUrl = (appBaseUrl && ownerSettings?.latestApprovedDoc?.id)
@@ -5199,10 +5372,17 @@ async function loadMessageVarContext(
     latestApprovedDoc = fallbackDoc;
   }
 
+  const { data: pubMaterials } = await lineSupabase
+    .from('public_materials')
+    .select('key,public_url')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
   return resolveMessageVars(contact, scenarioOrJob, {
     salesSettings,
     defaultForm,
     allForms: pubForms,
+    publicMaterials: pubMaterials || [],
     latestApprovedDoc,
     company: companyData,
     appUrl,
@@ -6197,22 +6377,23 @@ app.get('/api/marketing/health', async (req, res) => {
   if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
 
   try {
+    const ownerIds = await resolveWorkspaceOwnerIds(authData.user.id);
     const [killSwitch, runnerLastRunAt, countsResult, nextDueResult, recentErrorsResult] = await Promise.all([
       getKillSwitchStatus('send'),
       getPersistedRunnerLastRunAt(),
       lineSupabase.from('marketing_automation_jobs')
         .select('status')
-        .eq('owner_id', authData.user.id),
+        .in('owner_id', ownerIds),
       lineSupabase.from('marketing_automation_jobs')
         .select('due_at')
-        .eq('owner_id', authData.user.id)
+        .in('owner_id', ownerIds)
         .eq('status', 'queued')
         .order('due_at', { ascending: true })
         .limit(1)
         .maybeSingle(),
       lineSupabase.from('marketing_automation_jobs')
         .select('id, scenario_id, contact_id, channel, error_message, updated_at')
-        .eq('owner_id', authData.user.id)
+        .in('owner_id', ownerIds)
         .eq('status', 'failed')
         .order('updated_at', { ascending: false })
         .limit(5),
@@ -6246,17 +6427,160 @@ app.get('/api/marketing/health', async (req, res) => {
   }
 });
 
+// 配信ジョブ一覧＋設定診断（ワークスペース全owner_id横断でHP経由ジョブも含めて確実に取得）
+app.get('/api/marketing/jobs', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  try {
+    const authUser = (req as any).user;
+    const ownerIds = await resolveWorkspaceOwnerIds(authUser.id);
+    const showHidden = req.query.showHidden === 'true';
+
+    let jobQuery = lineSupabase
+      .from('marketing_automation_jobs')
+      .select('id, owner_id, status, scenario_id, contact_id, channel, subject, due_at, error_message, hidden_at, created_at, updated_at')
+      .in('owner_id', ownerIds)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (!showHidden) {
+      jobQuery = jobQuery.is('hidden_at', null);
+    }
+
+    let jobRes = await jobQuery;
+    if (jobRes.error && jobRes.error.message && jobRes.error.message.includes('hidden_at')) {
+      jobRes = await lineSupabase
+        .from('marketing_automation_jobs')
+        .select('id, owner_id, status, scenario_id, contact_id, channel, subject, due_at, error_message, created_at, updated_at')
+        .in('owner_id', ownerIds)
+        .order('created_at', { ascending: false })
+        .limit(200) as any;
+    }
+    if (jobRes.error) throw jobRes.error;
+    const rows = (jobRes.data || []) as any[];
+
+    const contactIds = Array.from(new Set(rows.map((r) => r.contact_id).filter(Boolean)));
+    const [contactsRes, scenariosRes, allCountRowsRes] = await Promise.all([
+      contactIds.length
+        ? lineSupabase.from('contacts').select('id, full_name, email, line_user_id').in('id', contactIds)
+        : Promise.resolve({ data: [], error: null }),
+      lineSupabase.from('marketing_automation_scenarios').select('owner_id, scenario_id, config').in('owner_id', ownerIds),
+      showHidden
+        ? lineSupabase.from('marketing_automation_jobs').select('status, channel').in('owner_id', ownerIds)
+        : lineSupabase.from('marketing_automation_jobs').select('status, channel').in('owner_id', ownerIds).is('hidden_at', null),
+    ]);
+
+    let scenarioRows = (scenariosRes.data || []) as any[];
+    let syncedFromMst = 0;
+    if (scenarioRows.length === 0) {
+      syncedFromMst = await syncMarketingScenariosFromMstFallback();
+      if (syncedFromMst > 0) {
+        const refreshed = await lineSupabase
+          .from('marketing_automation_scenarios')
+          .select('owner_id, scenario_id, config')
+          .in('owner_id', ownerIds);
+        scenarioRows = (refreshed.data || []) as any[];
+      }
+    }
+
+    const contactsById = new Map<string, any>();
+    for (const c of (contactsRes.data || []) as any[]) contactsById.set(c.id, c);
+
+    const scenariosById = new Map<string, any>();
+    const activeTriggers = {
+      diagnosis_completed: 0,
+      material_requested: 0,
+      line_registered: 0,
+      lead_created: 0,
+      report_or_proposal_sent: 0,
+    };
+    let activeScenarioCount = 0;
+    for (const s of scenarioRows) {
+      scenariosById.set(s.scenario_id, s.config || {});
+      const cfg = s.config || {};
+      const enabled = cfg.automationEnabled === false ? false : (cfg.automationEnabled === true || cfg.status === 'prepared' || cfg.status === 'active');
+      if (enabled) {
+        activeScenarioCount++;
+        const trig = String(cfg.trigger || '') as keyof typeof activeTriggers;
+        if (trig in activeTriggers) activeTriggers[trig]++;
+      }
+    }
+
+    const statusCounts: Record<string, number> = {
+      queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0, canceled: 0,
+    };
+    const channelCounts = { email: 0, line: 0 };
+    for (const r of (allCountRowsRes.data || []) as any[]) {
+      const st = String(r.status || '');
+      if (statusCounts[st] !== undefined) statusCounts[st]++;
+      if (r.channel === 'email') channelCounts.email++;
+      else if (r.channel === 'line') channelCounts.line++;
+    }
+
+    const enrichedJobs = rows.map((row) => {
+      const contact = contactsById.get(row.contact_id);
+      const scenCfg = scenariosById.get(row.scenario_id);
+      return {
+        ...row,
+        contactName: String(contact?.full_name || '連絡先不明'),
+        contactEmail: contact?.email ? String(contact.email) : null,
+        hasLineLinked: Boolean(contact?.line_user_id),
+        scenarioName: String(scenCfg?.name || row.scenario_id || 'シナリオ不明'),
+        scenarioTrigger: scenCfg?.trigger ? String(scenCfg.trigger) : null,
+      };
+    });
+
+    return res.json({
+      jobs: enrichedJobs,
+      statusCounts,
+      channelCounts,
+      diagnostics: {
+        activeScenarioCount,
+        triggers: activeTriggers,
+        syncedFromMst,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '配信ジョブの取得に失敗しました。' });
+  }
+});
+
+// 取消済みジョブを整理（hidden_at設定）
+app.post('/api/marketing/jobs/hide-canceled', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: '自動配信サーバーのSupabase設定がありません。' });
+  try {
+    const authUser = (req as any).user;
+    const ownerIds = await resolveWorkspaceOwnerIds(authUser.id);
+    const nowIso = new Date().toISOString();
+    const { data, error } = await lineSupabase
+      .from('marketing_automation_jobs')
+      .update({ hidden_at: nowIso, updated_at: nowIso })
+      .in('owner_id', ownerIds)
+      .eq('status', 'canceled')
+      .is('hidden_at', null)
+      .select('id');
+    if (error) {
+      if (error.message && error.message.includes('hidden_at')) {
+        return res.status(400).json({ error: 'hidden_at カラムのマイグレーション（20261108110000）が未適用です。' });
+      }
+      throw error;
+    }
+    return res.json({ success: true, hiddenCount: Array.isArray(data) ? data.length : 0 });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '取消済みジョブの整理に失敗しました。' });
+  }
+});
+
 // 手動トリガー: 今すぐジョブ処理を実行する
 app.post('/api/marketing/run-now', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'Supabase設定がありません。' });
   try {
     const authUser = (req as any).user;
+    const ownerIds = await resolveWorkspaceOwnerIds(authUser.id);
     const nowIso = new Date().toISOString();
 
     // 1. 待機中（自動リトライ待機中・未来due_at含む）のジョブの due_at を現在時刻に前倒し
     await lineSupabase.from('marketing_automation_jobs')
       .update({ due_at: nowIso, error_message: null })
-      .eq('owner_id', authUser.id)
+      .in('owner_id', ownerIds)
       .eq('status', 'queued');
 
     // 2. forceImmediate: true, bypassTimeWindow: true で即時処理
@@ -6266,7 +6590,7 @@ app.post('/api/marketing/run-now', requireAuth, async (req, res) => {
     // 処理後の直近エラーを取得
     const { data: latestErrors } = await lineSupabase.from('marketing_automation_jobs')
       .select('id, channel, error_message, status')
-      .eq('owner_id', authUser.id)
+      .in('owner_id', ownerIds)
       .in('status', ['queued', 'failed'])
       .not('error_message', 'is', null)
       .order('updated_at', { ascending: false })
@@ -6481,6 +6805,7 @@ app.post('/api/marketing/jobs/:id/retry', async (req, res) => {
   const id = req.params.id;
   if (!isPublicUuid(id)) return res.status(400).json({ error: 'ジョブIDが不正です。' });
 
+  const ownerIds = await resolveWorkspaceOwnerIds(authData.user.id);
   const nowIso = new Date().toISOString();
   // failed または queued (自動リトライ待機中) のジョブを再実行待ちにリセット
   const { data: updated, error } = await lineSupabase.from('marketing_automation_jobs').update({
@@ -6489,7 +6814,7 @@ app.post('/api/marketing/jobs/:id/retry', async (req, res) => {
     error_message: null,
     retry_count: 0,
     updated_at: nowIso,
-  }).eq('id', id).eq('owner_id', authData.user.id).in('status', ['failed', 'queued']).select('id, scenario_id, contact_id, channel').maybeSingle();
+  }).eq('id', id).in('owner_id', ownerIds).in('status', ['failed', 'queued']).select('id, scenario_id, contact_id, channel').maybeSingle();
 
   if (error) return res.status(500).json({ error: 'ジョブを再実行待ちにできませんでした。' });
   if (!updated) return res.status(409).json({ error: '再実行可能なジョブが見つかりません。' });
@@ -6523,9 +6848,10 @@ app.post('/api/marketing/jobs/:id/cancel', async (req, res) => {
   if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
   const id = req.params.id;
   if (!isPublicUuid(id)) return res.status(400).json({ error: 'ジョブIDが不正です。' });
+  const ownerIds = await resolveWorkspaceOwnerIds(authData.user.id);
   const { data: updated, error } = await lineSupabase.from('marketing_automation_jobs').update({
     status: 'canceled', updated_at: new Date().toISOString(),
-  }).eq('id', id).eq('owner_id', authData.user.id).eq('status', 'queued').select('id').maybeSingle();
+  }).eq('id', id).in('owner_id', ownerIds).eq('status', 'queued').select('id').maybeSingle();
   if (error) return res.status(500).json({ error: 'ジョブを取り消せませんでした。' });
   if (!updated) return res.status(409).json({ error: '待機中のジョブが見つからないか、取消できる状態ではありません。' });
   return res.json({ success: true, status: 'canceled' });
@@ -8595,7 +8921,10 @@ app.post(
       } else if (isActualDiagnosis) {
         await enqueueScenariosForContact(contact.id, 'diagnosis_completed');
       } else if (isMaterialDownload) {
-        await enqueueScenariosForContact(contact.id, 'material_requested');
+        await enqueueScenariosForContact(contact.id, 'material_requested', undefined, {
+          materialKeys: requestedMaterialKeys,
+          isCarePackage,
+        });
         await enqueueScenariosForContact(contact.id, 'lead_created', undefined, {
           isPublicFormSubmission: true,
           skipDelayedEducationReschedule: true,
