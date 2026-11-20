@@ -14,9 +14,14 @@ import {
   Paperclip,
   FileText,
   Trash2,
+  Filter,
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
+import {
+  buildEntityFilterOptions,
+  matchesEntityFilter,
+} from '../../utils/entityFilter';
 
 export interface OutboxMessage {
   id: string;
@@ -25,6 +30,7 @@ export interface OutboxMessage {
   source_id?: string | null;
   recipient_address?: string | null;
   recipient_contact_id?: string | null;
+  company_id?: string | null;
   deal_id?: string | null;
   document_id?: string | null;
   subject?: string | null;
@@ -76,14 +82,15 @@ const sourceTypeLabels: Record<string, string> = {
 
 export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
   const [messages, setMessages] = useState<OutboxMessage[]>([]);
-  const [contacts, setContacts] = useState<Record<string, { full_name: string; company_name?: string }>>({});
-  const [emailContacts, setEmailContacts] = useState<Record<string, { full_name: string; company_name?: string }>>({});
+  const [contacts, setContacts] = useState<Record<string, { full_name: string; company_name?: string; company_id?: string | null; email?: string | null; line_user_id?: string | null }>>({});
+  const [emailContacts, setEmailContacts] = useState<Record<string, { full_name: string; company_name?: string; company_id?: string | null; contact_id?: string | null }>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | OutboxMessage['status']>('all');
   const [channelFilter, setChannelFilter] = useState<'all' | 'email' | 'line'>('all');
+  const [entityFilter, setEntityFilter] = useState('all');
   const [selectedMessage, setSelectedMessage] = useState<OutboxMessage | null>(null);
   const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
@@ -105,9 +112,9 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
           .select('*')
           .order('created_at', { ascending: false })
           .limit(500),
-        supabase.from('contacts').select('id, full_name, email, company_id'),
+        supabase.from('contacts').select('id, full_name, email, company_id, line_user_id'),
         supabase.from('companies').select('id, company_name'),
-        supabase.from('leads').select('id, name, company_name, email'),
+        supabase.from('leads').select('id, name, company_name, email, company_id, contact_id'),
       ]);
 
       if (outboxRes.error) throw outboxRes.error;
@@ -117,8 +124,8 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
         compMap[c.id] = c.company_name;
       });
 
-      const contactMap: Record<string, { full_name: string; company_name?: string }> = {};
-      const emailMap: Record<string, { full_name: string; company_name?: string }> = {};
+      const contactMap: Record<string, { full_name: string; company_name?: string; company_id?: string | null; email?: string | null; line_user_id?: string | null }> = {};
+      const emailMap: Record<string, { full_name: string; company_name?: string; company_id?: string | null; contact_id?: string | null }> = {};
 
       (leadsRes.data || []).forEach((ld: any) => {
         if (ld.email) {
@@ -126,6 +133,8 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
           emailMap[cleanEmail] = {
             full_name: ld.name,
             company_name: ld.company_name,
+            company_id: ld.company_id || null,
+            contact_id: ld.contact_id || null,
           };
         }
       });
@@ -134,10 +143,18 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
         const info = {
           full_name: ct.full_name,
           company_name: ct.company_id ? compMap[ct.company_id] : undefined,
+          company_id: ct.company_id || null,
+          email: ct.email || null,
+          line_user_id: ct.line_user_id || null,
         };
         contactMap[ct.id] = info;
         if (ct.email) {
-          emailMap[String(ct.email).trim().toLowerCase()] = info;
+          emailMap[String(ct.email).trim().toLowerCase()] = {
+            full_name: ct.full_name,
+            company_name: info.company_name,
+            company_id: ct.company_id || null,
+            contact_id: ct.id,
+          };
         }
       });
 
@@ -247,6 +264,36 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
     return res;
   }, [messages]);
 
+  const entityOptions = useMemo(
+    () =>
+      buildEntityFilterOptions(
+        messages.map((m) => {
+          const contactById = m.recipient_contact_id ? contacts[m.recipient_contact_id] : null;
+          const emailLookup = m.recipient_address && m.channel === 'email'
+            ? emailContacts[m.recipient_address.trim().toLowerCase()]
+            : null;
+          const contactInfo = contactById || emailLookup;
+          return {
+            companyName: contactInfo?.company_name || null,
+            personName: contactInfo?.full_name || null,
+          };
+        }),
+      ),
+    [messages, contacts, emailContacts],
+  );
+  const hasActiveFilters =
+    searchQuery.trim() !== '' ||
+    statusFilter !== 'all' ||
+    channelFilter !== 'all' ||
+    entityFilter !== 'all';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setChannelFilter('all');
+    setEntityFilter('all');
+  };
+
   // Filtered Messages
   const filteredMessages = useMemo(() => {
     return messages.filter((m) => {
@@ -256,9 +303,19 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
       if (channelFilter !== 'all' && m.channel !== channelFilter) {
         return false;
       }
+
+      const contactById = m.recipient_contact_id ? contacts[m.recipient_contact_id] : null;
+      const emailLookup = m.recipient_address && m.channel === 'email'
+        ? emailContacts[m.recipient_address.trim().toLowerCase()]
+        : null;
+      const contactInfo = contactById || emailLookup;
+
+      if (!matchesEntityFilter(entityFilter, contactInfo?.company_name || null, contactInfo?.full_name || null)) {
+        return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const contactInfo = (m.recipient_contact_id ? contacts[m.recipient_contact_id] : null) || (m.recipient_address ? emailContacts[m.recipient_address.trim().toLowerCase()] : null);
         const recipientText = (m.recipient_address || '').toLowerCase();
         const contactName = (contactInfo?.full_name || '').toLowerCase();
         const compName = (contactInfo?.company_name || '').toLowerCase();
@@ -270,7 +327,7 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
       }
       return true;
     });
-  }, [messages, statusFilter, channelFilter, searchQuery, contacts, emailContacts]);
+  }, [messages, statusFilter, channelFilter, entityFilter, searchQuery, contacts, emailContacts]);
 
   return (
     <div className="space-y-5">
@@ -339,18 +396,48 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
       )}
 
       {/* ── Filter Bar ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Search box */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="宛先、件名、本文、会社名で検索…"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none transition shadow-2xs"
-            />
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Search box + 会社名・担当者名プルダウン */}
+          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="会社名・担当者名・宛先・件名・本文で検索…"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none transition shadow-2xs"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs text-slate-600">
+              <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              <select
+                aria-label="会社名・担当者名で絞り込み"
+                value={entityFilter}
+                onChange={(e) => setEntityFilter(e.target.value)}
+                className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 shadow-2xs focus:outline-none focus:border-purple-500 max-w-[260px]"
+              >
+                <option value="all">すべての会社・担当者</option>
+                {entityOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label} ({opt.count}件)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-600 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>解除</span>
+              </button>
+            )}
           </div>
 
           {/* Right Filters */}
@@ -442,10 +529,19 @@ export const CommunicationOutboxHistoryView: React.FC<Props> = () => {
               該当する送信メッセージはありません
             </p>
             <p className="text-[11px] text-slate-400">
-              {searchQuery || statusFilter !== 'all' || channelFilter !== 'all'
-                ? '検索条件やフィルターを変更してお試しください。'
+              {hasActiveFilters
+                ? '検索条件やリスト・フィルターを変更してお試しください。'
                 : '書類送付・一斉配信・営業メールを実行すると、この送信台帳に記録されます。'}
             </p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-2 px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 cursor-pointer"
+              >
+                絞り込みを解除
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

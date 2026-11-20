@@ -6484,13 +6484,26 @@ app.get('/api/marketing/jobs', requireAuth, async (req, res) => {
     const contactIds = Array.from(new Set(rows.map((r) => r.contact_id).filter(Boolean)));
     const [contactsRes, scenariosRes, allCountRowsRes] = await Promise.all([
       contactIds.length
-        ? lineSupabase.from('contacts').select('id, full_name, email, line_user_id').in('id', contactIds)
+        ? lineSupabase.from('contacts').select('id, full_name, email, line_user_id, company_id').in('id', contactIds)
         : Promise.resolve({ data: [], error: null }),
       lineSupabase.from('marketing_automation_scenarios').select('owner_id, scenario_id, config').in('owner_id', ownerIds),
       showHidden
         ? lineSupabase.from('marketing_automation_jobs').select('status, channel').in('owner_id', ownerIds)
         : lineSupabase.from('marketing_automation_jobs').select('status, channel').in('owner_id', ownerIds).is('hidden_at', null),
     ]);
+
+    const companyIds = Array.from(
+      new Set(((contactsRes.data || []) as any[]).map((c) => c.company_id).filter(Boolean))
+    );
+    const companiesRes = companyIds.length
+      ? await lineSupabase.from('companies').select('id, company_name').in('id', companyIds)
+      : { data: [], error: null };
+    const companyNamesById = new Map<string, string>();
+    for (const comp of (companiesRes.data || []) as any[]) {
+      if (comp.id && comp.company_name) {
+        companyNamesById.set(String(comp.id), String(comp.company_name));
+      }
+    }
 
     let scenarioRows = (scenariosRes.data || []) as any[];
     let syncedFromMst = 0;
@@ -6542,10 +6555,14 @@ app.get('/api/marketing/jobs', requireAuth, async (req, res) => {
     const enrichedJobs = rows.map((row) => {
       const contact = contactsById.get(row.contact_id);
       const scenCfg = scenariosById.get(row.scenario_id);
+      const companyId = contact?.company_id ? String(contact.company_id) : null;
       return {
         ...row,
         contactName: String(contact?.full_name || '連絡先不明'),
         contactEmail: contact?.email ? String(contact.email) : null,
+        contactCompanyId: companyId,
+        contactCompanyName: companyId ? companyNamesById.get(companyId) || null : null,
+        contactLineUserId: contact?.line_user_id ? String(contact.line_user_id) : null,
         hasLineLinked: Boolean(contact?.line_user_id),
         scenarioName: String(scenCfg?.name || row.scenario_id || 'シナリオ不明'),
         scenarioTrigger: scenCfg?.trigger ? String(scenCfg.trigger) : null,

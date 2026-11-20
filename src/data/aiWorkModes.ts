@@ -105,6 +105,8 @@ export interface RoleAIOverride {
   extraInstruction?: string;
   /** 未設定なら全体のデフォルトモデルを使う */
   modelSetting?: AIModelSetting;
+  /** 3-wayマージ競合解決用の最終更新タイムスタンプ(ms) */
+  updatedAt?: number;
 }
 
 export type RoleAIOverrides = Record<string, RoleAIOverride>;
@@ -144,6 +146,9 @@ export function sanitizeRoleOverride(input: unknown): RoleAIOverride {
   }
   const modelSetting = sanitizeModelSetting(raw.modelSetting);
   if (modelSetting) result.modelSetting = modelSetting;
+  if (typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) && raw.updatedAt > 0) {
+    result.updatedAt = raw.updatedAt;
+  }
   return result;
 }
 

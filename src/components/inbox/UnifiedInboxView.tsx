@@ -35,6 +35,10 @@ import { useInboxRealtime, useVisiblePolling } from '../../hooks/useInboxRealtim
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import { LinkifiedText } from '../common/LinkifiedText';
 import { countUnreadEmails, loadLocalReadEmailIds } from '../../utils/inboxReadState';
+import {
+  buildEntityFilterOptions,
+  matchesEntityFilter,
+} from '../../utils/entityFilter';
 
 export type InboxChannel = 'line' | 'email' | 'forms';
 
@@ -130,6 +134,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
   const [customerStageFilter, setCustomerStageFilter] = useState<'all' | 'leads' | 'customers'>('all');
   const [formFilterStatus, setFormFilterStatus] = useState<string>('all');
   const [formTypeCategory, setFormTypeCategory] = useState<'all' | 'diagnosis' | 'inquiry'>(initialFormTypeFilter || 'all');
+  const [formEntityFilter, setFormEntityFilter] = useState<string>('all');
   const [filterCompanyId, setFilterCompanyId] = useState<string | undefined>(initialCompanyId);
   const [filterLeadId, setFilterLeadId] = useState<string | undefined>(initialLeadId);
   const [formSearchQuery, setFormSearchQuery] = useState('');
@@ -727,6 +732,31 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
     return fromSub || undefined;
   }, [filterCompanyId, submissions]);
 
+  const formEntityOptions = useMemo(
+    () =>
+      buildEntityFilterOptions(
+        submissions.map((sub) => ({
+          companyName: sub.respondent_company_name || null,
+          personName: sub.respondent_name || null,
+        })),
+      ),
+    [submissions],
+  );
+  const hasActiveFormFilters =
+    formTypeCategory !== 'all' ||
+    customerStageFilter !== 'all' ||
+    formFilterStatus !== 'all' ||
+    formEntityFilter !== 'all' ||
+    formSearchQuery.trim() !== '';
+
+  const resetFormFilters = () => {
+    setFormTypeCategory('all');
+    setCustomerStageFilter('all');
+    setFormFilterStatus('all');
+    setFormEntityFilter('all');
+    setFormSearchQuery('');
+  };
+
   // Base filtered submissions (before status filter, so status badge counts match active category/stage/search)
   const statusBaseSubmissions = useMemo(() => {
     return submissions.filter((sub) => {
@@ -741,19 +771,45 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
       if (formTypeCategory === 'diagnosis' && !isDiagnosisSubmission(sub)) return false;
       if (formTypeCategory === 'inquiry' && isDiagnosisSubmission(sub)) return false;
 
+      if (!matchesEntityFilter(formEntityFilter, sub.respondent_company_name || null, sub.respondent_name || null)) {
+        return false;
+      }
+
       const isContracted = sub.company_id ? customerCompanyIds.has(sub.company_id) : false;
       if (customerStageFilter === 'customers' && !isContracted) return false;
       if (customerStageFilter === 'leads' && isContracted) return false;
 
       if (!formSearchQuery.trim()) return true;
-      const q = formSearchQuery.toLowerCase();
+      const q = formSearchQuery.trim().toLowerCase();
       const name = (sub.respondent_name || '').toLowerCase();
       const email = (sub.respondent_email || '').toLowerCase();
       const company = (sub.respondent_company_name || '').toLowerCase();
       const formName = (formsMeta.get(sub.form_id)?.name || '').toLowerCase();
-      return name.includes(q) || email.includes(q) || company.includes(q) || formName.includes(q);
+      const memo = (sub.reviewer_memo || '').toLowerCase();
+      let answersText = '';
+      try {
+        answersText = JSON.stringify(sub.answers || {}).toLowerCase();
+      } catch {}
+      return (
+        name.includes(q) ||
+        email.includes(q) ||
+        company.includes(q) ||
+        formName.includes(q) ||
+        memo.includes(q) ||
+        answersText.includes(q)
+      );
     });
-  }, [submissions, customerStageFilter, formTypeCategory, formSearchQuery, formsMeta, customerCompanyIds, filterCompanyId, filterLeadId]);
+  }, [
+    submissions,
+    customerStageFilter,
+    formTypeCategory,
+    formEntityFilter,
+    formSearchQuery,
+    formsMeta,
+    customerCompanyIds,
+    filterCompanyId,
+    filterLeadId,
+  ]);
 
   // Filtered submissions
   const visibleSubmissions = useMemo(() => {
@@ -1062,15 +1118,45 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                 </button>
               </div>
 
-              <div className="relative min-w-[260px]">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={formSearchQuery}
-                  onChange={(e) => setFormSearchQuery(e.target.value)}
-                  placeholder="回答者名・会社名・メール検索..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
-                />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[230px]">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={formSearchQuery}
+                    onChange={(e) => setFormSearchQuery(e.target.value)}
+                    placeholder="会社名・担当者名・メール・回答内容検索..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  <select
+                    aria-label="会社名・担当者名で絞り込み"
+                    value={formEntityFilter}
+                    onChange={(e) => setFormEntityFilter(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-2xs focus:outline-none focus:border-purple-500 max-w-[260px]"
+                  >
+                    <option value="all">すべての会社・担当者</option>
+                    {formEntityOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label} ({opt.count}件)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {hasActiveFormFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFormFilters}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-600 transition cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>解除</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1219,6 +1305,15 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                     className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs text-white font-semibold shadow-xs transition cursor-pointer"
                   >
                     すべて表示（{statusCountsInScope.total}件）
+                  </button>
+                )}
+                {hasActiveFormFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFormFilters}
+                    className="px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs text-slate-700 font-semibold shadow-xs transition cursor-pointer"
+                  >
+                    すべての絞り込みを解除
                   </button>
                 )}
                 <button

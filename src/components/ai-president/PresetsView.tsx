@@ -94,7 +94,7 @@ export const PresetsView: React.FC<PresetsViewProps> = ({
                   <Cpu className="w-3 h-3 text-slate-400" />
                   {(mode.override.modelSetting ?? defaultModelSetting).primary.model}
                   {!mode.override.modelSetting && '（デフォルト）'}
-                  {Object.keys(mode.override).some((key) => key !== 'modelSetting') && <span className="ml-1 rounded bg-purple-50 px-1.5 py-0.5 text-purple-700 border border-purple-100 font-medium">カスタマイズ済み</span>}
+                  {Object.keys(mode.override).some((key) => key !== 'modelSetting' && key !== 'updatedAt') && <span className="ml-1 rounded bg-purple-50 px-1.5 py-0.5 text-purple-700 border border-purple-100 font-medium">カスタマイズ済み</span>}
                 </p>
                 <div className="mt-4 grid grid-cols-[1fr_auto] gap-2 pt-3 border-t border-slate-100">
                   <button

@@ -1183,9 +1183,16 @@ function AppContent() {
       : activeCharacter;
   const editingCharacter = editingCharacterId ? characters.find((c) => c.id === editingCharacterId) : undefined;
 
+  const warnIfCloudSyncPaused = () => {
+    if (user && workspaceReady && (!workspaceSyncEnabledRef.current || workspaceSaveCoordinator.isStopped())) {
+      showToast('クラウド同期が一時停止中のため、変更はこの端末にのみ保存されました。ヘッダーの「同期エラー」から再同期してください。', 'error');
+    }
+  };
+
   const updateAiModelSettings = (next: AIModelSettings) => {
     setAiModelSettings(next);
     saveAIModelSettings(next);
+    warnIfCloudSyncPaused();
   };
 
   const handleSaveRoleOverride = (roleId: AIWorkModeId, override: RoleAIOverride | null) => {
@@ -1322,6 +1329,7 @@ function AppContent() {
   const handleUpdateCharacters = (newChars: CharacterConfig[]) => {
     setCharacters(newChars);
     saveCharacters(newChars);
+    warnIfCloudSyncPaused();
   };
 
   const closeCharacterEditor = () => {
@@ -1384,7 +1392,7 @@ function AppContent() {
 
   const handleDeleteCharacter = (id: string) => {
     if (id === 'preset-ceo') {
-      alert('標準のAI社長は削除できません。');
+      showToast('標準のAI社長は削除できません。', 'error');
       return;
     }
     if (!characters.some((character) => character.id === id)) return;
@@ -3678,7 +3686,7 @@ function AppContent() {
         <ModelSettingsModal
           defaultSetting={aiModelSettings.defaultSetting}
           onSave={(defaultSetting) => {
-            updateAiModelSettings({ ...aiModelSettings, defaultSetting });
+            updateAiModelSettings({ ...aiModelSettings, defaultSetting, defaultSettingUpdatedAt: Date.now() });
             closeModalWithHistory('model_settings');
           }}
           onClose={() => closeModalWithHistory('model_settings')}

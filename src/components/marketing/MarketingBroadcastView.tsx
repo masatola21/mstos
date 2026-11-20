@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Mail, MessageCircle } from 'lucide-react';
+import { Filter, Mail, MessageCircle, Search, X } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { LineMessagePreview } from '../LineMessagePreview';
 import { renderPlaceholders } from '../../utils/placeholders';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
+import {
+  buildEntityFilterOptions,
+  matchesEntityFilter,
+} from '../../utils/entityFilter';
 
 
 
@@ -66,6 +70,9 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
   const [batches,setBatches]=useState<any[]>([]);
   const [selectedBatchId,setSelectedBatchId]=useState<string>('all');
   const [appendOptOutNotice,setAppendOptOutNotice]=useState(true);
+  const [recipientEntityFilter,setRecipientEntityFilter]=useState<string>('all');
+  const [recipientSearch,setRecipientSearch]=useState<string>('');
+  const [outreachSearch,setOutreachSearch]=useState<string>('');
 
   const db=getSupabase();
   useEffect(() => {
@@ -123,16 +130,40 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
     return()=>{active=false}
   },[]);
 
+  const recipientEntityOptions = useMemo(
+    () =>
+      buildEntityFilterOptions(
+        contacts.map((row) => ({
+          companyName: row.company_id ? String(companies[row.company_id]?.company_name || companies[row.company_id]?.name || '') || null : null,
+          personName: row.full_name || null,
+        })),
+      ),
+    [contacts, companies],
+  );
   const selectedSegment = segments.find(x=>x.id===segmentId);
-  const outreachProspects = useMemo(() => {
+  const allOutreachProspects = useMemo(() => {
     return prospects.filter(row => {
       const isAi = String(row.source || '').includes('外部AI調査');
       const notOptedOut = row.opted_out !== true;
-      const matchesBatch = selectedBatchId === 'all' || row.import_batch_id === selectedBatchId;
       const hasCompany = Boolean(row.company_id && companies[String(row.company_id)]);
-      return isAi && notOptedOut && matchesBatch && hasCompany;
+      return isAi && notOptedOut && hasCompany;
     });
-  }, [prospects, companies, selectedBatchId]);
+  }, [prospects, companies]);
+
+  const outreachProspects = useMemo(() => {
+    const q = outreachSearch.trim().toLowerCase();
+    return allOutreachProspects.filter(row => {
+      const matchesBatch = selectedBatchId === 'all' || row.import_batch_id === selectedBatchId;
+      if (!matchesBatch) return false;
+      if (q) {
+        const company = companies[String(row.company_id || '')] || {};
+        const compName = String(company.company_name || company.name || '').toLowerCase();
+        const email = String(row.email || '').toLowerCase();
+        if (!compName.includes(q) && !email.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allOutreachProspects, companies, selectedBatchId, outreachSearch]);
 
   const selectedOutreachCompanies = useMemo(() => {
     return new Set(outreachProspects.filter(row=>selectedProspectIds.includes(String(row.id||''))).map(row=>String(row.company_id||'')));
@@ -173,14 +204,29 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
         rows=[];
       }
     }
-    return rows.filter(row=>channel==='email'
-      ? Boolean(row.email)
-      : Boolean(row.line_user_id&&friends[row.line_user_id]?.status==='active'&&friends[row.line_user_id]?.consent_status==='opted_in'));
-  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends,audienceMode,selectedOutreachCompanies]);
+    const q = recipientSearch.trim().toLowerCase();
+    return rows.filter(row=>{
+      const channelOk = channel==='email'
+        ? Boolean(row.email)
+        : Boolean(row.line_user_id&&friends[row.line_user_id]?.status==='active'&&friends[row.line_user_id]?.consent_status==='opted_in');
+      if (!channelOk) return false;
+      const compName = row.company_id ? String(companies[row.company_id]?.company_name || companies[row.company_id]?.name || '') : '';
+      if (!matchesEntityFilter(recipientEntityFilter, compName || null, row.full_name || null)) {
+        return false;
+      }
+      if (q) {
+        const compLower = compName.toLowerCase();
+        const fullName = String(row.full_name || '').toLowerCase();
+        const email = String(row.email || '').toLowerCase();
+        if (!fullName.includes(q) && !compLower.includes(q) && !email.includes(q)) return false;
+      }
+      return true;
+    });
+  },[contacts,selectedSegment,companies,prospects,leads,deals,customers,channel,friends,audienceMode,selectedOutreachCompanies,recipientEntityFilter,recipientSearch]);
 
   const refreshRuns=async()=>{
     if(!db)return;
-    const {data,error:e}=await db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach']).order('created_at',{ascending:false}).limit(1000);if(e)setError(e.message);else setRuns(summarizeBroadcastHistory((data||[]) as OutboxHistoryRow[]));
+    const {data,error:e}=await db.from('communication_outbox').select('source_id,channel,status,subject,body_text,created_at').in('source_type',['marketing_broadcast','marketing_outreach','marketing_automation']).order('created_at',{ascending:false}).limit(1000);if(e)setError(e.message);else setRuns(summarizeBroadcastHistory((data||[]) as OutboxHistoryRow[]));
   };
   const selectAll=()=>setSelected(eligible.map(x=>x.id));
   const clearSelected=()=>setSelected([]);
@@ -307,12 +353,14 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
           </select>
         </label>
 
-        {audienceMode==='crm'&&<label className="md:col-span-2 text-xs font-bold text-slate-700">CRMセグメント絞り込み
-          <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 focus:border-purple-500 shadow-2xs">
-            <option value="all">全連絡先から抽出（メールまたは有効なLINE連携済み友だち）</option>
-            {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{segmentEntityLabels[x.entity_type]||x.entity_type}）</option>)}
-          </select>
-        </label>}
+        {audienceMode==='crm'&&(
+          <label className="text-xs font-bold text-slate-700">CRMセグメント絞り込み
+            <select value={segmentId} onChange={e=>{setSegmentId(e.target.value);setSelected([]);setPreview(false)}} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 focus:border-purple-500 shadow-2xs">
+              <option value="all">全連絡先から抽出（メールまたは有効なLINE連携済み友だち）</option>
+              {segments.map(x=><option key={x.id} value={x.id}>{x.name}（{segmentEntityLabels[x.entity_type]||x.entity_type}）</option>)}
+            </select>
+          </label>
+        )}
       </div>
 
       {audienceMode==='prospect_outreach'&&<section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
@@ -321,28 +369,40 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
             <div className="font-bold text-amber-900 text-xs">営業対象の見込み企業を選択（AI新規リスト）</div>
             <p className="text-[11px] text-slate-600">外部AI調査から登録した見込み企業（配信停止済みを除く）を対象にします。</p>
           </div>
-          {batches.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-600">取込バッチ:</span>
-              <select
-                value={selectedBatchId}
-                onChange={e => {
-                  setSelectedBatchId(e.target.value);
-                  setSelectedProspectIds([]);
-                  setSelected([]);
-                  setPreview(false);
-                }}
-                className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs text-slate-800 shadow-2xs font-medium"
-              >
-                <option value="all">すべてのバッチ (対象{outreachProspects.length}社)</option>
-                {batches.map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.batch_name} ({b.source_ai || 'AI'} · {b.imported_count || 0}社)
-                  </option>
-                ))}
-              </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={outreachSearch}
+                onChange={(e) => setOutreachSearch(e.target.value)}
+                placeholder="企業名・メールで絞り込み..."
+                className="rounded-lg border border-amber-300 bg-white pl-7 pr-2.5 py-1 text-xs text-slate-800 shadow-2xs"
+              />
             </div>
-          )}
+            {batches.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-600">取込バッチ:</span>
+                <select
+                  value={selectedBatchId}
+                  onChange={e => {
+                    setSelectedBatchId(e.target.value);
+                    setSelectedProspectIds([]);
+                    setSelected([]);
+                    setPreview(false);
+                  }}
+                  className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs text-slate-800 shadow-2xs font-medium"
+                >
+                  <option value="all">すべてのバッチ (対象{allOutreachProspects.length}社)</option>
+                  {batches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.batch_name} ({b.source_ai || 'AI'} · {b.imported_count || 0}社)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -426,7 +486,48 @@ export const MarketingBroadcastView: React.FC<{initialChannel?:Channel}> = ({ini
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><div className="font-bold text-slate-800 text-xs">送信対象リスト</div><div className="text-xs text-slate-500">{audienceMode==='crm'&&selectedSegment?`「${selectedSegment.name}」の条件から抽出：`:'条件に合う宛先：'}{eligible.length}件・選択中 {selectedContacts.length}件</div></div>
-          <div className="flex gap-2"><button type="button" onClick={selectAll} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer">すべて選択</button><button type="button" onClick={clearSelected} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer">選択解除</button></div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={recipientSearch}
+                onChange={(e) => setRecipientSearch(e.target.value)}
+                placeholder="会社名・担当者名・メール検索..."
+                className="rounded-lg border border-slate-200 bg-white pl-7 pr-2.5 py-1.5 text-xs text-slate-800 shadow-2xs focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              <select
+                aria-label="会社名・担当者名で絞り込み"
+                value={recipientEntityFilter}
+                onChange={(e) => setRecipientEntityFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-2xs focus:outline-none focus:border-purple-500 max-w-[240px]"
+              >
+                <option value="all">すべての会社・担当者</option>
+                {recipientEntityOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            {(segmentId !== 'all' || recipientEntityFilter !== 'all' || recipientSearch.trim() !== '') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSegmentId('all');
+                  setRecipientEntityFilter('all');
+                  setRecipientSearch('');
+                }}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 shadow-2xs cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                <span>絞り込み解除</span>
+              </button>
+            )}
+            <button type="button" onClick={selectAll} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer">すべて選択</button>
+            <button type="button" onClick={clearSelected} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs cursor-pointer">選択解除</button>
+          </div>
         </div>
         <div className="mt-3 max-h-52 space-y-1 overflow-auto rounded-lg border border-slate-200 bg-white p-2">
           {eligible.length===0?<p className="text-xs text-slate-500 p-2">{audienceMode==='prospect_outreach'?'選択した企業にメールアドレス付きの連絡先が登録されていません。連絡先を登録して会社に紐づけてください。':'対象となる連絡先がありません。LINEは有効な友だちかつ配信同意済みの連絡先だけ表示されます。'}</p>:eligible.map(contact=><label key={contact.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-slate-800 hover:bg-purple-50/50">

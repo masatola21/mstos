@@ -7,15 +7,21 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
+  Filter,
   Info,
   Play,
   RefreshCw,
+  Search,
   ShieldAlert,
   ShieldCheck,
   X,
 } from 'lucide-react';
 import { getSupabase } from '../../lib/supabaseClient';
 import { formatJobActionLabel } from '../../utils/followupStarterScenarios';
+import {
+  buildEntityFilterOptions,
+  matchesEntityFilter,
+} from '../../utils/entityFilter';
 
 export interface MarketingAutomationHealth {
   emailConfigured: boolean;
@@ -59,6 +65,9 @@ type JobView = JobRow & {
   scenarioTargetTag?: string | null;
   contactName: string;
   contactEmail?: string | null;
+  contactCompanyId?: string | null;
+  contactCompanyName?: string | null;
+  contactLineUserId?: string | null;
   hasLineLinked?: boolean;
 };
 type JobsDiagnostics = {
@@ -140,6 +149,8 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
   const [manualNotice, setManualNotice] = useState('');
   const [showHidden, setShowHidden] = useState(false);
   const [hidingCanceled, setHidingCanceled] = useState(false);
+  const [entityFilter, setEntityFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const db = getSupabase();
 
   const handleRunNow = async () => {
@@ -286,7 +297,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
       const contactIds = [...new Set(rows.map((row) => row.contact_id).filter(Boolean))];
       const scenarioIds = [...new Set(rows.map((row) => row.scenario_id).filter(Boolean))];
       const [contactsResult, scenariosResult, ...countResults] = await Promise.all([
-        contactIds.length ? db.from('contacts').select('id,full_name,email,line_user_id').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
+        contactIds.length ? db.from('contacts').select('id,full_name,email,line_user_id,company_id').in('id', contactIds) : Promise.resolve({ data: [], error: null }),
         scenarioIds.length ? db.from('marketing_automation_scenarios').select('scenario_id,config').in('scenario_id', scenarioIds) : Promise.resolve({ data: [], error: null }),
         ...statuses.map(async (status) => {
           let q = db.from('marketing_automation_jobs').select('id', { count: 'exact', head: true }).eq('status', status);
@@ -319,6 +330,8 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
           ...row,
           contactName: String(c?.full_name || '連絡先不明'),
           contactEmail: c?.email || null,
+          contactCompanyId: c?.company_id || null,
+          contactLineUserId: c?.line_user_id || null,
           hasLineLinked: Boolean(c?.line_user_id),
           scenarioName: String(sCfg?.name || row.scenario_id || 'シナリオ不明'),
           scenarioTrigger: sCfg?.trigger || null,
@@ -399,12 +412,39 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
     } finally { setBusyJobId(''); }
   };
 
+  const entityOptions = React.useMemo(
+    () =>
+      buildEntityFilterOptions(
+        jobs.map((job) => ({
+          companyName: job.contactCompanyName || null,
+          personName: job.contactName || null,
+        })),
+      ),
+    [jobs],
+  );
+
+  const hasActiveFilters = entityFilter !== 'all' || searchQuery.trim() !== '';
+
   const visibleJobs = jobs.filter((job) => {
     if (channelFilter !== 'all' && job.channel !== channelFilter) return false;
     if (filter === 'all') {
-      return showHidden || job.status !== 'canceled';
+      if (!showHidden && job.status === 'canceled') return false;
+    } else if (job.status !== filter) {
+      return false;
     }
-    return job.status === filter;
+    if (!matchesEntityFilter(entityFilter, job.contactCompanyName || null, job.contactName || null)) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const hit =
+        job.contactName.toLowerCase().includes(q) ||
+        (job.contactEmail || '').toLowerCase().includes(q) ||
+        (job.contactCompanyName || '').toLowerCase().includes(q) ||
+        job.scenarioName.toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    return true;
   });
   const runnerIsStale = !health?.runnerLastRunAt || Date.now() - Date.parse(health.runnerLastRunAt) > 15 * 60 * 1000;
   const killSwitch = health?.killSwitch;
@@ -757,6 +797,54 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
             </label>
           </div>
         </div>
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-100 px-4 py-2.5 bg-slate-50/40">
+          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+            <div className="relative min-w-[220px] flex-1 max-w-sm">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="会社名・担当者名・メール・シナリオ検索..."
+                className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500 shadow-2xs"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs text-slate-600">
+              <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              <select
+                aria-label="会社名・担当者名で絞り込み"
+                value={entityFilter}
+                onChange={(e) => setEntityFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-2xs focus:outline-none focus:border-purple-500 max-w-[260px]"
+              >
+                <option value="all">すべての会社・担当者</option>
+                {entityOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label} ({opt.count}件)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
+            <span>表示中: <strong className="text-slate-800">{visibleJobs.length}</strong> 件</span>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEntityFilter('all');
+                  setSearchQuery('');
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-semibold transition cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                <span>絞り込み解除</span>
+              </button>
+            )}
+          </div>
+        </div>
         {error && (
           <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 flex items-center justify-between gap-3">
             <span>{error}</span>
@@ -780,7 +868,21 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
         {loading ? (
           <p className="p-8 text-center text-sm text-slate-400">読み込み中…</p>
         ) : visibleJobs.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-400">該当する配信ジョブはありません。</p>
+          <div className="p-8 text-center space-y-2">
+            <p className="text-sm text-slate-400">該当する配信ジョブはありません。</p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEntityFilter('all');
+                  setSearchQuery('');
+                }}
+                className="px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 cursor-pointer"
+              >
+                検索・絞り込みを解除
+              </button>
+            )}
+          </div>
         ) : (
           <div className="divide-y divide-slate-100">
             {visibleJobs.map((job) => {
@@ -830,6 +932,7 @@ export const MarketingAutomationJobsPanel: React.FC<Props> = ({ health, onHealth
                   </div>
                   <p className="mt-2 truncate text-sm font-bold text-slate-900">{job.scenarioName}</p>
                   <p className="mt-1 text-xs text-slate-500">
+                    {job.contactCompanyName ? `${job.contactCompanyName} / ` : ''}
                     {job.contactName}
                     {job.contactEmail ? ` (${job.contactEmail})` : ''}
                     {job.hasLineLinked ? ' · LINE連携済' : ''}

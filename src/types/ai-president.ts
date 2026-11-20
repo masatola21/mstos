@@ -31,6 +31,7 @@ export interface CharacterConfig {
   /** 未設定なら全体のデフォルトモデルを使う */
   modelSetting?: AIModelSetting;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface ChatMessage {

@@ -207,7 +207,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
       return;
     }
     setModelError('');
-    onSaveCharacter(formData);
+    const stamped: CharacterConfig = { ...formData, updatedAt: Date.now() };
+    setFormData(stamped);
+    onSaveCharacter(stamped);
     setSaveSuccessNotice(true);
     setTimeout(() => setSaveSuccessNotice(false), 2500);
   };
@@ -218,8 +220,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
       return;
     }
     setModelError('');
-    onSaveCharacter(formData);
-    onStartChat(formData);
+    const stamped: CharacterConfig = { ...formData, updatedAt: Date.now() };
+    setFormData(stamped);
+    onSaveCharacter(stamped);
+    onStartChat(stamped);
   };
 
   const addRule = () => {

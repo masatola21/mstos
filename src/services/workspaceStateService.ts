@@ -11,6 +11,7 @@ import {
   KnowledgeItem,
 } from '../types';
 import {
+  hasLocalCharactersCache,
   loadActivityLogs,
   loadActiveCharacterId,
   loadAllChatHistories,
@@ -39,7 +40,14 @@ import {
 import { getSupabase } from '../lib/supabaseClient';
 import { MarketingScenario } from '../types/marketing';
 import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios, hasLocalMarketingScenariosCache } from '../utils/marketingStorage';
-import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
+import {
+  AIModelSettings,
+  hasLocalAIModelSettingsCache,
+  loadAIModelSettings,
+  normalizeAIModelSettings,
+  saveAIModelSettings,
+} from '../utils/aiSettingsStorage';
+import type { RoleAIOverrides } from '../data/aiWorkModes';
 import { matrixService, SAMPLE_RECORD_IDS } from './matrixService';
 import { stableStringify } from '../utils/stableSerialize';
 import {
@@ -439,11 +447,17 @@ async function loadRelationalAIOperations(userId: string): Promise<RelationalAIO
   if (queryError) throw queryError;
 
   const records = (rows: Array<{ payload: unknown }> | null | undefined) => (rows || []).map((row) => row.payload);
-  const characters = (preferences.data?.characters || loadCharacters()) as CharacterConfig[];
+  const hasSavedCharacters = Array.isArray(preferences.data?.characters);
+  const characters = (hasSavedCharacters ? preferences.data.characters : loadCharacters()) as CharacterConfig[];
   const histories = Object.fromEntries((chats.data || []).map((row) => [row.conversation_key, row.messages as ChatMessage[]]));
-  const savedModelSettings = preferences.data?.ai_model_settings as AIModelSettings | null;
-  const aiModelSettings = savedModelSettings?.defaultSetting && savedModelSettings?.roleOverrides
-    ? savedModelSettings
+  const savedModelSettings = preferences.data?.ai_model_settings as Partial<AIModelSettings> | null | undefined;
+  const hasSavedModelSettings = Boolean(
+    savedModelSettings &&
+      typeof savedModelSettings === 'object' &&
+      (savedModelSettings.defaultSetting || savedModelSettings.roleOverrides)
+  );
+  const aiModelSettings = hasSavedModelSettings
+    ? normalizeAIModelSettings(savedModelSettings)
     : loadAIModelSettings();
   return {
     topGoal: preferences.data?.top_goal ?? loadTopGoal(),
@@ -684,9 +698,99 @@ function mergeChatHistories(
   return merged;
 }
 function mergePreference<T>(remoteValue: T | undefined, localValue: T, baselineValue: T | undefined): T {
-  if (baselineValue !== undefined && JSON.stringify(localValue) !== JSON.stringify(baselineValue)
-    && JSON.stringify(remoteValue) === JSON.stringify(baselineValue)) return localValue;
+  if (
+    baselineValue !== undefined &&
+    stableStringify(localValue) !== stableStringify(baselineValue) &&
+    stableStringify(remoteValue) === stableStringify(baselineValue)
+  ) {
+    return localValue;
+  }
   return remoteValue ?? localValue;
+}
+
+export function mergeAIModelSettings(
+  remoteSettings: AIModelSettings | undefined,
+  localSettings: AIModelSettings,
+  baselineSettings: AIModelSettings | undefined,
+  localCacheInitialized = true
+): AIModelSettings {
+  const local = normalizeAIModelSettings(localSettings);
+  if (!remoteSettings) return local;
+  const remote = normalizeAIModelSettings(remoteSettings);
+  if (!localCacheInitialized) return remote;
+  const baseline = baselineSettings ? normalizeAIModelSettings(baselineSettings) : undefined;
+
+  let mergedDefault = remote.defaultSetting;
+  let mergedDefaultUpdatedAt = remote.defaultSettingUpdatedAt;
+  if (!baseline) {
+    const localDefaultChangedFromDefault =
+      local.defaultSettingUpdatedAt !== undefined &&
+      stableStringify(local.defaultSetting) !== stableStringify(remote.defaultSetting);
+    if (localDefaultChangedFromDefault && (local.defaultSettingUpdatedAt || 0) >= (remote.defaultSettingUpdatedAt || 0)) {
+      mergedDefault = local.defaultSetting;
+      mergedDefaultUpdatedAt = local.defaultSettingUpdatedAt;
+    }
+  } else {
+    const localChanged = stableStringify(local.defaultSetting) !== stableStringify(baseline.defaultSetting);
+    const remoteChanged = stableStringify(remote.defaultSetting) !== stableStringify(baseline.defaultSetting);
+    if (localChanged && !remoteChanged) {
+      mergedDefault = local.defaultSetting;
+      mergedDefaultUpdatedAt = local.defaultSettingUpdatedAt;
+    } else if (localChanged && remoteChanged) {
+      const localTime = local.defaultSettingUpdatedAt ?? 0;
+      const remoteTime = remote.defaultSettingUpdatedAt ?? 0;
+      if (localTime >= remoteTime && localTime > 0) {
+        mergedDefault = local.defaultSetting;
+        mergedDefaultUpdatedAt = local.defaultSettingUpdatedAt;
+      }
+    }
+  }
+
+  const allRoleIds = new Set<string>([
+    ...Object.keys(remote.roleOverrides || {}),
+    ...Object.keys(local.roleOverrides || {}),
+    ...Object.keys(baseline?.roleOverrides || {}),
+  ]);
+  const roleOverrides: RoleAIOverrides = {};
+
+  allRoleIds.forEach((roleId) => {
+    const remoteVal = remote.roleOverrides?.[roleId];
+    const localVal = local.roleOverrides?.[roleId];
+    const baselineVal = baseline?.roleOverrides?.[roleId];
+
+    if (!localVal) {
+      if (baselineVal && remoteVal && stableStringify(remoteVal) === stableStringify(baselineVal)) {
+        return;
+      }
+      if (remoteVal) {
+        roleOverrides[roleId] = remoteVal;
+      }
+      return;
+    }
+
+    const localChanged = !baselineVal || stableStringify(localVal) !== stableStringify(baselineVal);
+    if (!localChanged) {
+      if (remoteVal) {
+        roleOverrides[roleId] = remoteVal;
+      }
+      return;
+    }
+
+    if (!remoteVal || (baselineVal && stableStringify(remoteVal) === stableStringify(baselineVal))) {
+      roleOverrides[roleId] = localVal;
+      return;
+    }
+
+    const localTime = typeof localVal.updatedAt === 'number' && Number.isFinite(localVal.updatedAt) ? localVal.updatedAt : 0;
+    const remoteTime = typeof remoteVal.updatedAt === 'number' && Number.isFinite(remoteVal.updatedAt) ? remoteVal.updatedAt : 0;
+    roleOverrides[roleId] = localTime >= remoteTime && localTime > 0 ? localVal : remoteVal;
+  });
+
+  return {
+    defaultSetting: mergedDefault,
+    roleOverrides,
+    ...(mergedDefaultUpdatedAt ? { defaultSettingUpdatedAt: mergedDefaultUpdatedAt } : {}),
+  };
 }
 
 function loadLastSyncedData(userId: string): Partial<WorkspaceData> {
@@ -789,6 +893,10 @@ function hasPendingLocalChanges(
 
   // 3. AI Operations の差分確認
   if (cloudData.relationalAI) {
+    if (stableStringify(cloudData.relationalAI.characters || []) !== stableStringify(merged.characters || [])) return true;
+    if (stableStringify(cloudData.relationalAI.aiModelSettings) !== stableStringify(merged.aiModelSettings)) return true;
+    if (stableStringify(cloudData.relationalAI.userProfile) !== stableStringify(merged.userProfile)) return true;
+    if (stableStringify(cloudData.relationalAI.knowledgeItems || []) !== stableStringify(merged.knowledgeItems || [])) return true;
     if (stableStringify(cloudData.relationalAI.projects || []) !== stableStringify(merged.projects || [])) return true;
     if (stableStringify(cloudData.relationalAI.tasks || []) !== stableStringify(merged.tasks || [])) return true;
     if (stableStringify(cloudData.relationalAI.approvals || []) !== stableStringify(merged.approvals || [])) return true;
@@ -814,6 +922,8 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
 
   const localDefaults = loadLocalWorkspaceData();
   const localMarketingScenariosReady = hasLocalMarketingScenariosCache();
+  const localCharactersReady = hasLocalCharactersCache();
+  const localAiSettingsReady = hasLocalAIModelSettingsCache();
   const baseline = loadLastSyncedData(userId);
   const remote = row?.data && typeof row.data === 'object' && !Array.isArray(row.data)
     ? row.data as Partial<WorkspaceData>
@@ -823,6 +933,15 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     ? {
         ...localDefaults,
         ...remote,
+        characters: localCharactersReady
+          ? mergeRecords(remote.characters || [], localDefaults.characters, baseline.characters || [])
+          : (remote.characters || localDefaults.characters),
+        aiModelSettings: mergeAIModelSettings(
+          remote.aiModelSettings,
+          localDefaults.aiModelSettings,
+          baseline.aiModelSettings,
+          localAiSettingsReady
+        ),
         projects: mergeRecords(remote.projects || [], localDefaults.projects, baseline.projects || []),
         tasks: mergeRecords(remote.tasks || [], localDefaults.tasks, baseline.tasks || []),
         approvals: mergeRecords(remote.approvals || [], localDefaults.approvals, baseline.approvals || []),
@@ -857,10 +976,21 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   const relationalAI = await loadRelationalAIOperations(userId);
   if (relationalAI) {
     merged.topGoal = mergePreference(relationalAI.topGoal, localDefaults.topGoal, baseline.topGoal);
-    merged.characters = mergeRecords(relationalAI.characters, localDefaults.characters, baseline.characters || []);
+    merged.characters = localCharactersReady
+      ? mergeRecords(relationalAI.characters, localDefaults.characters, baseline.characters || [])
+      : relationalAI.characters;
+    if (merged.characters.length === 0) {
+      const ceo = loadCharacters().find((c) => c.id === 'preset-ceo');
+      if (ceo) merged.characters = [ceo];
+    }
     merged.activeCharacterId = mergePreference(relationalAI.activeCharacterId, localDefaults.activeCharacterId, baseline.activeCharacterId);
     merged.userProfile = mergePreference(relationalAI.userProfile, localDefaults.userProfile, baseline.userProfile);
-    merged.aiModelSettings = mergePreference(relationalAI.aiModelSettings, localDefaults.aiModelSettings, baseline.aiModelSettings);
+    merged.aiModelSettings = mergeAIModelSettings(
+      relationalAI.aiModelSettings,
+      localDefaults.aiModelSettings,
+      baseline.aiModelSettings,
+      localAiSettingsReady
+    );
     merged.pricingRates = mergeRecordsByKey(relationalAI.pricingRates, localDefaults.pricingRates, baseline.pricingRates || [], (rate) => rate.model);
     merged.tokenUsage = mergeRecords(relationalAI.tokenUsage, localDefaults.tokenUsage, baseline.tokenUsage || []).slice(0, 300);
     merged.workModeHistories = mergeChatHistories(relationalAI.workModeHistories, localDefaults.workModeHistories, baseline.workModeHistories || {});
@@ -1335,8 +1465,10 @@ export async function saveWorkspaceData(
   // 4. マージが発生した場合はローカルストレージも最新データで更新（通常保存時も未初期化キャッシュを同期）
   if (wasMerged) {
     applyWorkspaceData(currentData);
-  } else if (!hasLocalMarketingScenariosCache()) {
-    saveMarketingScenarios(currentData.marketingScenarios || []);
+  } else {
+    if (!hasLocalMarketingScenariosCache()) saveMarketingScenarios(currentData.marketingScenarios || []);
+    if (!hasLocalCharactersCache()) saveCharacters(currentData.characters);
+    if (!hasLocalAIModelSettingsCache()) saveAIModelSettings(currentData.aiModelSettings);
   }
 
   try {

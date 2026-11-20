@@ -158,12 +158,24 @@ const INITIAL_SAMPLE_LOGS: ActivityLog[] = [
 
 // --- Characters Storage ---
 
+export function hasLocalCharactersCache(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.CHARACTERS) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function loadCharacters(): CharacterConfig[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CHARACTERS);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          const ceo = PRESET_CHARACTERS.find((c) => c.id === 'preset-ceo');
+          return ceo ? [ceo] : [];
+        }
         if (!parsed.some((c: CharacterConfig) => c.id === 'preset-ceo')) {
           const ceo = PRESET_CHARACTERS.find((c) => c.id === 'preset-ceo');
           if (ceo) {

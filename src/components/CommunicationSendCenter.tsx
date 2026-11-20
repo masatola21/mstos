@@ -9,7 +9,7 @@ import {
   type CustomOneShotConfig,
 } from '../utils/salesOutreachTemplates';
 import { EmailHtmlPreviewCard } from './common/EmailHtmlPreviewCard';
-import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle, Maximize2, Minimize2, Eraser, ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { Eye, Save, Send, Users, SendHorizonal, FileText, Library, Mail, MessageSquare, Paperclip, CheckCircle2, X, Inbox, ArrowLeft, AlertTriangle, Maximize2, Minimize2, Eraser, ChevronDown, ChevronUp, Settings2, Filter, Search } from 'lucide-react';
 import { getSupabase } from '../lib/supabaseClient';
 import { LineMessagePreview } from './LineMessagePreview';
 import { renderPlaceholders } from '../utils/placeholders';
@@ -18,6 +18,17 @@ import { MarketingBroadcastView } from './marketing/MarketingBroadcastView';
 import { CommunicationTemplateLibraryView } from './marketing/CommunicationTemplateLibraryView';
 import { CommunicationOutboxHistoryView } from './marketing/CommunicationOutboxHistoryView';
 import { DocumentPreviewModal } from './common/DocumentPreviewModal';
+import {
+  buildEntityFilterOptions,
+  matchesEntityFilter,
+} from '../utils/entityFilter';
+import {
+  buildDirectContactInsertPayload,
+  findContactByEmail,
+  isValidDirectEmail,
+  normalizeDirectEmail,
+  resolveDirectContactPreview,
+} from '../utils/directEmailRecipient';
 
 type Kind = 'document' | 'form' | 'diagnosis' | 'deal' | 'customer_meeting' | 'announcement' | 'sales_outreach' | 'freeform';
 type Channel = 'email' | 'line' | 'both';
@@ -307,6 +318,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   // 第1通を手動で送ったあと、第2〜5通を自動で予約するか（初期はOFF。送るたびにOFFへ戻す）
   const [autoFollowups, setAutoFollowups] = useState(false);
   const [contactId, setContactId] = useState(initialContactId || '');
+  const [recipientInputMode, setRecipientInputMode] = useState<'select' | 'direct'>('select');
+  const [directEmail, setDirectEmail] = useState('');
+  const [directName, setDirectName] = useState('');
   const [unregisteredEmailWarning, setUnregisteredEmailWarning] = useState<string | null>(null);
   const userInteractedContactRef = useRef(false);
   const userInteractedDocumentRef = useRef(false);
@@ -337,6 +351,8 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   const [customMonitorOneShotConfig, setCustomMonitorOneShotConfig] = useState<CustomOneShotConfig | null>(null);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [showDrawerSettings, setShowDrawerSettings] = useState(false);
+  const [recipientEntityFilter, setRecipientEntityFilter] = useState('all');
+  const [recipientSearch, setRecipientSearch] = useState('');
 
   useEffect(() => {
     if (!isComposerExpanded) return;
@@ -356,8 +372,54 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   const db = getSupabase();
   const contact = contacts.find((x) => x.id === contactId);
+  const isDirectEmailMode = recipientInputMode === 'direct' && channel === 'email';
+  const directEmailTrimmed = directEmail.trim();
+  const isDirectEmailValid = isValidDirectEmail(directEmailTrimmed);
+  const directPreviewResolution = resolveDirectContactPreview({
+    contacts,
+    email: directEmailTrimmed,
+    recipientName: directName,
+    companyId: initialCompanyId || null,
+  });
+  const matchedDirectContact =
+    isDirectEmailMode && directEmailTrimmed && directPreviewResolution.isExisting
+      ? (directPreviewResolution.contact as Contact)
+      : undefined;
+  const effectiveContact: Contact | undefined = isDirectEmailMode
+    ? directEmailTrimmed
+      ? (directPreviewResolution.contact as Contact)
+      : undefined
+    : contact;
   const doc = docs.find((x) => x.id === docId);
   const form = forms.find((x) => x.id === formId);
+
+  const recipientEntityOptions = React.useMemo(
+    () =>
+      buildEntityFilterOptions(
+        contacts.map((x) => ({
+          companyName: x.company_id ? companies[x.company_id] || null : null,
+          personName: x.full_name || null,
+        })),
+      ),
+    [contacts, companies],
+  );
+  const filteredContacts = React.useMemo(() => {
+    const q = recipientSearch.trim().toLowerCase();
+    return contacts.filter((x) => {
+      if (x.id === contactId) return true;
+      const compName = x.company_id ? companies[x.company_id] || null : null;
+      if (!matchesEntityFilter(recipientEntityFilter, compName, x.full_name || null)) {
+        return false;
+      }
+      if (q) {
+        const name = (x.full_name || '').toLowerCase();
+        const comp = (compName || '').toLowerCase();
+        const email = (x.email || '').toLowerCase();
+        if (!name.includes(q) && !comp.includes(q) && !email.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [contacts, contactId, recipientEntityFilter, recipientSearch, companies]);
 
   const activeDocumentType = screen === 'templates' ? templateDocumentType : doc ? documentCategory(doc) : 'other';
   const templateKeyFor = (deliveryChannel: DeliveryChannel) =>
@@ -426,43 +488,58 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     }
   };
 
-  const currentLinkUrl =
+  const buildLinkUrlForContact = (targetContact?: Partial<Contact>) =>
     (kind === 'form' || kind === 'diagnosis') && form
-      ? window.location.origin + '/f/' + encodeURIComponent(form.public_slug) + (contact ? `?cid=${encodeURIComponent(contact.id)}` + (contact.line_user_id ? `&luid=${encodeURIComponent(contact.line_user_id)}` : '') : '')
+      ? window.location.origin +
+        '/f/' +
+        encodeURIComponent(form.public_slug) +
+        (targetContact?.id
+          ? `?cid=${encodeURIComponent(targetContact.id)}` +
+            (targetContact.line_user_id ? `&luid=${encodeURIComponent(targetContact.line_user_id)}` : '')
+          : '')
       : kind === 'deal' || kind === 'customer_meeting'
       ? url.trim() || bookingUrl || DEFAULT_TIMEREX_URL
       : url.trim();
 
+  const currentLinkUrl = buildLinkUrlForContact(effectiveContact);
+
   const docViewUrl = doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : '';
   const safeCustomDocUrl = kind === 'document' && url.trim() && /\/(?:docs|apply|api\/public\/documents)\//.test(url.trim()) ? url.trim() : '';
 
-  const vals: Record<string, string> = {
-    ビデオツール名: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
-    video_tool_name: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
-    お名前: contact?.full_name || 'ご担当者',
-    会社名: companies[contact?.company_id || ''] || '貴社',
-    フォーム名: form?.name || 'フォーム',
-    書類名: doc?.title || '書類',
-    書類URL: safeCustomDocUrl || docViewUrl,
-    PDFダウンロードURL: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
-    書類本文: '',
-    面談予約URL: bookingUrl || DEFAULT_TIMEREX_URL,
-    案内URL: currentLinkUrl,
+  const buildValsForContact = (targetContact?: Partial<Contact>): Record<string, string> => {
+    const linkUrlForTarget = buildLinkUrlForContact(targetContact);
+    const contactName = targetContact?.full_name || 'ご担当者';
+    const companyLabel = companies[targetContact?.company_id || ''] || '貴社';
+    return {
+      ビデオツール名: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
+      video_tool_name: videoTool === 'zoom' ? 'Zoom' : 'Google Meet',
+      お名前: contactName,
+      会社名: companyLabel,
+      フォーム名: form?.name || 'フォーム',
+      書類名: doc?.title || '書類',
+      書類URL: safeCustomDocUrl || docViewUrl,
+      PDFダウンロードURL: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
+      書類本文: '',
+      面談予約URL: bookingUrl || DEFAULT_TIMEREX_URL,
+      案内URL: linkUrlForTarget,
 
-    // 英語キー互換
-    recipient_name: contact?.full_name || 'ご担当者',
-    name: contact?.full_name || 'ご担当者',
-    company_name: companies[contact?.company_id || ''] || '貴社',
-    form_title: form?.name || 'フォーム',
-    document_title: doc?.title || '書類',
-    document_url: safeCustomDocUrl || docViewUrl,
-    pdf_download_url: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
-    document_content: '',
-    booking_url: bookingUrl || DEFAULT_TIMEREX_URL,
-    link_url: currentLinkUrl,
+      // 英語キー互換
+      recipient_name: contactName,
+      name: contactName,
+      company_name: companyLabel,
+      form_title: form?.name || 'フォーム',
+      document_title: doc?.title || '書類',
+      document_url: safeCustomDocUrl || docViewUrl,
+      pdf_download_url: doc ? window.location.origin + '/api/public/documents/' + encodeURIComponent(doc.id) + '/pdf?download=1' : '',
+      document_content: '',
+      booking_url: bookingUrl || DEFAULT_TIMEREX_URL,
+      link_url: linkUrlForTarget,
+    };
   };
 
-  const selectedCompanyId = contact?.company_id || initialCompanyId;
+  const vals: Record<string, string> = buildValsForContact(effectiveContact);
+
+  const selectedCompanyId = effectiveContact?.company_id || initialCompanyId;
   const availableDocs = docs
     .filter((x) => (!selectedCompanyId || x.company_id === selectedCompanyId || x.id === docId || x.id === initialDocumentId) && (documentCategory(x) === documentType || x.id === docId || x.id === initialDocumentId))
     .sort((a, b) => documentOrder[documentCategory(a)] - documentOrder[documentCategory(b)]);
@@ -556,12 +633,20 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         let resolvedContactId = initialContactId || '';
         if (initialContactId) {
           setContactId(initialContactId);
+          setRecipientInputMode('select');
+          setUnregisteredEmailWarning(null);
         } else if (initialRecipientEmail && !userInteractedContactRef.current) {
-          const cleanEmail = initialRecipientEmail.trim().toLowerCase();
-          const matched = fetchedContacts.find((ct: Contact) => (ct.email || '').trim().toLowerCase() === cleanEmail);
+          const cleanEmail = normalizeDirectEmail(initialRecipientEmail);
+          const matched = fetchedContacts.find((ct: Contact) => normalizeDirectEmail(ct.email) === cleanEmail);
           if (matched) {
             resolvedContactId = matched.id;
             setContactId(matched.id);
+            setRecipientInputMode('select');
+            setDirectEmail('');
+            setUnregisteredEmailWarning(null);
+          } else if (channel === 'email') {
+            setRecipientInputMode('direct');
+            setDirectEmail(initialRecipientEmail.trim());
             setUnregisteredEmailWarning(null);
           } else {
             setUnregisteredEmailWarning(initialRecipientEmail);
@@ -628,10 +713,17 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   useEffect(() => {
     if (variant === 'drawer') {
-      const isDirty = Boolean(subject.trim() || body.trim() || (contactId && contactId !== initialContactId) || (docId && docId !== initialDocumentId));
+      const isDirty = Boolean(
+        subject.trim() ||
+          body.trim() ||
+          directEmail.trim() ||
+          directName.trim() ||
+          (contactId && contactId !== initialContactId) ||
+          (docId && docId !== initialDocumentId),
+      );
       onDraftChange?.(isDirty);
     }
-  }, [subject, body, contactId, docId, variant, onDraftChange, initialContactId, initialDocumentId]);
+  }, [subject, body, directEmail, directName, contactId, docId, variant, onDraftChange, initialContactId, initialDocumentId]);
 
   useEffect(() => {
     if (hasCustomInitialContentRef.current) {
@@ -679,18 +771,18 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   useEffect(() => {
     if (kind === 'sales_outreach') {
-      applySalesStep(salesStep, contact, customOneShotConfig, customMonitorOneShotConfig);
+      applySalesStep(salesStep, effectiveContact, customOneShotConfig, customMonitorOneShotConfig);
     }
-  }, [kind, salesStep, contact?.id, contact?.company_id, customOneShotConfig, customMonitorOneShotConfig]);
+  }, [kind, salesStep, effectiveContact?.id, effectiveContact?.company_id, customOneShotConfig, customMonitorOneShotConfig]);
 
   useEffect(() => {
     if ((kind === 'form' || kind === 'diagnosis') && form) {
-      const tracking = contact ? `?cid=${encodeURIComponent(contact.id)}` + (contact.line_user_id ? `&luid=${encodeURIComponent(contact.line_user_id)}` : '') : '';
+      const tracking = effectiveContact?.id ? `?cid=${encodeURIComponent(effectiveContact.id)}` + (effectiveContact.line_user_id ? `&luid=${encodeURIComponent(effectiveContact.line_user_id)}` : '') : '';
       setUrl(window.location.origin + '/f/' + encodeURIComponent(form.public_slug) + tracking);
     } else if (kind === 'document' && doc) {
       setUrl(window.location.origin + '/docs/' + encodeURIComponent(doc.id));
     }
-  }, [kind, formId, form?.public_slug, contact?.id, contact?.line_user_id, docId, doc?.id]);
+  }, [kind, formId, form?.public_slug, effectiveContact?.id, effectiveContact?.line_user_id, docId, doc?.id]);
 
   const save = async () => {
     if (!db) return;
@@ -748,7 +840,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   };
 
   const send = async () => {
-    if (!db || !contact) return;
+    if (!db) return;
     setError('');
     const targets: DeliveryChannel[] = channel === 'both' ? ['email', 'line'] : [channel];
     if (targets.includes('email') && (!senderSettings.fromName.trim() || !senderSettings.fromEmail.trim())) {
@@ -756,17 +848,24 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       return;
     }
     const hasDocUrl = Boolean(url.trim() || vals.document_url?.trim() || (doc ? window.location.origin + '/docs/' + encodeURIComponent(doc.id) : ''));
-    if (!contact) {
-      setError('送信先の連絡先を選択してください。');
-      return;
-    }
-    if (targets.includes('email') && !contact.email) {
-      setError(`「${contact.full_name} 様」にはメールアドレスが登録されていません。連絡先設定でメールアドレスを登録するか、LINE送信を選択してください。`);
-      return;
-    }
-    if (targets.includes('line') && !contact.line_user_id) {
-      setError(`「${contact.full_name} 様」はLINE公式アカウントと連携されていません（LINE送信不可）。メール送信を選択してください。`);
-      return;
+    if (isDirectEmailMode) {
+      if (!isDirectEmailValid) {
+        setError('直接送信するメールアドレスを正しく入力してください（例: taro@example.com）。');
+        return;
+      }
+    } else {
+      if (!contact) {
+        setError('送信先の連絡先を選択してください。');
+        return;
+      }
+      if (targets.includes('email') && !contact.email) {
+        setError(`「${contact.full_name} 様」にはメールアドレスが登録されていません。連絡先設定でメールアドレスを登録するか、LINE送信を選択してください。`);
+        return;
+      }
+      if (targets.includes('line') && !contact.line_user_id) {
+        setError(`「${contact.full_name} 様」はLINE公式アカウントと連携されていません（LINE送信不可）。メール送信を選択してください。`);
+        return;
+      }
     }
     if (kind === 'document' && (!doc || !hasDocUrl)) {
       setError('送信対象の書類を選択してください。上の詳細設定から書類を選択できます。');
@@ -788,12 +887,74 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       setError('自由作成モードでは本文を入力してください。');
       return;
     }
-    if (initialCompanyId && contact.company_id && contact.company_id !== initialCompanyId) {
+    if (!isDirectEmailMode && initialCompanyId && contact?.company_id && contact.company_id !== initialCompanyId) {
       setError('会社に紐づく連絡先を選択してください。');
       return;
     }
     setBusy(true);
     try {
+      let targetContact: Contact | undefined = contact;
+      let autoCreatedContact = false;
+
+      if (isDirectEmailMode) {
+        const existingLocal = findContactByEmail(contacts, directEmailTrimmed);
+        if (existingLocal) {
+          targetContact = existingLocal;
+        } else {
+          const { data: existingRemote, error: lookupError } = await db
+            .from('contacts')
+            .select('id,full_name,email,line_user_id,company_id')
+            .ilike('email', normalizeDirectEmail(directEmailTrimmed))
+            .limit(1)
+            .maybeSingle();
+          if (lookupError) throw lookupError;
+          if (existingRemote) {
+            targetContact = existingRemote as Contact;
+            setContacts((prev) => [targetContact!, ...prev.filter((x) => x.id !== targetContact!.id)]);
+          } else {
+            const insertPayload = buildDirectContactInsertPayload({
+              email: directEmailTrimmed,
+              recipientName: directName,
+              companyId: initialCompanyId || null,
+            });
+            const { data: createdContact, error: createError } = await db
+              .from('contacts')
+              .insert(insertPayload)
+              .select('id,full_name,email,line_user_id,company_id')
+              .single();
+            if (createError || !createdContact) {
+              throw createError || new Error('連絡先の自動登録に失敗しました。');
+            }
+            targetContact = createdContact as Contact;
+            autoCreatedContact = true;
+            setContacts((prev) => [targetContact!, ...prev.filter((x) => x.id !== targetContact!.id)]);
+          }
+        }
+        setContactId(targetContact.id);
+      }
+
+      if (!targetContact) {
+        throw new Error('送信先の連絡先を確定できませんでした。');
+      }
+      if (initialCompanyId && targetContact.company_id && targetContact.company_id !== initialCompanyId) {
+        throw new Error('会社に紐づく連絡先を選択してください。');
+      }
+
+      const sendVals = buildValsForContact(targetContact);
+      const fillForTarget = (text: string) => fill(text, sendVals);
+      const fillPayloadForTarget = (value: any): any =>
+        Array.isArray(value)
+          ? value.map(fillPayloadForTarget)
+          : value && typeof value === 'object'
+          ? Object.fromEntries(
+              Object.entries(value)
+                .filter(([key]) => key !== 'storagePaths')
+                .map(([key, item]) => [key, fillPayloadForTarget(item)]),
+            )
+          : typeof value === 'string'
+          ? fillForTarget(value)
+          : value;
+
       if (doc && !['approved', 'sent'].includes(doc.status)) {
         await db.from('customer_documents').update({ status: 'approved' }).eq('id', doc.id);
         doc.status = 'approved';
@@ -801,7 +962,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
       const { data: sessionData } = await db.auth.getSession();
       if (!sessionData.session?.access_token) throw Error('ログイン状態を確認できません。');
       if (targets.includes('line')) {
-        const { data: friend, error: friendError } = await db.from('line_friends').select('status,consent_status').eq('line_user_id', contact.line_user_id).maybeSingle();
+        const { data: friend, error: friendError } = await db.from('line_friends').select('status,consent_status').eq('line_user_id', targetContact.line_user_id).maybeSingle();
         if (friendError) throw friendError;
         const isStopped =
           friend &&
@@ -815,7 +976,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           const ensureRes = await fetch('/api/line/friends/ensure-contact', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionData.session.access_token },
-            body: JSON.stringify({ lineUserId: contact.line_user_id }),
+            body: JSON.stringify({ lineUserId: targetContact.line_user_id }),
           });
           const ensured = await ensureRes.json().catch(() => ({}));
           if (!ensureRes.ok || !ensured.canSendLine) {
@@ -829,17 +990,17 @@ export const CommunicationSendCenter: React.FC<Props> = ({
         const rawTargetBody = target === templateChannel ? body : targetTemplate?.body_text || '';
         const targetBody = kind === 'document' && activeDocumentType === 'contract' && target === 'email' ? ensureContractReplySection(rawTargetBody) : rawTargetBody;
         const targetLineTemplate = target === 'line' ? selectedLineTemplate : null;
-        const linePayload = targetLineTemplate && targetLineTemplate.reply_type !== 'text' ? { type: targetLineTemplate.reply_type, ...fillPayload(targetLineTemplate.payload || {}) } : null;
+        const linePayload = targetLineTemplate && targetLineTemplate.reply_type !== 'text' ? { type: targetLineTemplate.reply_type, ...fillPayloadForTarget(targetLineTemplate.payload || {}) } : null;
         const finalBody = targetLineTemplate?.reply_type === 'text' ? String(targetLineTemplate.payload?.text || '') : linePayload ? `[${targetLineTemplate.reply_type === 'image' ? '画像' : targetLineTemplate.reply_type === 'video' ? '動画' : 'Flex'}メッセージ]` : targetBody;
         return {
           channel: target,
-          recipient_contact_id: contact.id,
-          recipient_address: target === 'email' ? contact.email : contact.line_user_id,
-          subject: target === 'email' ? fill(targetSubject, vals) : null,
-          body_text: fill(finalBody, vals),
+          recipient_contact_id: targetContact!.id,
+          recipient_address: target === 'email' ? targetContact!.email : targetContact!.line_user_id,
+          subject: target === 'email' ? fillForTarget(targetSubject) : null,
+          body_text: fillForTarget(finalBody),
           line_message_payload: linePayload,
           document_id: kind === 'document' ? (doc?.id || null) : null,
-          company_id: contact.company_id || null,
+          company_id: targetContact!.company_id || null,
           deal_id: initialDealId || null,
           source_type: kind === 'document' ? 'customer_document' : kind === 'deal' ? 'deal_invitation' : kind === 'customer_meeting' ? 'customer_meeting_invitation' : kind + '_announcement',
           status: 'queued',
@@ -863,16 +1024,27 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           return { channel: row.channel, ok: response.ok && result.status === 'sent', message: result.error || '' };
         }),
       );
-      const summary = outcomes
+      const baseSummary = outcomes
         .map((x) => (x.channel === 'email' ? 'メール' : 'LINE'))
         .map((label, i) => {
           const outcome = outcomes[i];
           return label + (outcome.ok ? '送信済み' : '失敗') + (outcome.message ? '（' + outcome.message + '）' : '');
         })
         .join(' / ');
+      const summary = autoCreatedContact
+        ? `${baseSummary}（新規連絡先「${targetContact.full_name} <${targetContact.email}>」を自動登録しました）`
+        : baseSummary;
       setNotice(summary);
       setPreview(false);
       const allOk = outcomes.length > 0 && outcomes.every((x) => x.ok);
+      if (autoCreatedContact && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mst:contacts-changed'));
+      }
+      if (allOk && isDirectEmailMode) {
+        setRecipientInputMode('select');
+        setDirectEmail('');
+        setDirectName('');
+      }
       // 書類を送れたら、書類の状態を「送信済み」にする(提案書は、対応する下書きの記録も「送付済み」にする)
       if (allOk && doc) {
         try {
@@ -894,7 +1066,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
           const followRes = await fetch('/api/marketing/outreach-followups', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sessionData.session!.access_token },
-            body: JSON.stringify({ contactId: contact.id }),
+            body: JSON.stringify({ contactId: targetContact.id }),
           });
           const followBody = await followRes.json().catch(() => ({}));
           if (followRes.ok && followBody.scheduled > 0) {
@@ -1053,9 +1225,14 @@ export const CommunicationSendCenter: React.FC<Props> = ({
             <span className="rounded-md bg-purple-100 text-purple-800 font-bold px-2 py-0.5 border border-purple-200">
               {labels[kind] || kind}
             </span>
-            {contact && (
+            {effectiveContact && (
               <span className="text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-medium">
-                宛先: <strong className="text-slate-900">{contact.full_name} 様</strong> {companies[contact.company_id || ''] && `(${companies[contact.company_id || '']})`}
+                宛先: <strong className="text-slate-900">{effectiveContact.full_name} 様</strong>{' '}
+                {effectiveContact.company_id && companies[effectiveContact.company_id]
+                  ? `(${companies[effectiveContact.company_id]})`
+                  : isDirectEmailMode && effectiveContact.email
+                  ? `<${effectiveContact.email}>`
+                  : ''}
               </span>
             )}
             {kind === 'document' && doc && (
@@ -1147,6 +1324,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                           const next = e.target.value as Channel;
                           setChannel(next);
                           if (next !== 'both') setTemplateChannel(next);
+                          if (next !== 'email' && recipientInputMode === 'direct') {
+                            if (matchedDirectContact) setContactId(matchedDirectContact.id);
+                            setRecipientInputMode('select');
+                          }
                         }}
                         className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                       >
@@ -1155,35 +1336,146 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                         <option value="both">メール ＋ LINE（同時送信）</option>
                       </select>
                     </label>
-                    <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                      送信先
-                      <select
-                        value={contactId}
-                        onChange={(e) => {
-                          userInteractedContactRef.current = true;
-                          setContactId(e.target.value);
-                        }}
-                        className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
-                      >
-                        <option value="">連絡先を選択してください</option>
-                        {contacts.map((x) => (
-                          <option key={x.id} value={x.id}>
-                            {x.full_name} · {companies[x.company_id || ''] || '未設定'} ·{' '}
-                            {channel === 'both'
-                              ? `${x.email ? 'メールあり' : 'メール未登録'} · ${x.line_user_id ? 'LINE連携' : 'LINE未連携'}`
-                              : channel === 'email'
-                              ? x.email || 'メール未登録'
-                              : x.line_user_id ? 'LINE連携' : 'LINE未連携'}
-                          </option>
-                        ))}
-                      </select>
-                      {unregisteredEmailWarning && !contactId && (
-                        <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
-                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                          <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録してください</span>
+                    <div className="md:col-span-2 space-y-2 text-xs font-semibold text-slate-700">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>
+                            {isDirectEmailMode
+                              ? '送信先（メールアドレス直接入力 → 自動登録）'
+                              : `送信先（表示 ${filteredContacts.length} / ${contacts.length}件）`}
+                          </span>
+                          {channel === 'email' && (
+                            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 font-semibold">
+                              <button
+                                type="button"
+                                onClick={() => setRecipientInputMode('select')}
+                                className={`rounded-md px-2 py-0.5 text-[11px] transition cursor-pointer ${
+                                  recipientInputMode === 'select'
+                                    ? 'bg-purple-600 text-white shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                連絡先から選ぶ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRecipientInputMode('direct');
+                                  setUnregisteredEmailWarning(null);
+                                }}
+                                className={`rounded-md px-2 py-0.5 text-[11px] transition cursor-pointer ${
+                                  recipientInputMode === 'direct'
+                                    ? 'bg-purple-600 text-white shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                メールアドレスを直接入力
+                              </button>
+                            </div>
+                          )}
                         </div>
+                        {!isDirectEmailMode && (
+                          <div className="flex flex-wrap items-center gap-1.5 font-normal">
+                            <div className="relative">
+                              <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                              <input
+                                type="text"
+                                value={recipientSearch}
+                                onChange={(e) => setRecipientSearch(e.target.value)}
+                                placeholder="会社名・担当者名検索..."
+                                className="w-36 rounded-lg border border-slate-200 bg-white pl-6 pr-2 py-1 text-[11px] text-slate-800 focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <select
+                              aria-label="会社名・担当者名で絞り込み"
+                              value={recipientEntityFilter}
+                              onChange={(e) => setRecipientEntityFilter(e.target.value)}
+                              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 focus:outline-none focus:border-purple-500 max-w-[220px]"
+                            >
+                              <option value="all">すべての会社・担当者</option>
+                              {recipientEntityOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                      {isDirectEmailMode ? (
+                        <div className="space-y-2 font-normal">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="block text-[11px] font-semibold text-slate-700">
+                              送信先メールアドレス <span className="text-rose-600">*</span>
+                              <input
+                                type="email"
+                                value={directEmail}
+                                onChange={(e) => setDirectEmail(e.target.value)}
+                                placeholder="例: taro@example.com"
+                                className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                              />
+                            </label>
+                            <label className="block text-[11px] font-semibold text-slate-700">
+                              宛名（お名前・任意）
+                              <input
+                                type="text"
+                                value={directName}
+                                onChange={(e) => setDirectName(e.target.value)}
+                                placeholder="例: 山田 太郎（空欄時は「ご担当者」）"
+                                className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                              />
+                            </label>
+                          </div>
+                          {directEmailTrimmed ? (
+                            !isDirectEmailValid ? (
+                              <p className="text-[11px] font-semibold text-rose-600">
+                                有効なメールアドレス形式で入力してください（例: name@example.com）。
+                              </p>
+                            ) : matchedDirectContact ? (
+                              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-800">
+                                既存の連絡先が見つかりました：「{matchedDirectContact.full_name} 様」として送信します（重複登録はされません）。
+                              </p>
+                            ) : (
+                              <p className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-[11px] font-semibold text-purple-800">
+                                未登録のメールアドレスです。送信時に連絡先へ自動登録して送信します。
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-[11px] text-slate-500">
+                              アドレスを直接入力すると、そのまま送信して連絡先リストにも自動登録します。
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            value={contactId}
+                            onChange={(e) => {
+                              userInteractedContactRef.current = true;
+                              setContactId(e.target.value);
+                            }}
+                            className="block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                          >
+                            <option value="">連絡先を選択してください</option>
+                            {filteredContacts.map((x) => (
+                              <option key={x.id} value={x.id}>
+                                {x.full_name} · {companies[x.company_id || ''] || '未設定'} ·{' '}
+                                {channel === 'both'
+                                  ? `${x.email ? 'メールあり' : 'メール未登録'} · ${x.line_user_id ? 'LINE連携' : 'LINE未連携'}`
+                                  : channel === 'email'
+                                  ? x.email || 'メール未登録'
+                                  : x.line_user_id ? 'LINE連携' : 'LINE未連携'}
+                              </option>
+                            ))}
+                          </select>
+                          {unregisteredEmailWarning && !contactId && (
+                            <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
+                              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                              <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録するか、「メール」を選んで直接入力してください。</span>
+                            </div>
+                          )}
+                        </>
                       )}
-                    </label>
+                    </div>
                     {/* 文例ストック */}
                     {templateChannel === 'email' && (
                       <div className="md:col-span-2 space-y-1.5">
@@ -1598,7 +1890,13 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     type="button"
                     onClick={() => {
                       setError('');
-                      if (!contact) {
+                      if (isDirectEmailMode) {
+                        if (!isDirectEmailValid) {
+                          setError('直接送信するメールアドレスを正しく入力してください（例: taro@example.com）。');
+                          setShowDrawerSettings(true);
+                          return;
+                        }
+                      } else if (!contact) {
                         setError('送信先を選択してください。上の「詳細設定」から選択できます。');
                         setShowDrawerSettings(true);
                         return;
@@ -1669,6 +1967,10 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                     const next = e.target.value as Channel;
                     setChannel(next);
                     if (next !== 'both') setTemplateChannel(next);
+                    if (next !== 'email' && recipientInputMode === 'direct') {
+                      if (matchedDirectContact) setContactId(matchedDirectContact.id);
+                      setRecipientInputMode('select');
+                    }
                   }}
                   className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
                 >
@@ -1677,37 +1979,160 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   <option value="both">メール ＋ LINE（同時送信）</option>
                 </select>
               </label>
-              <label className="md:col-span-2 text-xs font-semibold text-slate-700">
-                送信先
-                <select
-                  value={contactId}
-                  onChange={(e) => {
-                    userInteractedContactRef.current = true;
-                    setContactId(e.target.value);
-                  }}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
-                >
-                  <option value="">連絡先を選択してください</option>
-                  {contacts.map((x) => (
-                    <option key={x.id} value={x.id}>
-                      {x.full_name} · {companies[x.company_id || ''] || '未設定'} ·{' '}
-                      {channel === 'both'
-                        ? `${x.email ? 'メールあり' : 'メール未登録'} · ${x.line_user_id ? 'LINE連携' : 'LINE未連携'}`
-                        : channel === 'email'
-                        ? x.email || 'メール未登録'
-                        : x.line_user_id
-                        ? 'LINE連携'
-                        : 'LINE未連携'}
-                    </option>
-                  ))}
-                </select>
-                {unregisteredEmailWarning && !contactId && (
-                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-                    <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録してください</span>
+              <div className="md:col-span-2 space-y-2 text-xs font-semibold text-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>
+                      {isDirectEmailMode
+                        ? '送信先（メールアドレス直接入力 → 自動登録）'
+                        : `送信先（表示 ${filteredContacts.length} / ${contacts.length}件）`}
+                    </span>
+                    {channel === 'email' && (
+                      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setRecipientInputMode('select')}
+                          className={`rounded-md px-2.5 py-1 text-[11px] transition cursor-pointer ${
+                            recipientInputMode === 'select'
+                              ? 'bg-purple-600 text-white shadow-2xs'
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          連絡先から選ぶ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecipientInputMode('direct');
+                            setUnregisteredEmailWarning(null);
+                          }}
+                          className={`rounded-md px-2.5 py-1 text-[11px] transition cursor-pointer ${
+                            recipientInputMode === 'direct'
+                              ? 'bg-purple-600 text-white shadow-2xs'
+                              : 'text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          メールアドレスを直接入力
+                        </button>
+                      </div>
+                    )}
                   </div>
+                  {!isDirectEmailMode && (
+                    <div className="flex flex-wrap items-center gap-1.5 font-normal">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={recipientSearch}
+                          onChange={(e) => setRecipientSearch(e.target.value)}
+                          placeholder="会社名・担当者名・メール検索..."
+                          className="w-48 rounded-lg border border-slate-200 bg-white pl-7 pr-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <Filter className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      <select
+                        aria-label="会社名・担当者名で絞り込み"
+                        value={recipientEntityFilter}
+                        onChange={(e) => setRecipientEntityFilter(e.target.value)}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-purple-500 max-w-[260px]"
+                      >
+                        <option value="all">すべての会社・担当者</option>
+                        {recipientEntityOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {(recipientEntityFilter !== 'all' || recipientSearch.trim() !== '') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecipientEntityFilter('all');
+                            setRecipientSearch('');
+                          }}
+                          className="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-semibold text-slate-600 cursor-pointer"
+                        >
+                          解除
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {isDirectEmailMode ? (
+                  <div className="space-y-2 font-normal">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        送信先メールアドレス <span className="text-rose-600">*</span>
+                        <input
+                          type="email"
+                          value={directEmail}
+                          onChange={(e) => setDirectEmail(e.target.value)}
+                          placeholder="例: taro@example.com"
+                          className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        宛名（お名前・任意）
+                        <input
+                          type="text"
+                          value={directName}
+                          onChange={(e) => setDirectName(e.target.value)}
+                          placeholder="例: 山田 太郎（空欄時は「ご担当者」）"
+                          className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                        />
+                      </label>
+                    </div>
+                    {directEmailTrimmed ? (
+                      !isDirectEmailValid ? (
+                        <p className="text-xs font-semibold text-rose-600">
+                          有効なメールアドレス形式で入力してください（例: name@example.com）。
+                        </p>
+                      ) : matchedDirectContact ? (
+                        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                          既存の連絡先が見つかりました：「{matchedDirectContact.full_name} 様」として送信します（重複登録はされません）。
+                        </p>
+                      ) : (
+                        <p className="rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-xs font-semibold text-purple-800">
+                          未登録のメールアドレスです。送信時に連絡先へ自動登録して送信します。
+                        </p>
+                      )
+                    ) : (
+                      <p className="text-xs text-slate-500">
+                        アドレスを直接入力すると、そのまま送信して連絡先リストにも自動登録します。
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={contactId}
+                      onChange={(e) => {
+                        userInteractedContactRef.current = true;
+                        setContactId(e.target.value);
+                      }}
+                      className="block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-900 focus:border-purple-600 focus:outline-none shadow-2xs"
+                    >
+                      <option value="">連絡先を選択してください</option>
+                      {filteredContacts.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.full_name} · {companies[x.company_id || ''] || '未設定'} ·{' '}
+                          {channel === 'both'
+                            ? `${x.email ? 'メールあり' : 'メール未登録'} · ${x.line_user_id ? 'LINE連携' : 'LINE未連携'}`
+                            : channel === 'email'
+                            ? x.email || 'メール未登録'
+                            : x.line_user_id
+                            ? 'LINE連携'
+                            : 'LINE未連携'}
+                        </option>
+                      ))}
+                    </select>
+                    {unregisteredEmailWarning && !contactId && (
+                      <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900 shadow-2xs">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                        <span>このメールアドレスは連絡先に未登録です。先に連絡先を登録するか、「メール」を選んで直接入力してください。</span>
+                      </div>
+                    )}
+                  </>
                 )}
-              </label>
+              </div>
 
               {kind === 'sales_outreach' && (
                 <div className="md:col-span-2 space-y-2 rounded-xl border border-purple-200 bg-purple-50/50 p-3.5">
@@ -2213,7 +2638,12 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                   type="button"
                   onClick={() => {
                     setError('');
-                    if (!contact) {
+                    if (isDirectEmailMode) {
+                      if (!isDirectEmailValid) {
+                        setError('直接送信するメールアドレスを正しく入力してください（例: taro@example.com）。');
+                        return;
+                      }
+                    } else if (!contact) {
                       setError('送信先を選択してください。');
                       return;
                     }
@@ -2308,11 +2738,16 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       <div className="flex items-baseline gap-2">
                         <span className="w-16 shrink-0 font-bold text-slate-700">宛先:</span>
                         <span className="text-slate-900 font-medium">
-                          <strong className="font-bold text-slate-950">{contact?.full_name} 様</strong>
-                          {contact?.email ? (
-                            <span className="text-slate-700 font-mono ml-1.5">&lt;{contact.email}&gt;</span>
+                          <strong className="font-bold text-slate-950">{effectiveContact?.full_name || 'ご担当者'} 様</strong>
+                          {effectiveContact?.email ? (
+                            <span className="text-slate-700 font-mono ml-1.5">&lt;{effectiveContact.email}&gt;</span>
                           ) : (
                             <span className="ml-1.5 text-rose-600 font-bold">⚠️ メールアドレス未登録</span>
+                          )}
+                          {isDirectEmailMode && !matchedDirectContact && isDirectEmailValid && (
+                            <span className="ml-2 rounded-md border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">
+                              送信時に連絡先へ自動登録
+                            </span>
                           )}
                         </span>
                       </div>

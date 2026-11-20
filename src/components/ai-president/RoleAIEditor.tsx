@@ -54,6 +54,9 @@ export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
       extraInstruction: extra,
       modelSetting: useCustomModel ? modelSetting : undefined,
     });
+    if (Object.keys(cleaned).length > 0) {
+      cleaned.updatedAt = Date.now();
+    }
     onSave(cleaned);
   };
 
