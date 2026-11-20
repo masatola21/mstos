@@ -228,35 +228,36 @@ export function parseTimeRexEmail(
   // Extract Guest Name
   let guestName = '';
   const nameMatch =
-    content.match(/(?:ゲスト氏名|ゲスト名|お名前|氏名|予約者名|予約者)[:：]\s*([^\n\r(（<]+)/) ||
-    subject.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\s(（]+)\s*様/);
+    content.match(/(?:お客様名|ゲスト氏名|ゲスト名|お名前|氏名|予約者名|予約者)[ \t]*[:：][ \t]*([^\n\r(（<]+)/) ||
+    content.match(/(?:^|\n)[ \t]*(?:ゲスト|相手方)[ \t]*[:：][ \t]*([^\n\r@<]+)/) ||
+    subject.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\n\r(（]+?)\s*様/);
 
   if (nameMatch) {
     guestName = nameMatch[1].replace(/様.*$/, '').trim();
   }
 
-  // Extract Company Name
+  // Extract Company Name (use horizontal whitespace only so empty "会社名:\n..." does not bleed into the next line)
   let companyName = '';
-  const compMatch = content.match(/(?:会社名|御社名|会社|所属)[:：]\s*([^\n\r]+)/);
+  const compMatch = content.match(/(?:会社名|御社名|会社|所属)[ \t]*[:：][ \t]*([^\n\r]+)/);
   if (compMatch) {
     companyName = compMatch[1].trim();
   }
 
   // Extract Phone Number
   let phone = '';
-  const phoneMatch = content.match(/(?:電話番号|TEL|連絡先)[:：]\s*([0-9\-+()]{9,15})/i);
+  const phoneMatch = content.match(/(?:電話番号|TEL|連絡先)[ \t]*[:：][ \t]*([0-9\-+()]{9,15})/i);
   if (phoneMatch) {
     phone = phoneMatch[1].trim();
   }
 
-  // Extract Date and Time
+  // Extract Date and Time (supports both half-width (金) and full-width （金） day-of-week parens)
   let meetingDate = '';
   let meetingStartTime = '';
   let meetingEndTime = '';
 
   const dateTimeMatch =
-    content.match(/(?:変更後の日時|新しい日時|日時|予定日時)[:：]\s*(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*\([^\)]+\))?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/) ||
-    content.match(/(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*\([^\)]+\))?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/);
+    content.match(/(?:変更後の日時|新しい日時|日時|予定日時)[ \t]*[:：]\s*(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*[\(（][^)）]+[\)）])?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/) ||
+    content.match(/(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*[\(（][^)）]+[\)）])?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/);
 
   if (dateTimeMatch) {
     const y = dateTimeMatch[1];
@@ -265,6 +266,16 @@ export function parseTimeRexEmail(
     meetingDate = `${y}-${m}-${d}`;
     meetingStartTime = dateTimeMatch[4].padStart(5, '0');
     meetingEndTime = dateTimeMatch[5] ? dateTimeMatch[5].padStart(5, '0') : '';
+  } else {
+    const monthDayMatch = content.match(/(?:日時|予定日時)[ \t]*[:：]\s*(\d{1,2})月(\d{1,2})日(?:\s*[\(（][^)）]+[\)）])?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/);
+    if (monthDayMatch) {
+      const y = new Date().getFullYear();
+      const m = String(monthDayMatch[1]).padStart(2, '0');
+      const d = String(monthDayMatch[2]).padStart(2, '0');
+      meetingDate = `${y}-${m}-${d}`;
+      meetingStartTime = monthDayMatch[3].padStart(5, '0');
+      meetingEndTime = monthDayMatch[4] ? monthDayMatch[4].padStart(5, '0') : '';
+    }
   }
 
   // Extract Meet / Zoom URL (search both plain text and preserved HTML hrefs)
@@ -352,11 +363,12 @@ export function parseTimeRexCalendarEvent(
     title.startsWith('キャンセル') ||
     title.includes('【キャンセル】');
 
-  // Extract Guest Name from title: e.g. "【TimeRex】山田太郎 様" or "山田太郎様 (TimeRex)"
+  // Extract Guest Name from title: e.g. "【TimeRex】山田 太郎 様" or "山田太郎様 (TimeRex)"
   let guestName = '';
   const nameInTitle =
-    title.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\s(（]+)\s*様?/) ||
-    title.match(/([^\s(（]+)\s*様?\s*(?:\(TimeRex\)|（TimeRex）)/);
+    title.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\n\r(（]+?)\s*様(?:\s|$|[（(])/) ||
+    title.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\s(（]+)/) ||
+    title.match(/([^\n\r(（]+?)\s*様?\s*(?:\(TimeRex\)|（TimeRex）)/);
   if (nameInTitle) {
     guestName = nameInTitle[1].replace(/様.*$/, '').trim();
   }
@@ -439,7 +451,11 @@ async function ensureTaskDeduplicated(
       created_at: new Date().toISOString(),
     };
     if (params.ownerId) taskPayload.owner_id = params.ownerId;
-    const insertRes: any = await db.from('tasks').insert(taskPayload);
+    let insertRes: any = await db.from('tasks').insert(taskPayload);
+    if (insertRes?.error && taskPayload.owner_id && /owner_id/i.test(String(insertRes.error.message || ''))) {
+      const { owner_id: _ignored, ...withoutOwner } = taskPayload;
+      insertRes = await db.from('tasks').insert(withoutOwner);
+    }
     if (insertRes?.error) {
       console.warn('[TimeRexSync] Task insert error:', insertRes.error.message || insertRes.error);
       return false;
@@ -478,11 +494,15 @@ export async function syncTimeRexBookingToCrm(
     let companyId: string | null = null;
     let contactName = booking.guestName;
 
-    const { data: existingContacts } = await db
+    const { data: existingContacts, error: contactSelectErr } = await db
       .from('contacts')
-      .select('id, full_name, company_id, owner_id')
+      .select('id, full_name, company_id')
       .ilike('email', cleanEmail)
       .limit(1);
+
+    if (contactSelectErr) {
+      console.warn('[TimeRexSync] Contact lookup warning:', contactSelectErr);
+    }
 
     if (existingContacts && existingContacts.length > 0) {
       contactId = existingContacts[0].id;
@@ -504,9 +524,9 @@ export async function syncTimeRexBookingToCrm(
         full_name: contactName,
         email: cleanEmail,
         phone: booking.phone || null,
+        source: 'timerex',
         created_at: new Date().toISOString(),
       };
-      if (resolvedOwnerId) newContactPayload.owner_id = resolvedOwnerId;
 
       const { data: createdContact, error: contactErr } = await db
         .from('contacts')
@@ -514,6 +534,9 @@ export async function syncTimeRexBookingToCrm(
         .select('id')
         .single();
 
+      if (contactErr) {
+        console.warn('[TimeRexSync] Contact insert warning:', contactErr);
+      }
       if (!contactErr && createdContact) {
         contactId = createdContact.id;
       }
@@ -557,14 +580,27 @@ export async function syncTimeRexBookingToCrm(
       } else {
         const compPayload: any = {
           company_name: targetCompanyName,
+          contact_name: contactName || null,
+          email: cleanEmail || null,
+          phone: booking.phone || null,
           created_at: new Date().toISOString(),
         };
-        if (resolvedOwnerId) compPayload.owner_id = resolvedOwnerId;
-        const { data: newComp, error: compErr } = await db.from('companies').insert(compPayload).select('id').single();
-        if (compErr) {
-          console.warn('[TimeRexSync] Company insert warning:', compErr);
+        const firstCompTry = await db.from('companies').insert(compPayload).select('id').single();
+        if (!firstCompTry.error && firstCompTry.data?.id) {
+          companyId = firstCompTry.data.id;
+        } else {
+          const fallbackCompanyId = `CID-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+          const retryComp = await db
+            .from('companies')
+            .insert({ id: fallbackCompanyId, ...compPayload })
+            .select('id')
+            .single();
+          if (retryComp.error) {
+            console.warn('[TimeRexSync] Company insert warning:', retryComp.error);
+          } else if (retryComp.data?.id) {
+            companyId = retryComp.data.id;
+          }
         }
-        if (newComp) companyId = newComp.id;
       }
 
       if (companyId && contactId) {
@@ -574,12 +610,24 @@ export async function syncTimeRexBookingToCrm(
 
     // Load existing Lead & Deal
     let leadId = '';
-    const { data: existingLeads } = await db
-      .from('leads')
-      .select('id, notes, status, company_id, meeting_date, meeting_start_time')
-      .or(`contact_id.eq.${contactId || '00000000-0000-0000-0000-000000000000'}`)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    let existingLeads: any[] | null = null;
+    if (contactId) {
+      const { data } = await db
+        .from('leads')
+        .select('id, notes, status, company_id, meeting_date, meeting_start_time')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      existingLeads = data;
+    } else if (companyId) {
+      const { data } = await db
+        .from('leads')
+        .select('id, notes, status, company_id, meeting_date, meeting_start_time')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      existingLeads = data;
+    }
 
     const existingLead = existingLeads?.[0] || null;
     if (existingLead) leadId = existingLead.id;
@@ -720,7 +768,6 @@ export async function syncTimeRexBookingToCrm(
         first_registered_at: new Date().toISOString(),
         last_contacted_at: new Date().toISOString(),
       };
-      if (resolvedOwnerId) newLeadPayload.owner_id = resolvedOwnerId;
 
       const { data: createdLead, error: leadInsErr } = await db
         .from('leads')
@@ -787,19 +834,30 @@ export async function syncTimeRexBookingToCrm(
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      if (resolvedOwnerId) newDealPayload.owner_id = resolvedOwnerId;
 
-      const { data: createdDeal, error: dealInsErr } = await db
+      let dealInsertRes = await db
         .from('deals')
         .insert(newDealPayload)
         .select('id')
         .single();
 
-      if (dealInsErr) {
-        dealErrorMsg = dealInsErr.message || String(dealInsErr);
-        console.warn('[TimeRexSync] Deal insert error:', dealInsErr);
-      } else if (createdDeal) {
-        dealId = createdDeal.id;
+      if (dealInsertRes.error) {
+        const fallbackDealId = `DEAL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+        const retryDealRes = await db
+          .from('deals')
+          .insert({ id: fallbackDealId, ...newDealPayload })
+          .select('id')
+          .single();
+        if (!retryDealRes.error) {
+          dealInsertRes = retryDealRes;
+        }
+      }
+
+      if (dealInsertRes.error) {
+        dealErrorMsg = dealInsertRes.error.message || String(dealInsertRes.error);
+        console.warn('[TimeRexSync] Deal insert error:', dealInsertRes.error);
+      } else if (dealInsertRes.data) {
+        dealId = dealInsertRes.data.id;
         createdDealNow = true;
         changedSomething = true;
       }
@@ -933,7 +991,8 @@ export function isMeetingOverdueForCompletionCheck(
  */
 export async function checkOverdueMeetingCompletionReminders(
   db: any,
-  nowDate: Date = new Date()
+  nowDate: Date = new Date(),
+  fallbackOwnerId: string | null = null
 ): Promise<{ checked: number; created: number }> {
   if (!db) return { checked: 0, created: 0 };
 
@@ -944,12 +1003,12 @@ export async function checkOverdueMeetingCompletionReminders(
     const [{ data: bookedLeads }, { data: scheduledDeals }] = await Promise.all([
       db
         .from('leads')
-        .select('id, owner_id, contact_id, company_id, status, meeting_date, meeting_start_time, company:companies(company_name), contact:contacts(full_name)')
+        .select('id, contact_id, company_id, status, meeting_date, meeting_start_time, company:companies(company_name), contact:contacts(full_name)')
         .eq('status', '面談予約済')
         .limit(100),
       db
         .from('deals')
-        .select('id, owner_id, lead_id, company_id, proposal_status, proposal_plan_name, meeting_date, company:companies(company_name)')
+        .select('id, lead_id, company_id, proposal_status, proposal_plan_name, meeting_date, company:companies(company_name)')
         .in('proposal_status', ['日程確定', '初回面談'])
         .limit(100),
     ]);
@@ -978,7 +1037,7 @@ export async function checkOverdueMeetingCompletionReminders(
           `■ 面談が実施・完了した場合：リード／商談詳細またはカレンダーの「商談完了・お礼フォロー起動」を押してください（ステータスが「面談実施済／面談完了」になり、お礼フォローメールが自動予約されます）。\n` +
           `■ 日程再調整・キャンセルとなった場合：ステータスを「再調整待ち」または「日程再調整」に変更してください。`,
         dueDate: lead.meeting_date,
-        ownerId: lead.owner_id || null,
+        ownerId: fallbackOwnerId,
         skipIfDoneExists: true,
       });
       if (inserted) created++;
@@ -1003,7 +1062,7 @@ export async function checkOverdueMeetingCompletionReminders(
           `■ 面談が実施・完了した場合：商談詳細またはカレンダーの「商談完了・お礼フォロー起動」を押して「面談完了」＆お礼フォローを起動してください。\n` +
           `■ 未実施・変更の場合：ステータスを「日程再調整」または「保留」等へ更新してください。`,
         dueDate: deal.meeting_date,
-        ownerId: deal.owner_id || null,
+        ownerId: fallbackOwnerId,
         skipIfDoneExists: true,
       });
       if (inserted) created++;

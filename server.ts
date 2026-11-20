@@ -6036,10 +6036,12 @@ app.all('/api/cron/marketing-automation', async (req, res) => {
         return { syncedCalendars: 0, syncedBookings: 0 };
       }),
       lineSupabase
-        ? checkOverdueMeetingCompletionReminders(lineSupabase).catch((err) => {
-            console.warn('[Cron] Overdue meeting check warning:', err);
-            return { checked: 0, created: 0 };
-          })
+        ? resolveSystemOwnerId()
+            .then((sysOwner) => checkOverdueMeetingCompletionReminders(lineSupabase, new Date(), sysOwner))
+            .catch((err) => {
+              console.warn('[Cron] Overdue meeting check warning:', err);
+              return { checked: 0, created: 0 };
+            })
         : Promise.resolve({ checked: 0, created: 0 }),
     ]);
     return res.json({
@@ -14164,7 +14166,9 @@ async function startStandaloneServer() {
       await Promise.all([
         runScheduledGoogleCalendarSync().catch(() => ({ syncedCalendars: 0, syncedBookings: 0 })),
         lineSupabase
-          ? checkOverdueMeetingCompletionReminders(lineSupabase).catch(() => ({ checked: 0, created: 0 }))
+          ? resolveSystemOwnerId()
+              .then((sysOwner) => checkOverdueMeetingCompletionReminders(lineSupabase, new Date(), sysOwner))
+              .catch(() => ({ checked: 0, created: 0 }))
           : Promise.resolve({ checked: 0, created: 0 }),
       ]);
       if (processedCount > 0) {
