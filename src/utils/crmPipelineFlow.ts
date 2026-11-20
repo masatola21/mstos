@@ -216,3 +216,86 @@ export function getLeadFlowSteps(status?: string | null): PipelineFlowStep[] {
     return { ...step, state: 'upcoming' };
   });
 }
+
+const GENERIC_DOCUMENT_TITLES = new Set([
+  '業務委託基本契約書',
+  '経営・業務顧問 委託契約書',
+  '御見積書',
+  '御 見 積 書',
+  '御請求書',
+  '御 請 求 書',
+  '経営・業務改善 ご提案書',
+  '月次業務改善・伴走支援レポート',
+  'Web申込プラン',
+]);
+
+export function isGenericDocumentTitle(title?: string | null): boolean {
+  const s = String(title || '').replace(/\s+/g, ' ').trim();
+  if (!s) return true;
+  if (GENERIC_DOCUMENT_TITLES.has(s)) return true;
+  return /^(業務委託基本契約書|御\s*見\s*積\s*書|御\s*請\s*求\s*書|経営・業務改善\s*ご提案書)$/.test(s);
+}
+
+/**
+ * 書類のWeb申込時に商談へ設定する「提案プラン名・商談名」を解決する。
+ * 既に適切なプラン名がある場合や、書類本文から案件名・委託業務名を抽出できる場合はそれを使い、
+ * 「業務委託基本契約書」「御見積書」などの書類タイトルそのものは使わない。
+ */
+export function resolveWebApplyDealPlanName(params: {
+  existingPlanName?: string | null;
+  docTitle?: string | null;
+  bodyHtml?: string | null;
+  companyName?: string | null;
+}): string {
+  const existing = String(params.existingPlanName || '').trim();
+  if (existing && !isGenericDocumentTitle(existing)) {
+    return existing;
+  }
+
+  const htmlText = String(params.bodyHtml || '')
+    .replace(/<[^>]+>/g, '\n')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\r/g, '');
+
+  const extractPatterns = [
+    /案件名\s*[:：]\s*([^\n]+)/,
+    /案件・プラン名\s*[:：]\s*([^\n]+)/,
+    /件名\s*[:：]\s*([^\n]+)/,
+    /委託業務名\s*[:：]\s*([^\n]+)/,
+    /サービス名\s*\n+\s*([^\n]+)/,
+    /第1条（業務内容）\s*\n+\s*([^\n]+)/,
+  ];
+
+  for (const re of extractPatterns) {
+    const m = re.exec(htmlText);
+    const candidate = String(m?.[1] || '')
+      .replace(/に関する業務支援および仕組み化伴走$/, '')
+      .replace(/【未入力】/g, '')
+      .trim();
+    if (candidate && candidate.length >= 2 && candidate.length <= 80 && !isGenericDocumentTitle(candidate)) {
+      return candidate;
+    }
+  }
+
+  const rawDocTitle = String(params.docTitle || '').trim();
+  const parenMatch = /[（(]([^（）()]{2,60})[）)]\s*$/.exec(rawDocTitle);
+  if (parenMatch?.[1] && !isGenericDocumentTitle(parenMatch[1]) && !/契約|合意|控|INV-/.test(parenMatch[1])) {
+    return parenMatch[1].trim();
+  }
+  if (rawDocTitle && !isGenericDocumentTitle(rawDocTitle)) {
+    const cleaned = rawDocTitle
+      .replace(/^.+?\s*·\s*/, '')
+      .replace(/（[^）]*）$/, '')
+      .trim();
+    if (cleaned && !isGenericDocumentTitle(cleaned)) {
+      return cleaned;
+    }
+  }
+
+  const comp = String(params.companyName || '').trim();
+  if (comp && comp !== '顧客企業' && comp !== 'Web申込顧客') {
+    return `${comp} 業務改善支援プラン`;
+  }
+  return 'Web申込 業務改善支援プラン';
+}
+

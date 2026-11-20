@@ -79,20 +79,21 @@ const TASK_STATUS_LABELS: Record<TaskItem['status'], string> = {
   waiting: '未完了', in_progress: '未完了', pending_approval: '未完了', completed: '完了', blocked: '未完了',
 };
 const INVOICE_STATUS_LABELS: Record<string, { label: string; badge: string }> = {
-  draft: { label: '下書き', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
-  awaiting_approval: { label: '承認待ち', badge: 'bg-amber-50 text-amber-800 border-amber-200' },
-  issued: { label: '発行済（入金待ち）', badge: 'bg-blue-50 text-blue-800 border-blue-200' },
-  paid: { label: '入金完了', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  draft: { label: '未発行', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  awaiting_approval: { label: '未発行', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  issued: { label: '請求済（入金待ち）', badge: 'bg-blue-50 text-blue-800 border-blue-200' },
+  paid: { label: '入金済み', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
   overdue: { label: '期限超過', badge: 'bg-rose-50 text-rose-800 border-rose-200' },
   canceled: { label: '取消', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
 };
 const CONTRACT_STATUS_LABELS: Record<string, { label: string; badge: string }> = {
-  draft: { label: '下書き', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
-  under_review: { label: '社内確認中', badge: 'bg-amber-50 text-amber-800 border-amber-200' },
-  sent: { label: '送付済', badge: 'bg-blue-50 text-blue-800 border-blue-200' },
-  signed: { label: '締結済', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-  expired: { label: '期限切れ', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
-  canceled: { label: '取消', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+  draft: { label: '未締結', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  under_review: { label: '未締結', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  sent: { label: '未締結', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  signed: { label: '締結済み', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  active: { label: '締結済み', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  expired: { label: '終了・解約', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
+  canceled: { label: '終了・解約', badge: 'bg-slate-100 text-slate-500 border-slate-200' },
 };
 const asDateTimeLocal = (value?: string | null) => {
   if (!value) return '';

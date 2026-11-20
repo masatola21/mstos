@@ -1615,7 +1615,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {contracts.filter(c => c.status === 'signed').length} / {contracts.length} 件
             </span>
             <span className="text-[10px] text-slate-400 mt-0.5 block">
-              確認中: {contracts.filter(c => c.status === 'under_review').length} 件 / 下書き: {contracts.filter(c => c.status === 'draft').length} 件
+              未締結: {contracts.filter(c => !['signed', 'active', 'effective', 'in_force', 'canceled', 'expired'].includes(String(c.status || ''))).length} 件 / 終了・解約: {contracts.filter(c => ['canceled', 'expired'].includes(String(c.status || ''))).length} 件
             </span>
           </div>
 

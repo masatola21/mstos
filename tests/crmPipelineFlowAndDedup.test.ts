@@ -5,8 +5,16 @@ import {
   appendUniqueNote,
   getDealFlowSteps,
   getLeadFlowSteps,
+  isGenericDocumentTitle,
+  resolveWebApplyDealPlanName,
 } from '../src/utils/crmPipelineFlow';
 import { splitTextWithUrls } from '../src/utils/linkify';
+import {
+  dedupeRecordsById,
+  findOpsDuplicateGroups,
+  normalizeContractUiStatus,
+  normalizeInvoiceUiStatus,
+} from '../src/utils/operationsDedup';
 
 console.log('=== Running CRM Pipeline Flow, Deduplication & Preview Linkify Tests ===');
 
@@ -75,5 +83,79 @@ assert.equal(urlSegments.length, 2);
 assert.equal(urlSegments[0].type === 'url' ? urlSegments[0].href : '', 'https://mst-consulting.co.jp/apply/doc-123');
 assert.equal(urlSegments[1].type === 'url' ? urlSegments[1].href : '', 'https://mst-consulting.co.jp/diagnosis/?id=abc');
 console.log('  -> PASSED: Preview URL linkification verified.');
+
+// Test 6: Web apply deal plan name resolution avoids generic document titles
+console.log('Test 6: resolveWebApplyDealPlanName & isGenericDocumentTitle');
+assert.equal(isGenericDocumentTitle('業務委託基本契約書'), true);
+assert.equal(isGenericDocumentTitle('御見積書'), true);
+assert.equal(isGenericDocumentTitle('社外右腕・業務仕組み化伴走プラン'), false);
+
+assert.equal(
+  resolveWebApplyDealPlanName({
+    existingPlanName: '業務委託基本契約書',
+    docTitle: '業務委託基本契約書',
+    bodyHtml: '<h1>業務委託基本契約書</h1><p>案件名: DX自動化伴走支援</p>',
+    companyName: '株式会社サンプル',
+  }),
+  'DX自動化伴走支援'
+);
+assert.equal(
+  resolveWebApplyDealPlanName({
+    docTitle: '業務委託基本契約書',
+    bodyHtml: '<p>業務委託基本契約書</p>',
+    companyName: '株式会社サンプル',
+  }),
+  '株式会社サンプル 業務改善支援プラン'
+);
+assert.equal(
+  resolveWebApplyDealPlanName({
+    existingPlanName: '経営顧問パッケージ',
+    docTitle: '業務委託基本契約書',
+    companyName: '株式会社サンプル',
+  }),
+  '経営顧問パッケージ'
+);
+console.log('  -> PASSED: Web apply deal plan name resolution verified.');
+
+// Test 7: Operations deduplication (contracts, invoices, engagements)
+console.log('Test 7: dedupeRecordsById & findOpsDuplicateGroups');
+const unique = dedupeRecordsById([{ id: '1', v: 'a' }, { id: '1', v: 'b' }, { id: '2', v: 'c' }]);
+assert.equal(unique.length, 2);
+
+const dupContracts = findOpsDuplicateGroups('contracts', [
+  { id: 'c-draft', company_id: 'comp-1', deal_id: 'deal-1', status: 'draft', amount: 300000, created_at: '2026-11-01T00:00:00Z' },
+  { id: 'c-signed', company_id: 'comp-1', deal_id: 'deal-1', status: 'signed', amount: 300000, document_id: 'doc-1', created_at: '2026-11-02T00:00:00Z' },
+  { id: 'c-other', company_id: 'comp-2', deal_id: 'deal-2', status: 'draft', amount: 150000, created_at: '2026-11-01T00:00:00Z' },
+]);
+assert.equal(dupContracts.length, 1);
+assert.equal(dupContracts[0].keeper.id, 'c-signed');
+assert.deepEqual(dupContracts[0].duplicates.map((d) => d.id), ['c-draft']);
+
+const dupServices = findOpsDuplicateGroups('services', [
+  { id: 's-1', company_id: 'comp-1', contract_id: 'c-signed', title: '【伴走サポート】A社', notes: '商談ID: deal-1', status: 'active', milestone_data: [{ id: 'm1' }], created_at: '2026-11-01T00:00:00Z' },
+  { id: 's-2', company_id: 'comp-1', contract_id: null, title: '【伴走サポート】A社', notes: '商談ID: deal-1', status: 'active', milestone_data: [], created_at: '2026-11-02T00:00:00Z' },
+]);
+assert.equal(dupServices.length, 1);
+assert.equal(dupServices[0].keeper.id, 's-1');
+assert.deepEqual(dupServices[0].duplicates.map((d) => d.id), ['s-2']);
+console.log('  -> PASSED: Operations deduplication verified.');
+
+// Test 8: Slimmed contract and invoice status normalization
+console.log('Test 8: normalizeContractUiStatus & normalizeInvoiceUiStatus');
+assert.equal(normalizeContractUiStatus('draft'), 'draft');
+assert.equal(normalizeContractUiStatus('under_review'), 'draft');
+assert.equal(normalizeContractUiStatus('sent'), 'draft');
+assert.equal(normalizeContractUiStatus('signed'), 'signed');
+assert.equal(normalizeContractUiStatus('active'), 'signed');
+assert.equal(normalizeContractUiStatus('expired'), 'canceled');
+assert.equal(normalizeContractUiStatus('canceled'), 'canceled');
+
+assert.equal(normalizeInvoiceUiStatus('draft'), 'draft');
+assert.equal(normalizeInvoiceUiStatus('awaiting_approval'), 'draft');
+assert.equal(normalizeInvoiceUiStatus('issued'), 'issued');
+assert.equal(normalizeInvoiceUiStatus('paid'), 'paid');
+assert.equal(normalizeInvoiceUiStatus('overdue'), 'overdue');
+assert.equal(normalizeInvoiceUiStatus('canceled'), 'canceled');
+console.log('  -> PASSED: Slimmed status normalization verified.');
 
 console.log('=== All CRM Pipeline Flow, Deduplication & Preview Linkify Tests Passed! ===');

@@ -108,6 +108,8 @@ import {
   resolveNonDowngradingLeadStatus,
   resolveNonDowngradingDealStatus,
   appendUniqueNote,
+  resolveWebApplyDealPlanName,
+  isGenericDocumentTitle,
 } from './src/utils/crmPipelineFlow.js';
 
 dotenv.config();
@@ -13096,6 +13098,12 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
 
     const docOwnerId = await resolveSystemOwnerId(doc.owner_id);
 
+    // 会社名・金額解決（商談プラン名・契約・請求・顧問構築支援の自動起票に使用）
+    const { data: compData } = resolvedCompanyId
+      ? await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle()
+      : { data: null as any };
+    const compLabel = compData?.company_name || '顧客企業';
+
     let finalDealId = doc.deal_id || null;
     if (!finalDealId && doc.lead_id) {
       const { data: leadDeal } = await lineSupabase
@@ -13127,8 +13135,13 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       '・合意文面: ' + consentEvidenceText,
     ].join('\n');
 
-    // 商談の更新または自動起票（1社1商談への重複統合を保証）
+    // 商談の更新または自動起票（1社1商談への重複統合を保証。「業務委託基本契約書」等の汎用書類タイトルは使わない）
     let currentDealRow: any = null;
+    let resolvedPlanName = resolveWebApplyDealPlanName({
+      docTitle: doc.title,
+      bodyHtml: doc.body_html,
+      companyName: compLabel,
+    });
     if (finalDealId) {
       const { data: currentDeal } = await lineSupabase
         .from('deals')
@@ -13136,10 +13149,21 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
         .eq('id', finalDealId)
         .maybeSingle();
       currentDealRow = currentDeal || null;
+      resolvedPlanName = resolveWebApplyDealPlanName({
+        existingPlanName: currentDeal?.proposal_plan_name,
+        docTitle: doc.title,
+        bodyHtml: doc.body_html,
+        companyName: compLabel,
+      });
+      const shouldUpdatePlanName = Boolean(
+        resolvedPlanName &&
+        (!currentDeal?.proposal_plan_name || isGenericDocumentTitle(currentDeal?.proposal_plan_name))
+      );
       const newMemo = appendUniqueNote(currentDeal?.memo, evidenceLog);
       const nextDealStatus = resolveNonDowngradingDealStatus(currentDeal?.proposal_status, '成約');
       const { error: dealUpdErr } = await lineSupabase.from('deals').update({
         proposal_status: nextDealStatus,
+        ...(shouldUpdatePlanName ? { proposal_plan_name: resolvedPlanName } : {}),
         ...(totalAmount > 0 && !currentDeal?.total_amount ? { total_amount: totalAmount } : {}),
         ...(doc.lead_id ? { lead_id: doc.lead_id } : {}),
         memo: newMemo,
@@ -13157,7 +13181,7 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
         id: finalDealId,
         company_id: resolvedCompanyId,
         lead_id: doc.lead_id || null,
-        proposal_plan_name: doc.title || 'Web申込プラン',
+        proposal_plan_name: resolvedPlanName,
         proposal_status: '成約',
         proposal_date: todayStr,
         total_amount: totalAmount > 0 ? totalAmount : null,
@@ -13187,10 +13211,7 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       }).eq('id', doc.id);
     }
 
-    // 会社名・金額解決（契約・請求・顧問構築支援の自動起票に使用）
-    const { data: compData } = await lineSupabase.from('companies').select('company_name').eq('id', resolvedCompanyId).maybeSingle();
-    const compLabel = compData?.company_name || '顧客企業';
-    const dealTitle = currentDealRow?.proposal_plan_name || doc.title || 'Web申込プラン';
+    const dealTitle = resolvedPlanName;
     const resolvedTotalAmount = Number(currentDealRow?.total_amount || totalAmount || 0);
     const resolvedInitialFee = Number(currentDealRow?.initial_fee || 0);
     const resolvedMonthlyFee = Number(currentDealRow?.monthly_fee || 0);
@@ -13201,15 +13222,32 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       ? `月額費用: ¥${resolvedMonthlyFee.toLocaleString('ja-JP')}（税抜 / 税込 ¥${Math.floor(resolvedMonthlyFee * 1.1).toLocaleString('ja-JP')}・毎月末日締め翌月末日振込）`
       : `スポット契約（一括払い・支払期日: ${dueDate}）`;
 
-    // 契約書レコード（customer_contracts）の作成または承諾更新（owner_id 必須付与）
+    // 契約書レコード（customer_contracts）の作成または承諾更新（複数件存在時でも重複作成しないよう limit(1) + 会社IDフォールバック）
     const isContractDoc = effectiveDocType === 'contract';
     let resolvedContractId: string | null = null;
     try {
-      const { data: existingContract } = await lineSupabase
+      const { data: existingContracts } = await lineSupabase
         .from('customer_contracts')
         .select('id, status')
         .or(`document_id.eq.${doc.id},deal_id.eq.${finalDealId}`)
-        .maybeSingle();
+        .order('created_at', { ascending: true })
+        .limit(1);
+      let existingContract = existingContracts?.[0] || null;
+
+      if (!existingContract && resolvedCompanyId) {
+        const { data: companyContracts } = await lineSupabase
+          .from('customer_contracts')
+          .select('id, status, deal_id, title')
+          .eq('company_id', resolvedCompanyId)
+          .in('status', ['draft', 'under_review', 'sent', 'signed', 'active', 'effective', 'in_force'])
+          .order('created_at', { ascending: true })
+          .limit(10);
+        existingContract = (companyContracts || []).find((c: any) =>
+          !c.deal_id ||
+          c.title === `${dealTitle} 契約書` ||
+          (doc.title && String(c.title || '').includes(String(doc.title)))
+        ) || null;
+      }
 
       if (existingContract?.id) {
         resolvedContractId = existingContract.id;
@@ -13308,8 +13346,29 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
             .from('customer_invoices')
             .select('id')
             .eq('contract_id', resolvedContractId)
+            .order('created_at', { ascending: true })
             .limit(1);
           if (existingInv?.[0]?.id) resolvedInvoiceId = existingInv[0].id;
+        }
+        if (!resolvedInvoiceId && finalDealId) {
+          const { data: existingDealInv } = await lineSupabase
+            .from('customer_invoices')
+            .select('id')
+            .eq('company_id', resolvedCompanyId)
+            .ilike('notes', `%商談ID: ${finalDealId}%`)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (existingDealInv?.[0]?.id) resolvedInvoiceId = existingDealInv[0].id;
+        }
+        if (!resolvedInvoiceId) {
+          const { data: existingTitleInv } = await lineSupabase
+            .from('customer_invoices')
+            .select('id')
+            .eq('company_id', resolvedCompanyId)
+            .eq('title', `${dealTitle} 初回ご請求書`)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (existingTitleInv?.[0]?.id) resolvedInvoiceId = existingTitleInv[0].id;
         }
 
         if (!resolvedInvoiceId) {
@@ -13401,6 +13460,7 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
             .from('customer_service_engagements')
             .select('id')
             .eq('contract_id', resolvedContractId)
+            .order('created_at', { ascending: true })
             .limit(1);
           if (existingEng?.[0]?.id) resolvedEngagementId = existingEng[0].id;
         }
@@ -13410,8 +13470,19 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
             .select('id')
             .eq('company_id', resolvedCompanyId)
             .ilike('notes', `%商談ID: ${finalDealId}%`)
+            .order('created_at', { ascending: true })
             .limit(1);
           if (existingDealEng?.[0]?.id) resolvedEngagementId = existingDealEng[0].id;
+        }
+        if (!resolvedEngagementId) {
+          const { data: existingTitleEng } = await lineSupabase
+            .from('customer_service_engagements')
+            .select('id')
+            .eq('company_id', resolvedCompanyId)
+            .eq('title', `【伴走サポート】${compLabel} 様 · ${dealTitle}`)
+            .order('created_at', { ascending: true })
+            .limit(1);
+          if (existingTitleEng?.[0]?.id) resolvedEngagementId = existingTitleEng[0].id;
         }
 
         if (!resolvedEngagementId) {

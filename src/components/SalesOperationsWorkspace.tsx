@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { ManagedContract, ManagedInvoice } from '../types/matrix';
@@ -17,6 +17,7 @@ import { getEndOfNextMonthDate } from '../utils/billingUtils';
 import { formatJapaneseDate } from '../utils/date';
 import { ensureCustomerRegisteredFromPaidInvoice } from '../services/paidInvoiceCustomerSync';
 import { executeDealWonAutomation, reconcilePendingWonDeals } from '../services/dealWonAutomationService';
+import { dedupeRecordsById, findOpsDuplicateGroups, normalizeContractUiStatus, normalizeInvoiceUiStatus } from '../utils/operationsDedup';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -69,20 +70,21 @@ const opsTabs = [
   { key: 'services', label: '顧問・構築支援', table: 'customer_service_engagements', icon: Wrench },
 ] as const;
 
-const contractStatusLabels: Record<string,string> = {
-  draft: '下書き（未送付）',
-  under_review: '社内確認中',
-  sent: 'メール送付済み（同意返信待ち）',
-  signed: '締結済み（相手の合意を確認）',
-  expired: '期限切れ',
-  canceled: '取消',
+const contractStatusLabels: Record<string, string> = {
+  draft: '未締結（締結待ち）',
+  under_review: '未締結（締結待ち）',
+  sent: '未締結（締結待ち）',
+  signed: '締結済み',
+  active: '締結済み',
+  expired: '終了・解約',
+  canceled: '終了・解約',
 };
-const invoiceStatusLabels: Record<string,string> = {
-  draft: '下書き（未発行）',
-  awaiting_approval: '承認待ち',
-  issued: '発行済み（入金待ち）',
+const invoiceStatusLabels: Record<string, string> = {
+  draft: '未発行（下書き）',
+  awaiting_approval: '未発行（下書き）',
+  issued: '請求済み（入金待ち）',
   paid: '入金済み',
-  overdue: '支払期限超過',
+  overdue: '期限超過（未入金）',
   canceled: '取消',
 };
 
@@ -145,8 +147,17 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
   const [recurringDueDate, setRecurringDueDate] = useState<string>('');
   const [isGeneratingRecurring, setIsGeneratingRecurring] = useState(false);
   const [loadingRecurring, setLoadingRecurring] = useState(false);
+  const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
 
   const selectedOps = opsTabs.find((item) => item.key === activeOpsTab) || opsTabs[0];
+  const opsDuplicateGroups = useMemo(
+    () => findOpsDuplicateGroups(activeOpsTab, records),
+    [activeOpsTab, records],
+  );
+  const totalExtraDuplicateRows = useMemo(
+    () => opsDuplicateGroups.reduce((sum, g) => sum + g.duplicates.length, 0),
+    [opsDuplicateGroups],
+  );
 
   const loadRecurringCandidates = async (month: string) => {
     setLoadingRecurring(true);
@@ -262,13 +273,16 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         if (invoicesResult.error) throw invoicesResult.error;
         if (productsResult.error) throw productsResult.error;
         if (dealsResult.error) throw dealsResult.error;
-        setRecords(recordsResult.data || []); setCompanies(companyResult.data || []);
-        setCatalogProducts(productsResult.data || []); setDeals(dealsResult.data || []); setSavedContracts(contractsResult.data || []);
+        const dedupedRecords = dedupeRecordsById(recordsResult.data || []);
+        const dedupedContracts = dedupeRecordsById(contractsResult.data || []);
+        const dedupedInvoices = dedupeRecordsById(invoicesResult.data || []);
+        setRecords(dedupedRecords); setCompanies(companyResult.data || []);
+        setCatalogProducts(productsResult.data || []); setDeals(dealsResult.data || []); setSavedContracts(dedupedContracts);
         setDocuments(documentsResult.data || []);
         const asTime = (value:string|null|undefined) => value ? (Date.parse(value)||Date.now()) : Date.now();
         onOperationalRecordsChange?.(
-          (contractsResult.data||[]).map((row:any)=>({id:row.legacy_id||row.id,title:row.title,type:row.contract_type,productId:row.product_id||undefined,companyId:row.company_id||undefined,counterpartyName:row.counterparty_name||'',status:row.status,startDate:row.start_date||undefined,endDate:row.end_date||undefined,amount:Number(row.amount||0),notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedContract[],
-          (invoicesResult.data||[]).map((row:any)=>({id:row.legacy_id||row.id,invoiceNumber:row.invoice_number,title:row.title,productId:row.product_id||undefined,companyId:row.company_id||undefined,recipientName:row.recipient_name||'',amount:Number(row.amount||0),taxAmount:row.tax_amount==null?undefined:Number(row.tax_amount),status:row.status,issueDate:row.issue_date||'',dueDate:row.due_date||'',paidDate:row.paid_at||undefined,notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedInvoice[]
+          dedupedContracts.map((row:any)=>({id:row.legacy_id||row.id,title:row.title,type:row.contract_type,productId:row.product_id||undefined,companyId:row.company_id||undefined,counterpartyName:row.counterparty_name||'',status:row.status,startDate:row.start_date||undefined,endDate:row.end_date||undefined,amount:Number(row.amount||0),notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedContract[],
+          dedupedInvoices.map((row:any)=>({id:row.legacy_id||row.id,invoiceNumber:row.invoice_number,title:row.title,productId:row.product_id||undefined,companyId:row.company_id||undefined,recipientName:row.recipient_name||'',amount:Number(row.amount||0),taxAmount:row.tax_amount==null?undefined:Number(row.tax_amount),status:row.status,issueDate:row.issue_date||'',dueDate:row.due_date||'',paidDate:row.paid_at||undefined,notes:row.notes||undefined,createdAt:asTime(row.created_at),updatedAt:asTime(row.updated_at)})) as ManagedInvoice[]
         );
       }
     } catch (e: any) { setError(e?.message || 'データを読み込めませんでした。'); }
@@ -554,6 +568,85 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
 
   const reachServiceMilestone = async (record: RecordRow, milestoneId: string) => {
     await toggleServiceMilestone(record, milestoneId, 'completed');
+  };
+
+  const mergeOpsDuplicates = async () => {
+    if (opsDuplicateGroups.length === 0) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setIsMergingDuplicates(true);
+    setError('');
+    setNotice('');
+    try {
+      let mergedGroupCount = 0;
+      let removedCount = 0;
+      const nowIso = new Date().toISOString();
+
+      for (const group of opsDuplicateGroups) {
+        const keeper = group.keeper;
+        const dupIds = group.duplicates.map((d) => String(d.id)).filter(Boolean);
+        if (dupIds.length === 0) continue;
+
+        const patch: Record<string, any> = {};
+        for (const dup of group.duplicates) {
+          if (!keeper.document_id && !patch.document_id && dup.document_id) patch.document_id = dup.document_id;
+          if (!keeper.deal_id && !patch.deal_id && dup.deal_id) patch.deal_id = dup.deal_id;
+          if (!keeper.contract_id && !patch.contract_id && dup.contract_id) patch.contract_id = dup.contract_id;
+          if (!keeper.product_id && !patch.product_id && dup.product_id) patch.product_id = dup.product_id;
+        }
+
+        if (activeOpsTab === 'contracts') {
+          await supabase.from('customer_invoices').update({ contract_id: keeper.id }).in('contract_id', dupIds);
+          await supabase.from('customer_service_engagements').update({ contract_id: keeper.id }).in('contract_id', dupIds);
+          if (Object.keys(patch).length > 0) {
+            await supabase.from('customer_contracts').update({ ...patch, updated_at: nowIso }).eq('id', keeper.id);
+          }
+          for (const dup of group.duplicates) {
+            if (onDeleteContract) await onDeleteContract(dup.legacy_id || dup.id).catch(() => undefined);
+          }
+          const { error: delErr } = await supabase.from('customer_contracts').delete().in('id', dupIds);
+          if (delErr) throw delErr;
+        } else if (activeOpsTab === 'invoices') {
+          if (Object.keys(patch).length > 0) {
+            await supabase.from('customer_invoices').update({ ...patch, updated_at: nowIso }).eq('id', keeper.id);
+          }
+          for (const dup of group.duplicates) {
+            if (onDeleteInvoice) await onDeleteInvoice(dup.legacy_id || dup.id).catch(() => undefined);
+          }
+          const { error: delErr } = await supabase.from('customer_invoices').delete().in('id', dupIds);
+          if (delErr) throw delErr;
+        } else {
+          await supabase.from('customer_service_meetings').update({ engagement_id: keeper.id }).in('engagement_id', dupIds);
+          const dupIdSet = new Set(dupIds);
+          for (const t of tasks) {
+            if (t.supportEngagementId && dupIdSet.has(String(t.supportEngagementId)) && onUpdateTask) {
+              onUpdateTask({ ...t, supportEngagementId: String(keeper.id) });
+            }
+          }
+          const keeperMs = Array.isArray(keeper.milestone_data) ? keeper.milestone_data : [];
+          if (keeperMs.length === 0) {
+            const richer = group.duplicates.find((d) => Array.isArray(d.milestone_data) && d.milestone_data.length > 0);
+            if (richer) patch.milestone_data = richer.milestone_data;
+          }
+          if (Object.keys(patch).length > 0) {
+            await supabase.from('customer_service_engagements').update({ ...patch, updated_at: nowIso }).eq('id', keeper.id);
+          }
+          const { error: delErr } = await supabase.from('customer_service_engagements').delete().in('id', dupIds);
+          if (delErr) throw delErr;
+        }
+
+        mergedGroupCount += 1;
+        removedCount += dupIds.length;
+      }
+
+      setNotice(`同じ会社・同内容で重複していた ${mergedGroupCount}件（余剰 ${removedCount}行）を1件に統合し、関連データも引き継ぎました。`);
+      await load();
+      window.dispatchEvent(new CustomEvent('mst:crm-data-changed'));
+    } catch (err: any) {
+      setError(`重複統合中にエラーが発生しました: ${err?.message || '不明なエラー'}`);
+    } finally {
+      setIsMergingDuplicates(false);
+    }
   };
 
   const previewSegment = async (segment: Segment) => {
@@ -1030,6 +1123,25 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         )}
       </div>
 
+      {opsDuplicateGroups.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-950">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>{selectedOps.label}</strong> に同じ会社・同内容の重複が <strong>{opsDuplicateGroups.length}組（余剰 {totalExtraDuplicateRows}件）</strong> 見つかりました。関連データ（請求・打ち合わせ・タスク）を引き継いで1件に統合できます。
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void mergeOpsDuplicates()}
+            disabled={isMergingDuplicates}
+            className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
+          >
+            {isMergingDuplicates ? '統合中...' : '同じ会社・同内容の重複を1件に統合'}
+          </button>
+        </div>
+      )}
+
       {activeOpsTab === 'services' ? <CustomerSupportWorkspace
         companyId={companyId}
         initialSection={initialSupportSection}
@@ -1370,13 +1482,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
 
       {activeOpsTab==='contracts' ? (
         <p className="text-xs text-slate-500">
-          状態の流れ：下書き → 社内確認中 → メール送付済み（同意返信待ち）→ 締結済み（相手の合意を確認）。
-          相手の明示的な同意返信を確認した後に「締結済み」へ更新すると、商談パイプラインのステータスも自動的に「成約」へ同期されます。
+          契約ステータス：<strong>未締結（締結待ち）→ 締結済み → 終了・解約</strong> の3段階に集約しました（送付済みかどうかは横の「書類送付状況」で確認できます）。「締結済み」にすると顧客台帳が「契約中」になり、継続顧問の月次定期請求対象になります。
         </p>
       ) : (
         <p className="text-xs text-slate-500">
-          状態の流れ：下書き（未発行）→ 承認待ち → 発行済み（入金待ち）→ 入金済み。
-          「入金済み」に更新すると商談パイプラインが自動的に「成約」へ同期されます。書類送付状況（未送付／送信済み）もリアルタイムに反映されます。
+          請求ステータス：<strong>未発行（下書き）→ 請求済み（入金待ち）→ 入金済み ／ 取消</strong>（支払期日を過ぎると期限超過アラートが表示されます）。「入金済み」にすると商談「成約」・顧客台帳「契約中」へ自動同期されます。
         </p>
       )}
 
@@ -1494,27 +1604,38 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
 
                     {/* ステータス */}
                     <td className="p-3">
-                      <select
-                        aria-label={`${record.title || record.invoice_number}の状態`}
-                        value={record.status}
-                        onChange={(e) => void updateOperationStatus(record, e.target.value)}
-                        className={`rounded-lg border px-2 py-1 text-xs font-semibold focus:outline-none focus:border-purple-600 shadow-2xs cursor-pointer ${
-                          record.status === 'signed' || record.status === 'paid'
-                            ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
-                            : record.status === 'overdue'
-                              ? 'border-rose-300 bg-rose-50 text-rose-900'
-                              : 'border-slate-200 bg-white text-slate-800'
-                        }`}
-                      >
-                        {(activeOpsTab === 'contracts'
-                          ? ['draft', 'under_review', 'sent', 'signed', 'expired', 'canceled']
-                          : ['draft', 'awaiting_approval', 'issued', 'paid', 'overdue', 'canceled']
-                        ).map((status) => (
-                          <option key={status} value={status}>
-                            {(activeOpsTab === 'contracts' ? contractStatusLabels : invoiceStatusLabels)[status] || status}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const uiStatus = activeOpsTab === 'contracts'
+                          ? normalizeContractUiStatus(record.status)
+                          : normalizeInvoiceUiStatus(record.status);
+                        const statusChoices = activeOpsTab === 'contracts'
+                          ? (['draft', 'signed', 'canceled'] as const)
+                          : (uiStatus === 'overdue'
+                              ? (['draft', 'issued', 'overdue', 'paid', 'canceled'] as const)
+                              : (['draft', 'issued', 'paid', 'canceled'] as const));
+                        return (
+                          <select
+                            aria-label={`${record.title || record.invoice_number}の状態`}
+                            value={uiStatus}
+                            onChange={(e) => void updateOperationStatus(record, e.target.value)}
+                            className={`rounded-lg border px-2 py-1 text-xs font-semibold focus:outline-none focus:border-purple-600 shadow-2xs cursor-pointer ${
+                              uiStatus === 'signed' || uiStatus === 'paid'
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                                : uiStatus === 'overdue'
+                                  ? 'border-rose-300 bg-rose-50 text-rose-900'
+                                  : uiStatus === 'canceled'
+                                    ? 'border-slate-200 bg-slate-100 text-slate-500'
+                                    : 'border-slate-200 bg-white text-slate-800'
+                            }`}
+                          >
+                            {statusChoices.map((status) => (
+                              <option key={status} value={status}>
+                                {(activeOpsTab === 'contracts' ? contractStatusLabels : invoiceStatusLabels)[status] || status}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </td>
 
                     {/* 書類送付状況 */}

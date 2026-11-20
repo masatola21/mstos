@@ -142,6 +142,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [bulkDeleteDocs, setBulkDeleteDocs] = useState(true);
   const [bulkDeleteLinkedCrm, setBulkDeleteLinkedCrm] = useState(true);
   const [isCleanDummyModalOpen, setIsCleanDummyModalOpen] = useState(false);
+  const [unifiedDeleteTab, setUnifiedDeleteTab] = useState<'current_all' | 'category_cleanup'>('current_all');
   const [cleanDummyTargets, setCleanDummyTargets] = useState<string[]>(['prospects', 'leads', 'deals', 'customers', 'companies', 'customer_documents']);
   const [isCleaningDummy, setIsCleaningDummy] = useState(false);
 
@@ -448,16 +449,31 @@ export const TableManager: React.FC<TableManagerProps> = ({
     if (mode === 'all_current' && data.length === 0) return;
     setBulkDeleteDocs(['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable));
     setBulkDeleteLinkedCrm(['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable));
+    if (mode === 'all_current') {
+      setUnifiedDeleteTab('current_all');
+      setIsCleanDummyModalOpen(true);
+      return;
+    }
     setBulkDeleteModalMode(mode);
   };
 
-  const executeBulkDelete = async () => {
-    if (!bulkDeleteModalMode) return;
-    const targetIds = bulkDeleteModalMode === 'all_current'
+  const openUnifiedDeleteModal = () => {
+    const isCrmTable = ['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable);
+    setBulkDeleteDocs(isCrmTable);
+    setBulkDeleteLinkedCrm(isCrmTable);
+    setUnifiedDeleteTab(data.length > 0 ? 'current_all' : 'category_cleanup');
+    setIsCleanDummyModalOpen(true);
+  };
+
+  const executeBulkDelete = async (explicitMode?: 'selected' | 'all_current') => {
+    const activeMode = explicitMode || bulkDeleteModalMode;
+    if (!activeMode) return;
+    const targetIds = activeMode === 'all_current'
       ? data.map((item) => String(item.id))
       : selectedIds;
     if (targetIds.length === 0) {
       setBulkDeleteModalMode(null);
+      setIsCleanDummyModalOpen(false);
       return;
     }
 
@@ -471,6 +487,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
     });
     setIsBulkDeleting(false);
     setBulkDeleteModalMode(null);
+    setIsCleanDummyModalOpen(false);
 
     if (result.error && result.successCount === 0) {
       setRowActionError(result.error.message);
@@ -775,25 +792,15 @@ export const TableManager: React.FC<TableManagerProps> = ({
               <span>選択削除 ({selectedIds.length}件)</span>
             </button>
           )}
-          {data.length > 0 && (
-            <button
-              type="button"
-              onClick={() => openBulkDeleteModal('all_current')}
-              disabled={isBulkDeleting}
-              className="px-3 py-1.5 rounded-md font-medium text-xs bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-              title={`${config.label}の全レコード（${data.length}件）を削除します`}
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-              <span>全削除 ({data.length}件)</span>
-            </button>
-          )}
           <button
-            onClick={() => setIsCleanDummyModalOpen(true)}
-            className="px-3 py-1.5 rounded-md font-medium text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            title="カテゴリ別の全削除・ダミーデータ一括整理"
+            type="button"
+            onClick={openUnifiedDeleteModal}
+            disabled={isBulkDeleting || isCleaningDummy}
+            className="px-3 py-1.5 rounded-md font-medium text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+            title={`${config.label}の全件削除、またはCRM全体のカテゴリ別整理を行います`}
           >
             <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>一括整理・全削除</span>
+            <span>一括削除・整理</span>
           </button>
           <button
             onClick={loadData}
@@ -2322,7 +2329,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
 
-      {/* Bulk / Delete-All Confirmation Modal */}
+      {/* Selected Rows Confirmation Modal */}
       {bulkDeleteModalMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -2333,9 +2340,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">
-                    {bulkDeleteModalMode === 'all_current'
-                      ? `${config.label}を全削除 (${data.length}件)`
-                      : `選択した${config.label}を削除 (${selectedIds.length}件)`}
+                    {`選択した${config.label}を削除 (${selectedIds.length}件)`}
                   </h3>
                   <p className="text-xs text-slate-500">関連する書類やCRMデータの連動削除範囲を確認してください</p>
                 </div>
@@ -2378,12 +2383,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 </label>
 
                 <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200">
-                  ※ メール・LINEの送信履歴自体は監査保全のため保持されます（削除対象への紐付けのみ安全に解除されます）。送信履歴も消す場合は「一括整理・全削除」から送信履歴を選択してください。
+                  ※ メール・LINEの送信履歴自体は監査保全のため保持されます（削除対象への紐付けのみ安全に解除されます）。送信履歴も消す場合は「一括削除・整理」のカテゴリ整理から送信履歴を選択してください。
                 </div>
               </div>
             ) : (
               <p className="text-xs text-slate-600 leading-relaxed">
-                対象の {bulkDeleteModalMode === 'all_current' ? data.length : selectedIds.length} 件を削除します。関連参照がある場合は安全に解除されます。この操作は元に戻せません。
+                対象の {selectedIds.length} 件を削除します。関連参照がある場合は安全に解除されます。この操作は元に戻せません。
               </p>
             )}
 
@@ -2398,19 +2403,19 @@ export const TableManager: React.FC<TableManagerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => void executeBulkDelete()}
+                onClick={() => void executeBulkDelete('selected')}
                 disabled={isBulkDeleting}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>{isBulkDeleting ? '削除実行中...' : '削除を実行する'}</span>
+                <span>{isBulkDeleting ? '削除実行中...' : '選択データを削除する'}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Clean Dummy Data / Category Delete-All Modal */}
+      {/* Unified Delete-All & Category Cleanup Modal */}
       {isCleanDummyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -2420,11 +2425,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">一括整理・全削除（ダミーデータ削除）</h3>
-                  <p className="text-xs text-slate-500">外部キー制約を考慮し、依存関係の深い順に安全に全削除します</p>
+                  <h3 className="font-bold text-slate-900 text-base">一括削除・データ整理</h3>
+                  <p className="text-xs text-slate-500">「表示中の一覧だけ削除」か「CRM全体のカテゴリ別整理」を選択できます</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsCleanDummyModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
@@ -2432,65 +2438,160 @@ export const TableManager: React.FC<TableManagerProps> = ({
               </button>
             </div>
 
-            <div className="space-y-1.5 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 max-h-[60vh] overflow-y-auto">
-              <p className="font-semibold text-slate-800 mb-1">全削除する対象カテゴリを選択してください：</p>
-              {[
-                { key: 'prospects', label: '見込み企業リスト (prospects)' },
-                { key: 'leads', label: 'リード・反響一覧 (leads)' },
-                { key: 'deals', label: '商談パイプライン (deals)' },
-                { key: 'customer_documents', label: '重要書類（提案書・見積書・契約書・請求書ドラフト）' },
-                { key: 'customers', label: '顧客・契約・請求書・顧問構築支援 (customers, contracts, invoices, support)' },
-                { key: 'companies', label: '法人マスタ・連絡先（会社・担当者）' },
-                { key: 'diagnoses', label: '診断結果・フォーム回答データ (diagnoses)' },
-                { key: 'communication_outbox', label: 'メール・LINE送信履歴（通常は証跡保全のため未選択推奨）' },
-              ].map((item) => (
-                <label key={item.key} className="flex items-center gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
-                  <input
-                    type="checkbox"
-                    checked={cleanDummyTargets.includes(item.key)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setCleanDummyTargets([...cleanDummyTargets, item.key]);
-                      } else {
-                        setCleanDummyTargets(cleanDummyTargets.filter((k) => k !== item.key));
-                      }
-                    }}
-                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                  />
-                  <span className="font-medium text-slate-800">{item.label}</span>
-                </label>
-              ))}
-              <div className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2">
-                ※ 「販売商品マスタ」や「テンプレート」「LINE設定」は保護され削除されません。
-              </div>
+            <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setUnifiedDeleteTab('current_all')}
+                className={`px-3 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  unifiedDeleteTab === 'current_all'
+                    ? 'bg-white text-rose-700 shadow-xs border border-rose-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                この一覧を全削除 ({data.length}件)
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnifiedDeleteTab('category_cleanup')}
+                className={`px-3 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  unifiedDeleteTab === 'category_cleanup'
+                    ? 'bg-white text-rose-700 shadow-xs border border-rose-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                CRM全体をカテゴリ別整理
+              </button>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setIsCleanDummyModalOpen(false)}
-                disabled={isCleaningDummy}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleExecuteCleanDummy}
-                disabled={isCleaningDummy || cleanDummyTargets.length === 0}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs disabled:opacity-50"
-              >
-                {isCleaningDummy ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>削除実行中...</span>
-                  </>
+            {unifiedDeleteTab === 'current_all' ? (
+              <>
+                <div className="text-xs text-slate-700 bg-rose-50/60 border border-rose-200 rounded-xl p-3">
+                  現在表示中の「<span className="font-bold">{config.label}</span>」全 <strong>{data.length}件</strong> を削除します（他の一覧やマスタは選択しない限り維持されます）。
+                </div>
+
+                {data.length === 0 ? (
+                  <div className="text-xs text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+                    現在表示中のレコードはありません。「CRM全体をカテゴリ別整理」タブから他カテゴリの整理も行えます。
+                  </div>
+                ) : ['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable) ? (
+                  <div className="space-y-2.5 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                    <label className="flex items-start gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
+                      <input
+                        type="checkbox"
+                        checked={bulkDeleteDocs}
+                        onChange={(e) => setBulkDeleteDocs(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-semibold text-slate-800">関連する重要書類（提案書・見積書・契約書・請求書等）も連動削除する</div>
+                        <div className="text-[11px] text-slate-500">チェックすると重要書類一覧にも残らず完全に整理されます。</div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
+                      <input
+                        type="checkbox"
+                        checked={bulkDeleteLinkedCrm}
+                        onChange={(e) => setBulkDeleteLinkedCrm(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-semibold text-slate-800">紐づく会社・担当者・リード・商談・顧客もまとめて連動削除する</div>
+                        <div className="text-[11px] text-slate-500">重要書類の「会社」選択肢や担当者リストにも不要な会社が残らないように整理します。</div>
+                      </div>
+                    </label>
+                  </div>
                 ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>選択カテゴリを全削除</span>
-                  </>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    対象の {data.length} 件を削除します。関連参照がある場合は安全に解除されます。この操作は元に戻せません。
+                  </p>
                 )}
-              </button>
-            </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCleanDummyModalOpen(false)}
+                    disabled={isBulkDeleting}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void executeBulkDelete('all_current')}
+                    disabled={isBulkDeleting || data.length === 0}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isBulkDeleting ? '削除実行中...' : `${config.label}を全削除 (${data.length}件)`}</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 max-h-[55vh] overflow-y-auto">
+                  <p className="font-semibold text-slate-800 mb-1">テストデータ等を一括で空にするカテゴリを選択してください：</p>
+                  {[
+                    { key: 'prospects', label: '見込み企業リスト (prospects)' },
+                    { key: 'leads', label: 'リード・反響一覧 (leads)' },
+                    { key: 'deals', label: '商談パイプライン (deals)' },
+                    { key: 'customer_documents', label: '重要書類（提案書・見積書・契約書・請求書ドラフト）' },
+                    { key: 'customers', label: '顧客・契約・請求書・顧問構築支援 (customers, contracts, invoices, support)' },
+                    { key: 'companies', label: '法人マスタ・連絡先（会社・担当者）' },
+                    { key: 'diagnoses', label: '診断結果・フォーム回答データ (diagnoses)' },
+                    { key: 'communication_outbox', label: 'メール・LINE送信履歴（通常は証跡保全のため未選択推奨）' },
+                  ].map((item) => (
+                    <label key={item.key} className="flex items-center gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
+                      <input
+                        type="checkbox"
+                        checked={cleanDummyTargets.includes(item.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setCleanDummyTargets([...cleanDummyTargets, item.key]);
+                          } else {
+                            setCleanDummyTargets(cleanDummyTargets.filter((k) => k !== item.key));
+                          }
+                        }}
+                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      />
+                      <span className="font-medium text-slate-800">{item.label}</span>
+                    </label>
+                  ))}
+                  <div className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2">
+                    ※ 「販売商品マスタ」や「テンプレート」「LINE設定」は保護され削除されません。
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCleanDummyModalOpen(false)}
+                    disabled={isCleaningDummy}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecuteCleanDummy}
+                    disabled={isCleaningDummy || cleanDummyTargets.length === 0}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs disabled:opacity-50"
+                  >
+                    {isCleaningDummy ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>削除実行中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>選択カテゴリを全削除</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

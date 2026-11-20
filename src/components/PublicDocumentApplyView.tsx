@@ -12,7 +12,12 @@ import {
   FileText
 } from 'lucide-react';
 import { executeDealWonAutomation } from '../services/dealWonAutomationService';
-import { appendUniqueNote, resolveNonDowngradingLeadStatus } from '../utils/crmPipelineFlow';
+import {
+  appendUniqueNote,
+  resolveNonDowngradingLeadStatus,
+  resolveWebApplyDealPlanName,
+  isGenericDocumentTitle,
+} from '../utils/crmPipelineFlow';
 
 interface PublicDocument {
   id: string;
@@ -279,29 +284,56 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
           if (compDeal?.id) resolvedExistingDealId = String(compDeal.id);
         }
 
+        let resolvedCompanyName = doc?.companyName || '';
+        if (!resolvedCompanyName && targetCompanyId) {
+          const { data: compRow } = await supabase.from('companies').select('company_name').eq('id', targetCompanyId).maybeSingle();
+          resolvedCompanyName = compRow?.company_name || '';
+        }
+
+        let resolvedPlanName = resolveWebApplyDealPlanName({
+          docTitle: doc?.title,
+          bodyHtml: doc?.bodyHtml,
+          companyName: resolvedCompanyName,
+        });
+
         if (resolvedExistingDealId) {
           // 既存商談を成約に更新
           appliedDealId = resolvedExistingDealId;
-          const { data: curDeal } = await supabase.from('deals').select('memo, total_amount').eq('id', appliedDealId).maybeSingle();
+          const { data: curDeal } = await supabase
+            .from('deals')
+            .select('memo, total_amount, proposal_plan_name')
+            .eq('id', appliedDealId)
+            .maybeSingle();
+          resolvedPlanName = resolveWebApplyDealPlanName({
+            existingPlanName: curDeal?.proposal_plan_name,
+            docTitle: doc?.title,
+            bodyHtml: doc?.bodyHtml,
+            companyName: resolvedCompanyName,
+          });
+          const shouldUpgradePlanName = Boolean(
+            resolvedPlanName &&
+            (!curDeal?.proposal_plan_name || isGenericDocumentTitle(curDeal?.proposal_plan_name))
+          );
           const memo = appendUniqueNote(
             curDeal?.memo,
             `【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ${nowIso} / 書類: ${doc?.title || documentId}）`
           );
           await supabase.from('deals').update({
             proposal_status: '成約',
+            ...(shouldUpgradePlanName ? { proposal_plan_name: resolvedPlanName } : {}),
             ...(totalAmount > 0 && !curDeal?.total_amount ? { total_amount: totalAmount } : {}),
             ...(doc?.leadId ? { lead_id: doc.leadId } : {}),
             memo,
             updated_at: nowIso,
           }).eq('id', appliedDealId);
         } else {
-          // 新規商談を自動起票
+          // 新規商談を自動起票（「業務委託基本契約書」等の汎用書類タイトルは使わない）
           appliedDealId = `DEAL-WEB-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
           const { error: insDealErr } = await supabase.from('deals').insert({
             id: appliedDealId,
             company_id: targetCompanyId,
             lead_id: doc?.leadId || null,
-            proposal_plan_name: doc?.title || 'Web申込プラン',
+            proposal_plan_name: resolvedPlanName,
             proposal_status: '成約',
             proposal_date: todayStr,
             total_amount: totalAmount > 0 ? totalAmount : null,
@@ -330,11 +362,27 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
 
         // 契約書テーブルに電子合意レコードを記録（契約書の承認時のみ signed、提案書・見積書申込時は draft で契約手続き待ち）
         try {
-          const { data: existingContract } = await supabase
+          const { data: existingContracts } = await supabase
             .from('customer_contracts')
             .select('id, status')
             .or(`document_id.eq.${documentId},deal_id.eq.${appliedDealId}`)
-            .maybeSingle();
+            .order('created_at', { ascending: true })
+            .limit(1);
+          let existingContract = existingContracts?.[0] || null;
+          if (!existingContract && targetCompanyId) {
+            const { data: compContracts } = await supabase
+              .from('customer_contracts')
+              .select('id, status, deal_id, title')
+              .eq('company_id', targetCompanyId)
+              .in('status', ['draft', 'under_review', 'sent', 'signed', 'active', 'effective', 'in_force'])
+              .order('created_at', { ascending: true })
+              .limit(10);
+            existingContract = (compContracts || []).find((c: any) =>
+              !c.deal_id ||
+              c.title === `${resolvedPlanName} 契約書` ||
+              (doc?.title && String(c.title || '').includes(String(doc.title)))
+            ) || null;
+          }
 
           if (existingContract) {
             const nextContractStatus = isContractDoc
@@ -342,6 +390,7 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
               : (['signed', 'active', 'effective', 'in_force'].includes(String(existingContract.status || '').toLowerCase()) ? existingContract.status : 'draft');
             await supabase.from('customer_contracts').update({
               status: nextContractStatus,
+              deal_id: appliedDealId,
               ...(isContractDoc ? {
                 consent_method: 'web_apply',
                 consent_recorded_at: nowIso,

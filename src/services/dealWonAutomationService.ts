@@ -16,8 +16,9 @@ export interface DealWonResult {
 
 const defaultInvoiceDueDate = (date = new Date()) => getEndOfNextMonthDate(date);
 
-// 同時並行実行を防ぐインフライトMutexロック
-const inFlightDealLocks = new Set<string>();
+// 同時並行実行を防ぐインフライトPromise共有（後から来た呼び出しも同じ完了を待つ）
+const inFlightDealPromises = new Map<string, Promise<DealWonResult>>();
+let inFlightReconcile: Promise<{ checkedCount: number; completedCount: number }> | null = null;
 
 function isMissingColumnErr(error: any, columnName: string): boolean {
   const msg = String(error?.message || '');
@@ -43,19 +44,21 @@ export async function executeDealWonAutomation(dealId: string, forceRecreate = f
     return { success: false, message: '商談IDが指定されていません。' };
   }
 
-  if (inFlightDealLocks.has(safeDealId)) {
-    return {
-      success: true,
-      message: `商談（ID: ${safeDealId}）の成約自動処理は現在既にバックグラウンドで実行中です。二重起票を防止しました。`,
-    };
+  const existingPromise = inFlightDealPromises.get(safeDealId);
+  if (existingPromise) {
+    if (!forceRecreate) {
+      return await existingPromise;
+    }
+    await existingPromise.catch(() => undefined);
   }
 
-  inFlightDealLocks.add(safeDealId);
-  try {
-    return await executeDealWonAutomationInternal(safeDealId, forceRecreate);
-  } finally {
-    inFlightDealLocks.delete(safeDealId);
-  }
+  const runPromise = executeDealWonAutomationInternal(safeDealId, forceRecreate).finally(() => {
+    if (inFlightDealPromises.get(safeDealId) === runPromise) {
+      inFlightDealPromises.delete(safeDealId);
+    }
+  });
+  inFlightDealPromises.set(safeDealId, runPromise);
+  return await runPromise;
 }
 
 async function executeDealWonAutomationInternal(dealId: string, forceRecreate = false): Promise<DealWonResult> {
@@ -114,14 +117,39 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
     const errors: string[] = [];
 
     // 既存契約・入金状況を確認して顧客ステータス（申込済み vs 契約中）を決定
-    let existingContract: { id: string; document_id?: string | null; status?: string | null } | null = null;
+    let existingContract: { id: string; document_id?: string | null; status?: string | null; deal_id?: string | null } | null = null;
     if (!forceRecreate) {
       const { data: existingContracts } = await supabase
         .from('customer_contracts')
-        .select('id, document_id, status')
+        .select('id, document_id, status, deal_id')
         .eq('deal_id', dealId)
+        .order('created_at', { ascending: true })
         .limit(1);
       existingContract = existingContracts?.[0] || null;
+
+      if (!existingContract) {
+        const { data: companyContracts } = await supabase
+          .from('customer_contracts')
+          .select('id, document_id, status, deal_id, title')
+          .eq('company_id', companyId)
+          .in('status', ['draft', 'under_review', 'sent', 'signed', 'active', 'effective', 'in_force'])
+          .order('created_at', { ascending: true })
+          .limit(10);
+        const matched = (companyContracts || []).find((c: any) =>
+          !c.deal_id ||
+          c.title === `${dealTitle} 契約書` ||
+          (dealTitle && String(c.title || '').includes(dealTitle))
+        );
+        if (matched) {
+          existingContract = matched;
+          if (!matched.deal_id) {
+            await supabase
+              .from('customer_contracts')
+              .update({ deal_id: dealId, updated_at: nowIso })
+              .eq('id', matched.id);
+          }
+        }
+      }
     }
 
     const { data: paidInvoices } = await supabase
@@ -248,13 +276,36 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
 
     // ④ 初回請求書レコード（customer_invoices）の確認・補完起票
     let invoiceId: string | undefined;
-    if (!forceRecreate && contractId) {
-      const { data: existingInvoices } = await supabase
-        .from('customer_invoices')
-        .select('id')
-        .eq('contract_id', contractId)
-        .limit(1);
-      invoiceId = existingInvoices?.[0]?.id;
+    if (!forceRecreate) {
+      if (contractId) {
+        const { data: existingInvoices } = await supabase
+          .from('customer_invoices')
+          .select('id')
+          .eq('contract_id', contractId)
+          .order('created_at', { ascending: true })
+          .limit(1);
+        invoiceId = existingInvoices?.[0]?.id;
+      }
+      if (!invoiceId) {
+        const { data: existingDealInv } = await supabase
+          .from('customer_invoices')
+          .select('id')
+          .eq('company_id', companyId)
+          .ilike('notes', `%商談ID: ${dealId}%`)
+          .order('created_at', { ascending: true })
+          .limit(1);
+        invoiceId = existingDealInv?.[0]?.id;
+      }
+      if (!invoiceId) {
+        const { data: existingTitleInv } = await supabase
+          .from('customer_invoices')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('title', `${dealTitle} 初回ご請求書`)
+          .order('created_at', { ascending: true })
+          .limit(1);
+        invoiceId = existingTitleInv?.[0]?.id;
+      }
     }
 
     if (!invoiceId) {
@@ -321,7 +372,7 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
           due_date: dueDate,
           status: 'draft',
           recipient_name: companyName,
-          notes: `商談「${dealTitle}」成約による自動起票。支払期日: ${dueDate}。振込先: ドコモSMTBネット銀行 法人第一支店 普通 2223730（有限会社MST）。書類ID: ${invoiceDocId || 'なし'}`,
+          notes: `商談「${dealTitle}」（商談ID: ${dealId}）成約による自動起票。支払期日: ${dueDate}。振込先: ドコモSMTBネット銀行 法人第一支店 普通 2223730（有限会社MST）。書類ID: ${invoiceDocId || 'なし'}`,
         };
         const { data: invoice, error: invoiceError } = await supabase
           .from('customer_invoices')
@@ -351,6 +402,7 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
           .from('customer_service_engagements')
           .select('id')
           .eq('contract_id', contractId)
+          .order('created_at', { ascending: true })
           .limit(1);
         engagementId = existingEng?.[0]?.id;
       }
@@ -360,8 +412,19 @@ async function executeDealWonAutomationInternal(dealId: string, forceRecreate = 
           .select('id')
           .eq('company_id', companyId)
           .ilike('notes', `%商談ID: ${dealId}%`)
+          .order('created_at', { ascending: true })
           .limit(1);
         engagementId = existingDealEng?.[0]?.id;
+      }
+      if (!engagementId) {
+        const { data: existingTitleEng } = await supabase
+          .from('customer_service_engagements')
+          .select('id')
+          .eq('company_id', companyId)
+          .eq('title', `【伴走サポート】${companyName} 様 · ${dealTitle}`)
+          .order('created_at', { ascending: true })
+          .limit(1);
+        engagementId = existingTitleEng?.[0]?.id;
       }
     }
 
@@ -476,38 +539,48 @@ export async function reconcilePendingWonDeals(
   supabaseClient?: any,
   options?: { companyId?: string; limit?: number }
 ): Promise<{ checkedCount: number; completedCount: number }> {
+  if (inFlightReconcile) {
+    return await inFlightReconcile;
+  }
+
   const supabase = supabaseClient || getSupabase();
   if (!supabase) return { checkedCount: 0, completedCount: 0 };
 
-  try {
-    let query = supabase
-      .from('deals')
-      .select('id')
-      .in('proposal_status', ['成約', '受注', 'Won'])
-      .is('won_automation_completed_at', null)
-      .order('updated_at', { ascending: false })
-      .limit(options?.limit ?? 25);
+  inFlightReconcile = (async () => {
+    try {
+      let query = supabase
+        .from('deals')
+        .select('id')
+        .in('proposal_status', ['成約', '受注', 'Won'])
+        .is('won_automation_completed_at', null)
+        .order('updated_at', { ascending: false })
+        .limit(options?.limit ?? 25);
 
-    if (options?.companyId) {
-      query = query.eq('company_id', options.companyId);
-    }
-
-    const { data: pendingDeals, error } = await query;
-    if (error || !pendingDeals || pendingDeals.length === 0) {
-      return { checkedCount: 0, completedCount: 0 };
-    }
-
-    let completedCount = 0;
-    for (const deal of pendingDeals) {
-      const res = await executeDealWonAutomation(String(deal.id), false);
-      if (res.success && res.createdAny) {
-        completedCount += 1;
+      if (options?.companyId) {
+        query = query.eq('company_id', options.companyId);
       }
-    }
 
-    return { checkedCount: pendingDeals.length, completedCount };
-  } catch (err) {
-    console.warn('reconcilePendingWonDeals warning:', err);
-    return { checkedCount: 0, completedCount: 0 };
-  }
+      const { data: pendingDeals, error } = await query;
+      if (error || !pendingDeals || pendingDeals.length === 0) {
+        return { checkedCount: 0, completedCount: 0 };
+      }
+
+      let completedCount = 0;
+      for (const deal of pendingDeals) {
+        const res = await executeDealWonAutomation(String(deal.id), false);
+        if (res.success && res.createdAny) {
+          completedCount += 1;
+        }
+      }
+
+      return { checkedCount: pendingDeals.length, completedCount };
+    } catch (err) {
+      console.warn('reconcilePendingWonDeals warning:', err);
+      return { checkedCount: 0, completedCount: 0 };
+    } finally {
+      inFlightReconcile = null;
+    }
+  })();
+
+  return await inFlightReconcile;
 }
