@@ -161,6 +161,7 @@ export async function fetchGoogleCalendarFromIcal(icalUrl: string): Promise<{
 export async function syncTimeRexFromInboxHistory(): Promise<{
   success: boolean;
   syncedCount: number;
+  skippedCount?: number;
   detectedTimeRexEmails: number;
   failedCount?: number;
   warnings?: string[];
@@ -180,6 +181,7 @@ export async function syncTimeRexFromInboxHistory(): Promise<{
     return {
       success: true,
       syncedCount: data.syncedCount || 0,
+      skippedCount: data.skippedCount || 0,
       detectedTimeRexEmails: data.detectedTimeRexEmails || 0,
       failedCount: data.failedCount || 0,
       warnings: Array.isArray(data.warnings) ? data.warnings : undefined,

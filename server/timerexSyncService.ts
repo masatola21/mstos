@@ -59,39 +59,88 @@ const KNOWN_HOST_EMAILS = new Set([
   'masato.la21@gmail.com',
 ]);
 
-export function isHostOrSystemEmail(email: string, extraHostEmails: string[] = []): boolean {
+function isSystemOrDomainHostEmail(email: string): boolean {
   const lower = String(email || '').trim().toLowerCase();
   if (!lower || !lower.includes('@')) return true;
   if (lower.includes('timerex')) return true;
   if (lower.includes('no-reply') || lower.includes('noreply') || lower.includes('calendar-notification@google.com')) {
     return true;
   }
+  return HOST_DOMAIN_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+}
+
+export function isHostOrSystemEmail(email: string, extraHostEmails: string[] = []): boolean {
+  const lower = String(email || '').trim().toLowerCase();
+  if (isSystemOrDomainHostEmail(lower)) return true;
   if (KNOWN_HOST_EMAILS.has(lower)) return true;
-  if (HOST_DOMAIN_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return true;
   return extraHostEmails.some((h) => h && h.trim().toLowerCase() === lower);
 }
 
+function isExplicitHostLine(line: string): boolean {
+  const clean = String(line || '');
+  if (!clean) return false;
+  const hasHostKeyword = /(?:ホスト|主催者?|開催者|担当者|参加メンバー|From|Reply-To|転送元)\b/i.test(clean);
+  const hasGuestKeyword = /(?:ゲスト|予約者|相手方|お申し込み者|お客様)/i.test(clean);
+  return hasHostKeyword && !hasGuestKeyword;
+}
+
 export function extractGuestEmailFromText(content: string, extraHostEmails: string[] = []): string | null {
-  const labeledMatch = content.match(
-    /(?:ゲストメールアドレス|ゲストメール|予約者メールアドレス|メールアドレス|メール|E-?mail)[:：]\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
+  const safeContent = String(content || '');
+
+  // Pass 1: Strict extraction (excludes all known host/owner emails)
+  const labeledMatch = safeContent.match(
+    /(?:ゲストメールアドレス|ゲストメール|予約者メールアドレス|メールアドレス|メール|E-?mail|Eメール)[ \t]*(?:[:：]|\t)[ \t]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
   );
   if (labeledMatch && !isHostOrSystemEmail(labeledMatch[1], extraHostEmails)) {
     return labeledMatch[1].trim().toLowerCase();
   }
 
-  const guestSectionMatch = content.match(
-    /(?:ゲスト|予約者|相手方|お申し込み者)[\s\S]{0,200}?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
+  const guestSectionMatch = safeContent.match(
+    /(?:ゲスト|予約者|相手方|お申し込み者)[\s\S]{0,240}?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
   );
   if (guestSectionMatch && !isHostOrSystemEmail(guestSectionMatch[1], extraHostEmails)) {
     return guestSectionMatch[1].trim().toLowerCase();
   }
 
-  const allEmails = content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi) || [];
+  const allEmails = safeContent.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi) || [];
   for (const candidate of allEmails) {
     if (!isHostOrSystemEmail(candidate, extraHostEmails)) {
       return candidate.trim().toLowerCase();
     }
   }
+
+  // Pass 2: Owner self-test fallback (if user booked with their own personal Gmail/email on the guest form)
+  const lines = safeContent.split(/\r?\n/);
+  for (const line of lines) {
+    if (isExplicitHostLine(line)) continue;
+    const lineLabeled = line.match(
+      /(?:ゲストメールアドレス|ゲストメール|予約者メールアドレス|メールアドレス|メール|E-?mail|Eメール)[ \t]*(?:[:：]|\t)[ \t]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i
+    );
+    if (lineLabeled && !isSystemOrDomainHostEmail(lineLabeled[1])) {
+      return lineLabeled[1].trim().toLowerCase();
+    }
+  }
+
+  if (guestSectionMatch && !isSystemOrDomainHostEmail(guestSectionMatch[1])) {
+    const emailIdx = safeContent.indexOf(guestSectionMatch[1]);
+    const lineStart = safeContent.lastIndexOf('\n', emailIdx) + 1;
+    const lineEnd = safeContent.indexOf('\n', emailIdx);
+    const emailLine = safeContent.slice(lineStart, lineEnd === -1 ? safeContent.length : lineEnd);
+    if (!isExplicitHostLine(emailLine)) {
+      return guestSectionMatch[1].trim().toLowerCase();
+    }
+  }
+
+  for (const line of lines) {
+    if (isExplicitHostLine(line)) continue;
+    const candidates = line.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi) || [];
+    for (const candidate of candidates) {
+      if (!isSystemOrDomainHostEmail(candidate)) {
+        return candidate.trim().toLowerCase();
+      }
+    }
+  }
+
   return null;
 }
 
@@ -103,9 +152,13 @@ export function classifyTimeRexEmailAction(subject: string, bodyText: string): T
 
   if (
     combined.includes('キャンセルされました') ||
+    combined.includes('キャンセルしました') ||
     combined.includes('予定がキャンセル') ||
+    combined.includes('予定をキャンセル') ||
     combined.includes('予約がキャンセル') ||
+    combined.includes('予約をキャンセル') ||
     combined.includes('予約が取り消されました') ||
+    combined.includes('取り消しました') ||
     combined.includes('取消されました') ||
     /【\s*timerex\s*】[^\n]*(?:キャンセル|取消)/.test(combined)
   ) {
@@ -115,7 +168,11 @@ export function classifyTimeRexEmailAction(subject: string, bodyText: string): T
   if (
     combined.includes('日程が変更されました') ||
     combined.includes('予定が変更されました') ||
+    combined.includes('予定の日時を変更') ||
     combined.includes('日時が変更') ||
+    combined.includes('日時を変更') ||
+    combined.includes('日程を変更') ||
+    combined.includes('予定を変更') ||
     combined.includes('スケジュールが変更') ||
     combined.includes('日程変更が完了') ||
     combined.includes('rescheduled')
@@ -191,7 +248,8 @@ function htmlBodyToPlainTextPreservingLinks(html: string): string {
 
   work = work
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|div|li|tr|h[1-6]|blockquote|section|article|table)>/gi, '\n')
+    .replace(/<\/(?:th|td|dt)>/gi, '\t')
+    .replace(/<\/(?:p|div|li|tr|h[1-6]|blockquote|section|article|table|dd)>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -203,61 +261,71 @@ function htmlBodyToPlainTextPreservingLinks(html: string): string {
   return work;
 }
 
-/**
- * Parses a TimeRex notification email body into structured booking data.
- */
-export function parseTimeRexEmail(
+function analyzeTimeRexEmail(
   subject: string,
   textBody: string,
   htmlBody?: string,
   extraHostEmails: string[] = []
-): TimeRexBookingInfo | null {
+): { booking: TimeRexBookingInfo | null; missingReason?: string } {
   const cleanText = (textBody || '').trim();
-  const cleanHtmlText = htmlBody ? htmlBodyToPlainTextPreservingLinks(htmlBody) : '';
-  const content = cleanText || cleanHtmlText;
+  const cleanHtmlText = htmlBody ? htmlBodyToPlainTextPreservingLinks(htmlBody).trim() : '';
+  const content =
+    cleanText && cleanHtmlText && cleanText !== cleanHtmlText
+      ? `${cleanText}\n${cleanHtmlText}`
+      : cleanText || cleanHtmlText;
   const combinedForLinks = `${content}\n${cleanHtmlText}`;
   const bookingAction = classifyTimeRexEmailAction(subject, content);
 
   const guestEmail =
-    extractGuestEmailFromText(content, extraHostEmails) ||
-    (cleanHtmlText && cleanHtmlText !== content ? extractGuestEmailFromText(cleanHtmlText, extraHostEmails) : null);
+    (cleanText ? extractGuestEmailFromText(cleanText, extraHostEmails) : null) ||
+    (cleanHtmlText ? extractGuestEmailFromText(cleanHtmlText, extraHostEmails) : null) ||
+    extractGuestEmailFromText(content, extraHostEmails);
   if (!guestEmail) {
-    return null; // Email is required to match with CRM
+    return {
+      booking: null,
+      missingReason: 'ゲスト（予約者）のメールアドレスを本文から抽出できませんでした。',
+    };
   }
 
   // Extract Guest Name
   let guestName = '';
   const nameMatch =
-    content.match(/(?:お客様名|ゲスト氏名|ゲスト名|お名前|氏名|予約者名|予約者)[ \t]*[:：][ \t]*([^\n\r(（<]+)/) ||
-    content.match(/(?:^|\n)[ \t]*(?:ゲスト|相手方)[ \t]*[:：][ \t]*([^\n\r@<]+)/) ||
-    subject.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\n\r(（]+?)\s*様/);
+    content.match(/(?:お客様名|ゲスト氏名|ゲスト名|お名前|氏名|予約者名|予約者|名前)[ \t]*(?:[:：]|\t)[ \t]*([^\n\r(（<]+)/) ||
+    content.match(/(?:^|\n)[ \t]*(?:ゲスト|相手方)[ \t]*(?:[:：]|\t)[ \t]*([^\n\r@<]+)/) ||
+    subject.match(/【TimeRex】\s*(?:\[[^\]]+\])?\s*([^\n\r(（]+?)\s*様/) ||
+    subject.match(/^(?:【[^】]+】\s*|Fwd:\s*|Re:\s*)*([^\s(（【][^\n\r(（【]{0,40}?)\s*さんが(?:新しい予定|予定|日程)/) ||
+    content.match(/(?:^|\n)([^\s\n\r(（【][^\n\r(（]{1,30}?)\s*さんが(?:新しい予定|予定|日程)/);
 
   if (nameMatch) {
     guestName = nameMatch[1].replace(/様.*$/, '').trim();
   }
 
-  // Extract Company Name (use horizontal whitespace only so empty "会社名:\n..." does not bleed into the next line)
+  // Extract Company Name (horizontal whitespace/tab after label so empty "会社名:\n..." does not bleed)
   let companyName = '';
-  const compMatch = content.match(/(?:会社名|御社名|会社|所属)[ \t]*[:：][ \t]*([^\n\r]+)/);
+  const compMatch = content.match(/(?:会社名|御社名|企業名|法人名|会社|所属)[ \t]*(?:[:：]|\t)[ \t]*([^\n\r]+)/);
   if (compMatch) {
     companyName = compMatch[1].trim();
   }
 
   // Extract Phone Number
   let phone = '';
-  const phoneMatch = content.match(/(?:電話番号|TEL|連絡先)[ \t]*[:：][ \t]*([0-9\-+()]{9,15})/i);
+  const phoneMatch = content.match(/(?:電話番号|TEL|連絡先)[ \t]*(?:[:：]|\t)[ \t]*([0-9\-+()]{9,15})/i);
   if (phoneMatch) {
     phone = phoneMatch[1].trim();
   }
 
-  // Extract Date and Time (supports both half-width (金) and full-width （金） day-of-week parens)
+  // Extract Date and Time (supports both half-width (金) and full-width （金） parens, optional space before HH:MM, and 時分)
   let meetingDate = '';
   let meetingStartTime = '';
   let meetingEndTime = '';
 
   const dateTimeMatch =
-    content.match(/(?:変更後の日時|新しい日時|日時|予定日時)[ \t]*[:：]\s*(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*[\(（][^)）]+[\)）])?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/) ||
-    content.match(/(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*[\(（][^)）]+[\)）])?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/);
+    content.match(
+      /(?:変更後の日時|新しい日時|変更後日時|開催日時|面談日時|予約日時|日時|予定日時)[ \t]*(?:[:：]|\t|\n)\s*(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*[\(（][^)）]+[\)）])?\s*(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/
+    ) ||
+    content.match(
+      /(\d{4})[年\/-](\d{1,2})[月\/-](\d{1,2})(?:日)?(?:\s*[\(（][^)）]+[\)）])?[ \t]*(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/
+    );
 
   if (dateTimeMatch) {
     const y = dateTimeMatch[1];
@@ -267,14 +335,35 @@ export function parseTimeRexEmail(
     meetingStartTime = dateTimeMatch[4].padStart(5, '0');
     meetingEndTime = dateTimeMatch[5] ? dateTimeMatch[5].padStart(5, '0') : '';
   } else {
-    const monthDayMatch = content.match(/(?:日時|予定日時)[ \t]*[:：]\s*(\d{1,2})月(\d{1,2})日(?:\s*[\(（][^)）]+[\)）])?\s+(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/);
-    if (monthDayMatch) {
-      const y = new Date().getFullYear();
-      const m = String(monthDayMatch[1]).padStart(2, '0');
-      const d = String(monthDayMatch[2]).padStart(2, '0');
+    const jiFunMatch = content.match(
+      /(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s*[\(（][^)）]+[\)）])?\s*(\d{1,2})時(\d{1,2})分?(?:\s*[-〜~]\s*(\d{1,2})時(\d{1,2})分?)?/
+    );
+    if (jiFunMatch) {
+      const y = jiFunMatch[1];
+      const m = String(jiFunMatch[2]).padStart(2, '0');
+      const d = String(jiFunMatch[3]).padStart(2, '0');
       meetingDate = `${y}-${m}-${d}`;
-      meetingStartTime = monthDayMatch[3].padStart(5, '0');
-      meetingEndTime = monthDayMatch[4] ? monthDayMatch[4].padStart(5, '0') : '';
+      meetingStartTime = `${String(jiFunMatch[4]).padStart(2, '0')}:${String(jiFunMatch[5]).padStart(2, '0')}`;
+      meetingEndTime =
+        jiFunMatch[6] && jiFunMatch[7]
+          ? `${String(jiFunMatch[6]).padStart(2, '0')}:${String(jiFunMatch[7]).padStart(2, '0')}`
+          : '';
+    } else {
+      const monthDayMatch =
+        content.match(
+          /(?:日時|予定日時|開催日時|面談日時)[ \t]*(?:[:：]|\t|\n)\s*(\d{1,2})月(\d{1,2})日(?:\s*[\(（][^)）]+[\)）])?\s*(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/
+        ) ||
+        content.match(
+          /(\d{1,2})[月\/](\d{1,2})日?\s*[\(（][月火水木金土日][^)）]*[\)）]\s*(\d{1,2}:\d{2})(?:\s*[-〜~]\s*(\d{1,2}:\d{2}))?/
+        );
+      if (monthDayMatch) {
+        const y = new Date().getFullYear();
+        const m = String(monthDayMatch[1]).padStart(2, '0');
+        const d = String(monthDayMatch[2]).padStart(2, '0');
+        meetingDate = `${y}-${m}-${d}`;
+        meetingStartTime = monthDayMatch[3].padStart(5, '0');
+        meetingEndTime = monthDayMatch[4] ? monthDayMatch[4].padStart(5, '0') : '';
+      }
     }
   }
 
@@ -291,8 +380,9 @@ export function parseTimeRexEmail(
   let eventName = '';
   const eventMatch =
     content.match(/■\s*(?:予定|イベント名|メニュー)[:：]?\s*(?:[\n\r]+\s*)?([^\n\r]+)/) ||
-    content.match(/(?:イベント名|メニュー)[:：]\s*([^\n\r]+)/) ||
-    subject.match(/【TimeRex】(?:\[([^\]]+)\])/);
+    content.match(/(?:イベント名|メニュー|予定名)[ \t]*(?:[:：]|\t)\s*([^\n\r]+)/) ||
+    subject.match(/【TimeRex】(?:\[([^\]]+)\])/) ||
+    subject.match(/新しい予定[「『]([^」』]+)[」』]/);
   if (eventMatch) {
     const rawEvt = eventMatch[1].trim();
     if (rawEvt && !rawEvt.startsWith('■') && rawEvt !== '日時' && rawEvt !== 'ゲスト') {
@@ -304,29 +394,59 @@ export function parseTimeRexEmail(
   let memo = '';
   const memoMatch =
     content.match(/■\s*(?:コメント|ご質問・ご要望|自由記入|備考)[:：]?\s*(?:[\n\r]+\s*)?([^\n\r]+)/) ||
-    content.match(/(?:コメント|ご質問・ご要望|自由記入|備考)[:：]\s*([^\n\r]+(?:\n[^\n\r]+)?)/);
+    content.match(/(?:コメント|ご質問・ご要望|自由記入|備考)[ \t]*(?:[:：]|\t)\s*([^\n\r]+(?:\n[^\n\r]+)?)/);
   if (memoMatch) {
     memo = memoMatch[1].trim();
   }
 
   if (!meetingDate && bookingAction !== 'cancelled') {
-    return null;
+    return {
+      booking: null,
+      missingReason: `面談日時（年月日・開始時刻）を本文から読み取れませんでした（メール: ${guestEmail}）。`,
+    };
   }
 
   return {
-    guestName: guestName || '予約ゲスト',
-    guestEmail,
-    meetingDate,
-    meetingStartTime,
-    meetingEndTime,
-    companyName: companyName || undefined,
-    phone: phone || undefined,
-    meetUrl: meetUrl || undefined,
-    eventName: eventName || 'TimeRex個別面談',
-    memo: memo || undefined,
-    bookingAction,
-    sourceType: 'email',
+    booking: {
+      guestName: guestName || '予約ゲスト',
+      guestEmail,
+      meetingDate,
+      meetingStartTime,
+      meetingEndTime,
+      companyName: companyName || undefined,
+      phone: phone || undefined,
+      meetUrl: meetUrl || undefined,
+      eventName: eventName || 'TimeRex個別面談',
+      memo: memo || undefined,
+      bookingAction,
+      sourceType: 'email',
+    },
   };
+}
+
+/**
+ * Parses a TimeRex notification email body into structured booking data.
+ */
+export function parseTimeRexEmail(
+  subject: string,
+  textBody: string,
+  htmlBody?: string,
+  extraHostEmails: string[] = []
+): TimeRexBookingInfo | null {
+  return analyzeTimeRexEmail(subject, textBody, htmlBody, extraHostEmails).booking;
+}
+
+/**
+ * Explains why a detected TimeRex email failed to parse (for actionable inbox diagnostics).
+ */
+export function diagnoseTimeRexParseFailure(
+  subject: string,
+  textBody: string,
+  htmlBody?: string,
+  extraHostEmails: string[] = []
+): string {
+  const { missingReason } = analyzeTimeRexEmail(subject, textBody, htmlBody, extraHostEmails);
+  return missingReason || 'ゲストメールまたは面談日時を抽出できませんでした。';
 }
 
 /**

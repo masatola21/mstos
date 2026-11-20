@@ -5,6 +5,7 @@ import {
   extractGuestEmailFromText,
   classifyTimeRexEmailAction,
   parseTimeRexEmail,
+  diagnoseTimeRexParseFailure,
   parseTimeRexCalendarEvent,
   syncTimeRexBookingToCrm,
   isMeetingOverdueForCompletionCheck,
@@ -424,6 +425,67 @@ console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, r
   const reminderPass2 = await checkOverdueMeetingCompletionReminders(mockDb, nowCheck);
   assert.strictEqual(reminderPass2.created, 0, 'Must NOT recreate completion check task even after marked done');
   console.log('  ✓ checkOverdueMeetingCompletionReminders passed');
+
+  // Test 7: Real notifications@timerex.net format ("大橋真人さんが新しい予定..."), HTML table, self-test email, & diagnostics
+  console.log('Test 7: notifications@timerex.net HTML table & owner self-test email');
+  const realTimeRexHtml = `
+    <html><body>
+      <p>大橋真人さんが新しい予定「【30分】AI経営相談」を作成しました。</p>
+      <table>
+        <tr><th>日時</th><td>2026年11月20日(金)19:30〜20:00</td></tr>
+        <tr><th>お名前</th><td>大橋真人</td></tr>
+        <tr><th>メールアドレス</th><td>masato.la21@gmail.com</td></tr>
+        <tr><th>会社名</th><td></td></tr>
+        <tr><th>Web会議</th><td><a href="https://meet.google.com/real-test-meet">Google Meetに参加</a></td></tr>
+      </table>
+      <p>ホスト: contact@mstcorp.info</p>
+    </body></html>
+  `;
+  const realParsed = parseTimeRexEmail(
+    '大橋真人さんが新しい予定「【30分】AI経営相談」を作成しました',
+    '大橋真人さんが新しい予定を作成しました。詳細は本文をご確認ください。',
+    realTimeRexHtml,
+    ['asistaogaki@gmail.com']
+  );
+  assert(realParsed !== null, 'Real TimeRex HTML table self-test booking should parse');
+  assert.strictEqual(realParsed.guestName, '大橋真人');
+  assert.strictEqual(realParsed.guestEmail, 'masato.la21@gmail.com');
+  assert.strictEqual(realParsed.meetingDate, '2026-11-20');
+  assert.strictEqual(realParsed.meetingStartTime, '19:30');
+  assert.strictEqual(realParsed.meetingEndTime, '20:00');
+  assert.strictEqual(realParsed.companyName, undefined);
+  assert.strictEqual(realParsed.meetUrl, 'https://meet.google.com/real-test-meet');
+
+  // Host-only notice with no guest email must STILL be rejected and produce clear diagnostic
+  const hostOnlyBody = 'ホスト: ohashi@mstcorp.info\n日時: 2026年11月20日(金) 19:30';
+  assert.strictEqual(parseTimeRexEmail('【TimeRex】お知らせ', hostOnlyBody), null);
+  assert.ok(
+    diagnoseTimeRexParseFailure('【TimeRex】お知らせ', hostOnlyBody).includes('メールアドレス'),
+    'Diagnostic must explain missing guest email'
+  );
+
+  assert.strictEqual(
+    classifyTimeRexEmailAction('大橋真人さんが予定をキャンセルしました', ''),
+    'cancelled'
+  );
+  assert.strictEqual(
+    classifyTimeRexEmailAction('大橋真人さんが予定の日時を変更しました', ''),
+    'rescheduled'
+  );
+
+  // Sync the parsed self-test personal booking end-to-end
+  mockDbState.contacts = [];
+  mockDbState.companies = [];
+  mockDbState.leads = [];
+  mockDbState.deals = [];
+  mockDbState.tasks = [];
+  const realSyncRes = await syncTimeRexBookingToCrm(realParsed, mockDb, 'user-owner-1');
+  assert.strictEqual(realSyncRes.success, true);
+  assert.strictEqual(mockDbState.companies[0].company_name, '大橋真人様（個人）');
+  assert.strictEqual(mockDbState.deals.length, 1);
+  assert.strictEqual(mockDbState.deals[0].proposal_plan_name, '【面談予約】大橋真人 様');
+  assert.strictEqual(mockDbState.tasks.length, 1);
+  console.log('  ✓ notifications@timerex.net HTML table & owner self-test passed');
 
   console.log('\n=== All Round 2-8-7 TimeRex Pattern A Sync Tests Passed! ===\n');
 })();

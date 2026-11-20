@@ -13,6 +13,7 @@ import { parseIcalendar } from './server/icalParser.js';
 import {
   isTimeRexEmail,
   parseTimeRexEmail,
+  diagnoseTimeRexParseFailure,
   parseTimeRexCalendarEvent,
   syncTimeRexBookingToCrm,
   checkOverdueMeetingCompletionReminders,
@@ -13989,6 +13990,7 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
 
     let detectedCount = 0;
     let syncedCount = 0;
+    let skippedCount = 0;
     let failedCount = 0;
     const syncedList: any[] = [];
     const warnings: string[] = [];
@@ -14000,7 +14002,8 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
         const booking = parseTimeRexEmail(msg.subject || '', msg.text_body || '', msg.html_body || '', ownerHostEmail);
         if (!booking) {
           failedCount++;
-          warnings.push(`メール「${msg.subject || '(件名なし)'}」から予約情報（ゲストメール/日時）を抽出できませんでした。`);
+          const reason = diagnoseTimeRexParseFailure(msg.subject || '', msg.text_body || '', msg.html_body || '', ownerHostEmail);
+          warnings.push(`「${msg.subject || '(件名なし)'}」: ${reason}`);
           continue;
         }
         const syncRes = await syncTimeRexBookingToCrm(booking, lineSupabase, user.id);
@@ -14009,24 +14012,26 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
           warnings.push(`「${booking.guestName}」のCRM同期に失敗: ${syncRes.error || '不明なエラー'}`);
           continue;
         }
-        if (syncRes.action !== 'skipped_no_change' && syncRes.action !== 'reminder_acknowledged') {
-          syncedCount++;
-          if (
-            syncRes.contactId &&
-            (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled') &&
-            booking.meetingDate >= todayJstStr
-          ) {
-            await enqueueScenariosForContact(syncRes.contactId, 'booking_created', user.id);
-          }
-          syncedList.push({
-            guestName: booking.guestName,
-            meetingDate: booking.meetingDate,
-            bookingAction: booking.bookingAction,
-            action: syncRes.action,
-            leadId: syncRes.leadId,
-            dealId: syncRes.dealId,
-          });
+        if (syncRes.action === 'skipped_no_change' || syncRes.action === 'reminder_acknowledged') {
+          skippedCount++;
+          continue;
         }
+        syncedCount++;
+        if (
+          syncRes.contactId &&
+          (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled') &&
+          booking.meetingDate >= todayJstStr
+        ) {
+          await enqueueScenariosForContact(syncRes.contactId, 'booking_created', user.id);
+        }
+        syncedList.push({
+          guestName: booking.guestName,
+          meetingDate: booking.meetingDate,
+          bookingAction: booking.bookingAction,
+          action: syncRes.action,
+          leadId: syncRes.leadId,
+          dealId: syncRes.dealId,
+        });
       }
     }
 
@@ -14035,6 +14040,7 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
       scannedMessages: messages?.length || 0,
       detectedTimeRexEmails: detectedCount,
       syncedCount,
+      skippedCount,
       failedCount,
       warnings: warnings.slice(0, 5),
       syncedBookings: syncedList,

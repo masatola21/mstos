@@ -866,9 +866,24 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
         setError(res.error || 'TimeRexメールのCRM同期に失敗しました。');
         return;
       }
-      setNotice(
-        `TimeRex履歴をCRM同期しました（検出 ${res.detectedTimeRexEmails}件 ／ リード・商談・タスク反映 ${res.syncedCount}件）`
-      );
+      const failedCount = res.failedCount || 0;
+      const skippedCount = res.skippedCount || 0;
+      const firstWarning = res.warnings?.[0] ? `（詳細: ${res.warnings[0]}）` : '';
+
+      if (failedCount > 0 && res.syncedCount === 0) {
+        setError(
+          `TimeRexメールを${res.detectedTimeRexEmails}件検出しましたが、CRMへ反映できませんでした（未反映 ${failedCount}件）${firstWarning}`
+        );
+        return;
+      }
+
+      const parts = [
+        `検出 ${res.detectedTimeRexEmails}件`,
+        `リード・商談・タスク反映 ${res.syncedCount}件`,
+      ];
+      if (skippedCount > 0) parts.push(`既存反映済・変更なし ${skippedCount}件`);
+      if (failedCount > 0) parts.push(`一部未反映 ${failedCount}件${firstWarning}`);
+      setNotice(`TimeRex履歴をCRM同期しました（${parts.join(' ／ ')}）`);
     } catch (err: any) {
       setError(err?.message || 'TimeRex履歴同期中にエラーが発生しました。');
     } finally {

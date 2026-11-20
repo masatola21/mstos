@@ -230,13 +230,15 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         return;
       }
       if (res.syncedCount > 0) void fetchData();
+      const skippedCount = res.skippedCount || 0;
+      const skippedText = skippedCount > 0 ? ` ／ 既存反映済 ${skippedCount}件` : '';
       const warningText =
         res.failedCount && res.failedCount > 0 && res.warnings?.length
-          ? `（一部未反映 ${res.failedCount}件: ${res.warnings[0]}）`
+          ? `（未反映 ${res.failedCount}件: ${res.warnings[0]}）`
           : '';
       setTimeRexSyncMsg({
         type: res.failedCount && res.failedCount > 0 && res.syncedCount === 0 ? 'error' : 'success',
-        text: `TimeRexメール同期完了: 検出 ${res.detectedTimeRexEmails}件 ／ CRM反映 ${res.syncedCount}件${warningText}`,
+        text: `TimeRexメール同期完了: 検出 ${res.detectedTimeRexEmails}件 ／ CRM反映 ${res.syncedCount}件${skippedText}${warningText}`,
       });
     } catch (err: any) {
       setTimeRexSyncMsg({ type: 'error', text: err?.message || 'TimeRexメール同期エラー' });
