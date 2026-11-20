@@ -20,6 +20,7 @@ interface AppShellProps {
   onOpenProfile: () => void;
   onOpenModelSettings: () => void;
   onRetrySync?: () => void;
+  onOpenSyncErrorModal?: () => void;
   children: React.ReactNode;
 }
 
@@ -40,6 +41,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   onOpenProfile,
   onOpenModelSettings,
   onRetrySync,
+  onOpenSyncErrorModal,
   children,
 }) => {
   const [isOpenMobile, setIsOpenMobile] = useState(false);
@@ -78,6 +80,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           pageAssistantEmoji={pageAssistantEmoji}
           onOpenProfile={onOpenProfile}
           onRetrySync={onRetrySync}
+          onOpenSyncErrorModal={onOpenSyncErrorModal}
         />
 
         {/* 指摘4対応: 競合停止通知バナー（未保存警告 ＆ 再同期・再読み込み導線） */}

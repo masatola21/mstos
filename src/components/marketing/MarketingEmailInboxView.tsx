@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText, Maximize2, Minimize2, Ban, ShieldAlert, CalendarCheck } from 'lucide-react';
+import { Mail, MailOpen, Reply, Send, RefreshCw, Settings, Trash2, CheckCircle2, AlertTriangle, AlertCircle, Copy, ShieldCheck, Activity, Sparkles, Globe, HelpCircle, Info, X, FileText, Maximize2, Minimize2, Ban, ShieldAlert, CalendarCheck, ExternalLink, Video } from 'lucide-react';
 import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
 import { syncTimeRexFromInboxHistory } from '../../services/calendarService';
+import { LinkifiedText } from '../common/LinkifiedText';
+import { extractQuickActionUrls, htmlToReadableTextPreservingLinks } from '../../utils/linkify';
 import {
   newestReceivedAt,
   removeMessages,
@@ -39,7 +41,11 @@ type InboxMessage = {
 const EMAIL_LIST_KEYS = ['subject', 'from_email', 'backup_status', 'backup_error', 'is_read'] as const satisfies readonly (keyof InboxMessage)[];
 
 const hasBody = (m: InboxMessage) => m.text_body !== undefined || m.html_body !== undefined;
-const bodyTextOf = (m: InboxMessage) => m.text_body || (m.html_body || '').replace(/<[^>]*>/g, ' ');
+const bodyTextOf = (m: InboxMessage) => {
+  const plain = (m.text_body || '').trim();
+  if (plain) return plain;
+  return htmlToReadableTextPreservingLinks(m.html_body || '');
+};
 
 // 一覧には本文を持たせない（Realtime通知などで本文付きの行が届いても取り除く）
 function toLightMessage(row: any): InboxMessage {
@@ -1530,12 +1536,39 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                   )}
                 </div>
               </div>
+              {hasBody(selected) && (() => {
+                const quickLinks = extractQuickActionUrls(selected.text_body, selected.html_body);
+                if (quickLinks.length === 0) return null;
+                return (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-800">
+                      <Video className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>会議・日程リンク:</span>
+                    </span>
+                    {quickLinks.map((item) => (
+                      <a
+                        key={item.url}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-indigo-100 border border-indigo-300 px-2.5 py-1 text-xs font-bold text-indigo-700 shadow-2xs transition"
+                        title={item.url}
+                      >
+                        <span>{item.label}</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
               <pre className="mt-4 flex-1 whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                {!hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'loading'
-                  ? '本文を読み込み中...'
-                  : !hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'error'
-                    ? '本文を読み込めませんでした。もう一度メールを選択してください。'
-                    : bodyTextOf(selected) || '(本文なし)'}
+                {!hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'loading' ? (
+                  '本文を読み込み中...'
+                ) : !hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'error' ? (
+                  '本文を読み込めませんでした。もう一度メールを選択してください。'
+                ) : (
+                  <LinkifiedText text={bodyTextOf(selected) || '(本文なし)'} />
+                )}
               </pre>
             </>
           ) : (
@@ -1636,13 +1669,40 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                   </button>
                 </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-auto p-6 bg-slate-50">
+              <div className="flex-1 min-h-0 overflow-auto p-6 bg-slate-50 space-y-4">
+                {hasBody(selected) && (() => {
+                  const quickLinks = extractQuickActionUrls(selected.text_body, selected.html_body);
+                  if (quickLinks.length === 0) return null;
+                  return (
+                    <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-800">
+                        <Video className="w-4 h-4 text-indigo-600" />
+                        <span>会議・日程リンク:</span>
+                      </span>
+                      {quickLinks.map((item) => (
+                        <a
+                          key={item.url}
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-white hover:bg-indigo-100 border border-indigo-300 px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-2xs transition"
+                          title={item.url}
+                        >
+                          <span>{item.label}</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-900 bg-white p-6 rounded-xl border border-slate-200 max-w-4xl mx-auto shadow-2xs">
-                  {!hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'loading'
-                    ? '本文を読み込み中...'
-                    : !hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'error'
-                      ? '本文を読み込めませんでした。もう一度メールを選択してください。'
-                      : bodyTextOf(selected) || '(本文なし)'}
+                  {!hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'loading' ? (
+                    '本文を読み込み中...'
+                  ) : !hasBody(selected) && bodyStatus?.id === selected.id && bodyStatus.state === 'error' ? (
+                    '本文を読み込めませんでした。もう一度メールを選択してください。'
+                  ) : (
+                    <LinkifiedText text={bodyTextOf(selected) || '(本文なし)'} />
+                  )}
                 </pre>
               </div>
             </div>

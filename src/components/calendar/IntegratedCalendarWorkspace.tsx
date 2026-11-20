@@ -200,6 +200,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         const serverConfig = await fetchServerGoogleSyncConfig();
         if (serverConfig.configured && serverConfig.icalUrl) {
           targetUrl = serverConfig.icalUrl;
+          setStoredGoogleIcalUrl(targetUrl);
           setGoogleIcalUrl(targetUrl);
           setSyncUrlInput(targetUrl);
         }
@@ -212,6 +213,9 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         setSyncUrlInput(targetUrl);
         setGoogleSyncInfo(getGoogleCalendarSyncInfo());
         if (res.syncedTimeRexCount && res.syncedTimeRexCount > 0) void fetchData();
+      } else {
+        setGoogleIcalUrl(targetUrl);
+        setSyncUrlInput(targetUrl);
       }
     })();
   }, []);
@@ -226,9 +230,13 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         return;
       }
       if (res.syncedCount > 0) void fetchData();
+      const warningText =
+        res.failedCount && res.failedCount > 0 && res.warnings?.length
+          ? `（一部未反映 ${res.failedCount}件: ${res.warnings[0]}）`
+          : '';
       setTimeRexSyncMsg({
-        type: 'success',
-        text: `TimeRexメール同期完了: 検出 ${res.detectedTimeRexEmails}件 ／ CRM反映 ${res.syncedCount}件`,
+        type: res.failedCount && res.failedCount > 0 && res.syncedCount === 0 ? 'error' : 'success',
+        text: `TimeRexメール同期完了: 検出 ${res.detectedTimeRexEmails}件 ／ CRM反映 ${res.syncedCount}件${warningText}`,
       });
     } catch (err: any) {
       setTimeRexSyncMsg({ type: 'error', text: err?.message || 'TimeRexメール同期エラー' });
@@ -294,6 +302,7 @@ export const IntegratedCalendarWorkspace: React.FC<Props> = ({
         setGoogleEvents(res.events);
         setGoogleIcalUrl(url);
         setGoogleSyncInfo(getGoogleCalendarSyncInfo());
+        if (res.syncedTimeRexCount && res.syncedTimeRexCount > 0) void fetchData();
         setSyncStatusMsg({
           type: 'success',
           text: `同期成功: ${res.calendarName} から ${res.events.length} 件の予定を反映しました！${res.syncedTimeRexCount && res.syncedTimeRexCount > 0 ? `（TimeRex面談 ${res.syncedTimeRexCount} 件をリード・商談パイプラインへ自動反映）` : ''}`,

@@ -4,6 +4,7 @@ import { Bell, CheckCircle2, FileText, Mail, Maximize2, Minimize2 } from 'lucide
 import { getAuthHeaders, getSupabase } from '../../lib/supabaseClient';
 import { InlineDeleteButton } from '../InlineDeleteButton';
 import { LineMessagePreview } from '../LineMessagePreview';
+import { LinkifiedText } from '../common/LinkifiedText';
 import { useInboxRealtime } from '../../hooks/useInboxRealtime';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import {
@@ -923,7 +924,16 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                             : 'bg-white text-slate-900 rounded-tl-none border border-slate-200'
                         }`}
                       >
-                        <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
+                        <div className="whitespace-pre-wrap leading-relaxed">
+                          <LinkifiedText
+                            text={message.body}
+                            linkClassName={
+                              isOutbound
+                                ? 'underline text-white hover:text-emerald-100 break-all'
+                                : 'underline text-emerald-700 hover:text-emerald-800 break-all'
+                            }
+                          />
+                        </div>
                         <div className={`mt-1 text-[11px] text-right ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
                           {new Date(message.received_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -1413,7 +1423,16 @@ export const MarketingLineInboxView: React.FC<MarketingLineInboxViewProps> = ({
                               : 'bg-white text-slate-900 rounded-tl-none border border-slate-200'
                           }`}
                         >
-                          <div className="whitespace-pre-wrap leading-relaxed">{message.body}</div>
+                          <div className="whitespace-pre-wrap leading-relaxed">
+                            <LinkifiedText
+                              text={message.body}
+                              linkClassName={
+                                isOutbound
+                                  ? 'underline text-white hover:text-emerald-100 break-all'
+                                  : 'underline text-emerald-700 hover:text-emerald-800 break-all'
+                              }
+                            />
+                          </div>
                           <div className={`mt-1 text-[10px] text-right ${isOutbound ? 'text-emerald-100' : 'text-slate-400'}`}>
                             {new Date(message.received_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </div>

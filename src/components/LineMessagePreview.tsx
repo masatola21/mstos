@@ -1,4 +1,5 @@
 import React from 'react';
+import { LinkifiedText } from './common/LinkifiedText';
 
 export type LinePreviewType = 'text' | 'image' | 'flex' | 'video';
 
@@ -94,7 +95,7 @@ export const LineMessagePreview: React.FC<Props> = ({ type, payload: payloadInpu
       <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold">LINE公式プレビュー</span>
     </div>
     <div className="mx-auto max-w-[360px] rounded-2xl bg-[#70c776]/15 border border-emerald-200/60 p-3.5 shadow-inner">
-      {type === 'text' && <div className="ml-auto w-fit max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-white px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 shadow-xs border border-slate-200/80 leading-relaxed font-sans">{body || 'メッセージ本文がここに表示されます。'}</div>}
+      {type === 'text' && <div className="ml-auto w-fit max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-white px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 shadow-xs border border-slate-200/80 leading-relaxed font-sans">{body ? <LinkifiedText text={body} /> : 'メッセージ本文がここに表示されます。'}</div>}
       {type === 'image' && <div className="ml-auto w-fit max-w-[90%] overflow-hidden rounded-xl bg-white p-2 shadow-xs border border-slate-200/80">{imageUrl ? <img src={imageUrl} alt={String(payload.altText || 'LINE配信画像')} className="max-h-80 max-w-full rounded-lg object-contain" /> : <div className="p-8 text-center text-xs text-slate-500">画像素材を選択してください。</div>}</div>}
       {type === 'video' && <div className="ml-auto w-fit max-w-[90%] overflow-hidden rounded-xl bg-white p-2 shadow-xs border border-slate-200/80">{videoUrl ? <video src={videoUrl} poster={String(payload.previewImageUrl || '')} controls className="max-h-80 max-w-full rounded-lg" /> : payload.previewImageUrl ? <img src={String(payload.previewImageUrl)} alt={String(payload.altText || 'LINE動画プレビュー')} className="max-h-80 max-w-full rounded-lg object-contain" /> : <div className="p-8 text-center text-xs text-slate-500">動画素材を選択してください。</div>}{payload.altText && <div className="pt-1 text-xs text-slate-600 font-medium">{String(payload.altText)}</div>}</div>}
       {type === 'flex' && <div className="ml-auto w-full max-w-[320px] overflow-hidden rounded-xl bg-white p-3 text-slate-900 shadow-xs border border-slate-200/80">{contents ? contents.type === 'carousel' ? <div className="flex gap-3 overflow-x-auto">{(contents.contents || []).map((bubble: any, i: number) => <div key={i} className="min-w-[260px] max-w-[280px] rounded-lg border border-slate-200 p-3 bg-white shadow-2xs"><FlexNode node={bubble} index={i} /></div>)}</div> : <FlexNode node={contents} /> : <div className="p-5 text-center text-xs text-rose-600">Flex JSONを読み取れません。bubbleまたはcarousel形式を確認してください。</div>}{payload.altText && <div className="mt-2 border-t border-slate-100 pt-2 text-[10px] text-slate-500">通知文: {String(payload.altText)}</div>}</div>}

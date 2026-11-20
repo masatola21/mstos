@@ -15,6 +15,7 @@ import {
 } from '../services/recurringInvoiceService';
 import { getEndOfNextMonthDate } from '../utils/billingUtils';
 import { formatJapaneseDate } from '../utils/date';
+import { ensureCustomerRegisteredFromPaidInvoice } from '../services/paidInvoiceCustomerSync';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -390,7 +391,12 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
 
   const updateOperationStatus = async (record: RecordRow, status: string) => {
     const supabase=getSupabase(); if(!supabase)return;
-    const {error:updateError}=await supabase.from(selectedOps.table).update({status, updated_at:new Date().toISOString()}).eq('id',record.id);
+    const nowIso = new Date().toISOString();
+    const updatePayload: Record<string, any> = { status, updated_at: nowIso };
+    if (activeOpsTab === 'invoices' && status === 'paid' && !record.paid_at) {
+      updatePayload.paid_at = localDateString();
+    }
+    const {error:updateError}=await supabase.from(selectedOps.table).update(updatePayload).eq('id',record.id);
     if(updateError){setError(updateError.message);return;}
     const sourceId = String(record.legacy_id || record.id);
     const companyName = companies.find((item)=>item.id===record.company_id)?.company_name || record.counterparty_name || record.recipient_name || undefined;
@@ -400,16 +406,42 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       }
       if(record.company_id) {
         await supabase.from('deals')
-          .update({ proposal_status: '成約', updated_at: new Date().toISOString() })
+          .update({ proposal_status: '成約', updated_at: nowIso })
           .eq('company_id', record.company_id)
           .neq('proposal_status', '成約');
       }
     }
-    if(activeOpsTab==='invoices' && status==='paid' && record.company_id) {
-      await supabase.from('deals')
-        .update({ proposal_status: '成約', updated_at: new Date().toISOString() })
-        .eq('company_id', record.company_id)
-        .neq('proposal_status', '成約');
+    if(activeOpsTab==='invoices' && status==='paid') {
+      const paidDate = updatePayload.paid_at || record.paid_at || localDateString();
+      const custSync = await ensureCustomerRegisteredFromPaidInvoice(supabase, {
+        invoiceId: record.id,
+        companyId: record.company_id,
+        recipientName: record.recipient_name || companyName,
+        invoiceTitle: record.title,
+        invoiceNumber: record.invoice_number,
+        paidDate,
+      });
+      const resolvedCompanyId = custSync.companyId || record.company_id;
+      if(resolvedCompanyId) {
+        await supabase.from('deals')
+          .update({ proposal_status: '成約', updated_at: nowIso })
+          .eq('company_id', resolvedCompanyId)
+          .neq('proposal_status', '成約');
+      }
+      const linkedDealId = record.deal_id || record.payload?.deal_id;
+      if (linkedDealId) {
+        await supabase.from('deals')
+          .update({ proposal_status: '成約', updated_at: nowIso })
+          .eq('id', linkedDealId)
+          .neq('proposal_status', '成約');
+      }
+      if (custSync.status === 'created') {
+        setNotice('入金済みに更新し、未登録だった顧客を顧客台帳へ「契約中」として自動登録しました。');
+      } else if (custSync.status === 'error') {
+        setNotice(`入金済みに更新しました（顧客台帳の自動登録エラー: ${custSync.message}）。`);
+      } else {
+        setNotice('入金済みに更新しました。');
+      }
     }
     if(activeOpsTab==='invoices' && status==='overdue' && record.status!=='overdue') {
       onInvoiceOverdue?.({id:sourceId,title:record.title||'請求書',invoiceNumber:record.invoice_number||undefined,companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount),dueDate:record.due_date||undefined});

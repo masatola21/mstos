@@ -162,6 +162,8 @@ export async function syncTimeRexFromInboxHistory(): Promise<{
   success: boolean;
   syncedCount: number;
   detectedTimeRexEmails: number;
+  failedCount?: number;
+  warnings?: string[];
   error?: string;
 }> {
   try {
@@ -179,6 +181,8 @@ export async function syncTimeRexFromInboxHistory(): Promise<{
       success: true,
       syncedCount: data.syncedCount || 0,
       detectedTimeRexEmails: data.detectedTimeRexEmails || 0,
+      failedCount: data.failedCount || 0,
+      warnings: Array.isArray(data.warnings) ? data.warnings : undefined,
     };
   } catch (err: any) {
     return { success: false, syncedCount: 0, detectedTimeRexEmails: 0, error: err?.message };

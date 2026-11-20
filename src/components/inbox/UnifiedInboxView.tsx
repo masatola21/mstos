@@ -33,6 +33,7 @@ import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime, useVisiblePolling } from '../../hooks/useInboxRealtime';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
+import { LinkifiedText } from '../common/LinkifiedText';
 import { countUnreadEmails, loadLocalReadEmailIds } from '../../utils/inboxReadState';
 
 export type InboxChannel = 'line' | 'email' | 'forms';
@@ -1573,7 +1574,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
                                         {questionLabel}
                                       </div>
                                       <div className="text-slate-900 whitespace-pre-wrap break-words font-sans">
-                                        {formattedValue}
+                                        <LinkifiedText text={formattedValue} />
                                       </div>
                                     </div>
                                   );

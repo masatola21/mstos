@@ -168,6 +168,41 @@ export function isTimeRexEmail(from: string, subject: string, bodyText: string):
   return isFromTimeRex || isTimeRexSubject || isTimeRexBody;
 }
 
+function htmlBodyToPlainTextPreservingLinks(html: string): string {
+  if (!html) return '';
+  let work = html
+    .replace(/<head[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ');
+
+  work = work.replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_full, rawHref, innerHtml) => {
+    const href = String(rawHref || '')
+      .replace(/&amp;/gi, '&')
+      .trim();
+    const innerText = String(innerHtml || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!/^https?:\/\//i.test(href)) return innerText;
+    if (!innerText) return href;
+    if (innerText.includes(href)) return innerText;
+    return `${innerText} (${href})`;
+  });
+
+  work = work
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|li|tr|h[1-6]|blockquote|section|article|table)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'");
+
+  return work;
+}
+
 /**
  * Parses a TimeRex notification email body into structured booking data.
  */
@@ -177,10 +212,15 @@ export function parseTimeRexEmail(
   htmlBody?: string,
   extraHostEmails: string[] = []
 ): TimeRexBookingInfo | null {
-  const content = (textBody || htmlBody || '').replace(/<[^>]+>/g, ' ');
+  const cleanText = (textBody || '').trim();
+  const cleanHtmlText = htmlBody ? htmlBodyToPlainTextPreservingLinks(htmlBody) : '';
+  const content = cleanText || cleanHtmlText;
+  const combinedForLinks = `${content}\n${cleanHtmlText}`;
   const bookingAction = classifyTimeRexEmailAction(subject, content);
 
-  const guestEmail = extractGuestEmailFromText(content, extraHostEmails);
+  const guestEmail =
+    extractGuestEmailFromText(content, extraHostEmails) ||
+    (cleanHtmlText && cleanHtmlText !== content ? extractGuestEmailFromText(cleanHtmlText, extraHostEmails) : null);
   if (!guestEmail) {
     return null; // Email is required to match with CRM
   }
@@ -227,10 +267,10 @@ export function parseTimeRexEmail(
     meetingEndTime = dateTimeMatch[5] ? dateTimeMatch[5].padStart(5, '0') : '';
   }
 
-  // Extract Meet / Zoom URL
+  // Extract Meet / Zoom URL (search both plain text and preserved HTML hrefs)
   let meetUrl = '';
-  const meetMatch = content.match(
-    /https:\/\/(?:meet\.google\.com\/[a-z-]+|us\d+web\.zoom\.us\/j\/[0-9?a-z=_-]+|zoom\.us\/j\/[0-9?a-z=_-]+|teams\.microsoft\.com\/[^\s]+)/i
+  const meetMatch = combinedForLinks.match(
+    /https:\/\/(?:meet\.google\.com\/[a-z-]+|us\d+web\.zoom\.us\/j\/[0-9?a-z=_-]+|zoom\.us\/j\/[0-9?a-z=_-]+|teams\.microsoft\.com\/[^\s)<>]+)/i
   );
   if (meetMatch) {
     meetUrl = meetMatch[0].trim();
@@ -487,23 +527,39 @@ export async function syncTimeRexBookingToCrm(
       };
     }
 
-    // If company exists or can be matched / created
-    if (!companyId && booking.companyName) {
+    // If company exists or can be matched / created (flexible handling for sole proprietors / no company name)
+    if (!companyId && actionKind !== 'cancelled') {
+      const rawCompany = (booking.companyName || '').trim();
+      const lowerCompany = rawCompany.toLowerCase();
+      const isNoCompanyPlaceholder =
+        !rawCompany ||
+        ['なし', '無し', '無', '-', 'ー', '―', '－', 'n/a', 'none', '個人', '個人名義'].includes(lowerCompany);
+      const isSoleProprietorKeyword = ['個人事業主', 'フリーランス', '自営業', '屋号なし'].includes(rawCompany);
+
+      const targetCompanyName = isNoCompanyPlaceholder
+        ? `${contactName || '予約ゲスト'}様（個人）`
+        : isSoleProprietorKeyword
+          ? `${contactName || '予約ゲスト'}様（${rawCompany}）`
+          : rawCompany;
+
       const { data: existingComp } = await db
         .from('companies')
         .select('id')
-        .ilike('company_name', booking.companyName.trim())
+        .ilike('company_name', targetCompanyName)
         .limit(1);
 
       if (existingComp && existingComp.length > 0) {
         companyId = existingComp[0].id;
-      } else if (actionKind !== 'cancelled') {
+      } else {
         const compPayload: any = {
-          company_name: booking.companyName.trim(),
+          company_name: targetCompanyName,
           created_at: new Date().toISOString(),
         };
         if (resolvedOwnerId) compPayload.owner_id = resolvedOwnerId;
-        const { data: newComp } = await db.from('companies').insert(compPayload).select('id').single();
+        const { data: newComp, error: compErr } = await db.from('companies').insert(compPayload).select('id').single();
+        if (compErr) {
+          console.warn('[TimeRexSync] Company insert warning:', compErr);
+        }
         if (newComp) companyId = newComp.id;
       }
 
@@ -606,6 +662,8 @@ export async function syncTimeRexBookingToCrm(
     const timerexNote = `[${noteLabel}] 日程: ${booking.meetingDate} ${booking.meetingStartTime || ''}${booking.meetUrl ? `\nMeet URL: ${booking.meetUrl}` : ''}${booking.memo ? `\n備考: ${booking.memo}` : ''}`;
 
     let changedSomething = false;
+    let leadErrorMsg = '';
+    let dealErrorMsg = '';
 
     // 2. Find or create Lead (non-downgrade safe)
     if (existingLead) {
@@ -637,8 +695,13 @@ export async function syncTimeRexBookingToCrm(
           leadPatch.meeting_date = booking.meetingDate;
           leadPatch.meeting_start_time = booking.meetingStartTime || null;
         }
-        await db.from('leads').update(leadPatch).eq('id', leadId);
-        changedSomething = true;
+        const { error: leadUpdErr } = await db.from('leads').update(leadPatch).eq('id', leadId);
+        if (leadUpdErr) {
+          leadErrorMsg = leadUpdErr.message || String(leadUpdErr);
+          console.warn('[TimeRexSync] Lead update warning:', leadUpdErr);
+        } else {
+          changedSomething = true;
+        }
       }
     } else {
       const newLeadPayload: any = {
@@ -655,13 +718,16 @@ export async function syncTimeRexBookingToCrm(
       };
       if (resolvedOwnerId) newLeadPayload.owner_id = resolvedOwnerId;
 
-      const { data: createdLead } = await db
+      const { data: createdLead, error: leadInsErr } = await db
         .from('leads')
         .insert(newLeadPayload)
         .select('id')
         .single();
 
-      if (createdLead) {
+      if (leadInsErr) {
+        leadErrorMsg = leadInsErr.message || String(leadInsErr);
+        console.warn('[TimeRexSync] Lead insert warning:', leadInsErr);
+      } else if (createdLead) {
         leadId = createdLead.id;
         changedSomething = true;
       }
@@ -696,8 +762,13 @@ export async function syncTimeRexBookingToCrm(
         if (isDateChanged || !existingDeal.meeting_date) {
           dealPatch.meeting_date = booking.meetingDate;
         }
-        await db.from('deals').update(dealPatch).eq('id', dealId);
-        changedSomething = true;
+        const { error: dealUpdErr } = await db.from('deals').update(dealPatch).eq('id', dealId);
+        if (dealUpdErr) {
+          dealErrorMsg = dealUpdErr.message || String(dealUpdErr);
+          console.warn('[TimeRexSync] Deal update warning:', dealUpdErr);
+        } else {
+          changedSomething = true;
+        }
       }
     } else {
       const dealTitle = `【面談予約】${contactName || booking.companyName || '新規個別面談'} 様`;
@@ -714,17 +785,32 @@ export async function syncTimeRexBookingToCrm(
       };
       if (resolvedOwnerId) newDealPayload.owner_id = resolvedOwnerId;
 
-      const { data: createdDeal } = await db
+      const { data: createdDeal, error: dealInsErr } = await db
         .from('deals')
         .insert(newDealPayload)
         .select('id')
         .single();
 
-      if (createdDeal) {
+      if (dealInsErr) {
+        dealErrorMsg = dealInsErr.message || String(dealInsErr);
+        console.warn('[TimeRexSync] Deal insert error:', dealInsErr);
+      } else if (createdDeal) {
         dealId = createdDeal.id;
         createdDealNow = true;
         changedSomething = true;
       }
+    }
+
+    if (!existingDeal && !dealId && dealErrorMsg) {
+      return {
+        success: false,
+        leadId: leadId || undefined,
+        companyId: companyId || undefined,
+        contactId: contactId || undefined,
+        bookingAction: actionKind,
+        action: 'skipped_no_change',
+        error: `商談パイプライン登録エラー: ${dealErrorMsg}${leadErrorMsg ? ` / リード登録エラー: ${leadErrorMsg}` : ''}`,
+      };
     }
 
     // 4. Attach Contact Tag "個別相談予約済み" (stops reminder sequences)

@@ -187,10 +187,10 @@ async function getKillSwitchStatus(target: 'all' | 'ai' | 'send' | 'billing' = '
     const { data } = await lineSupabase
       .from('automation_controls')
       .select('id, target, paused, reason, updated_at')
-      .in('target', ['all', target]);
+      .in('id', ['all', target]);
 
-    const allControl = data?.find((d: any) => d.target === 'all');
-    const targetControl = data?.find((d: any) => d.target === target);
+    const allControl = data?.find((d: any) => d.id === 'all');
+    const targetControl = data?.find((d: any) => d.id === target);
 
     let paused = false;
     let reason = '';
@@ -6338,27 +6338,28 @@ app.post('/api/admin/automation-controls', async (req, res) => {
     }
 
     const nowIso = new Date().toISOString();
-    const { data, error } = await lineSupabase
+    const { error } = await lineSupabase
       .from('automation_controls')
       .upsert(
         {
+          id: target,
           target,
           paused,
           reason,
           updated_by: updatedBy,
           updated_at: nowIso,
         },
-        { onConflict: 'target' }
+        { onConflict: 'id' }
       )
       .select('*')
       .maybeSingle();
 
     if (error) {
-      const { data: existing } = await lineSupabase.from('automation_controls').select('id').eq('target', target).maybeSingle();
+      const { data: existing } = await lineSupabase.from('automation_controls').select('id').eq('id', target).maybeSingle();
       if (existing) {
         await lineSupabase.from('automation_controls').update({ paused, reason, updated_by: updatedBy, updated_at: nowIso }).eq('id', existing.id);
       } else {
-        await lineSupabase.from('automation_controls').insert({ target, paused, reason, updated_by: updatedBy, updated_at: nowIso });
+        await lineSupabase.from('automation_controls').insert({ id: target, target, paused, reason, updated_by: updatedBy, updated_at: nowIso });
       }
     }
 
@@ -13803,24 +13804,45 @@ async function syncTimeRexEventsFromIcalEvents(
 
 async function saveGoogleCalendarSyncConfig(config: SavedGoogleCalendarConfig): Promise<void> {
   if (!lineSupabase || !config.ownerId) return;
+  const controlId = `google_calendar_ical_${config.ownerId}`;
+  const reasonPayload = JSON.stringify({
+    ownerId: config.ownerId,
+    ownerEmail: config.ownerEmail,
+    icalUrl: config.icalUrl,
+    calendarName: config.calendarName,
+    lastSyncedAt: config.lastSyncedAt || new Date().toISOString(),
+  });
+  const baseRow = {
+    id: controlId,
+    paused: false,
+    reason: reasonPayload,
+    updated_by: config.ownerEmail || config.ownerId,
+    updated_at: new Date().toISOString(),
+  };
+
   try {
-    await lineSupabase.from('automation_controls').upsert(
+    const { error } = await lineSupabase.from('automation_controls').upsert(
       {
-        id: `google_calendar_ical_${config.ownerId}`,
+        ...baseRow,
         target: CALENDAR_ICAL_CONTROL_TARGET,
-        paused: false,
-        reason: JSON.stringify({
-          ownerId: config.ownerId,
-          ownerEmail: config.ownerEmail,
-          icalUrl: config.icalUrl,
-          calendarName: config.calendarName,
-          lastSyncedAt: config.lastSyncedAt || new Date().toISOString(),
-        }),
-        updated_by: config.ownerEmail || config.ownerId,
-        updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' }
     );
+
+    if (error) {
+      // Production DB may still enforce CHECK (target IN ('all', 'ai', 'send', 'billing')).
+      // Fallback safely using target: 'all' with paused: false (getKillSwitchStatus filters by id).
+      const { error: fallbackError } = await lineSupabase.from('automation_controls').upsert(
+        {
+          ...baseRow,
+          target: 'all',
+        },
+        { onConflict: 'id' }
+      );
+      if (fallbackError) {
+        console.warn('[CalendarSync] Persist config fallback warning:', fallbackError.message || fallbackError);
+      }
+    }
   } catch (err) {
     console.warn('[CalendarSync] Persist config warning:', err);
   }
@@ -13829,12 +13851,12 @@ async function saveGoogleCalendarSyncConfig(config: SavedGoogleCalendarConfig): 
 async function loadGoogleCalendarSyncConfig(ownerId: string): Promise<SavedGoogleCalendarConfig | null> {
   if (!lineSupabase || !ownerId) return null;
   try {
-    const { data } = await lineSupabase
+    const { data, error } = await lineSupabase
       .from('automation_controls')
       .select('reason, paused, updated_at')
       .eq('id', `google_calendar_ical_${ownerId}`)
       .maybeSingle();
-    if (!data || data.paused || !data.reason) return null;
+    if (error || !data || data.paused || !data.reason) return null;
     const parsed = typeof data.reason === 'string' ? JSON.parse(data.reason) : data.reason;
     if (!parsed?.icalUrl) return null;
     return {
@@ -13857,7 +13879,7 @@ async function runScheduledGoogleCalendarSync(): Promise<{ syncedCalendars: numb
     const { data: configs } = await lineSupabase
       .from('automation_controls')
       .select('id, reason, paused, updated_at')
-      .eq('target', CALENDAR_ICAL_CONTROL_TARGET)
+      .like('id', 'google_calendar_ical_%')
       .eq('paused', false)
       .limit(20);
 
@@ -13928,10 +13950,13 @@ app.delete('/api/calendar/sync-config', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
   try {
-    await lineSupabase
+    const { error } = await lineSupabase
       .from('automation_controls')
-      .update({ paused: true, updated_at: new Date().toISOString() })
+      .delete()
       .eq('id', `google_calendar_ical_${user.id}`);
+    if (error) {
+      return res.status(500).json({ error: error.message || 'カレンダー同期設定の解除に失敗しました。' });
+    }
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'カレンダー同期設定の解除に失敗しました。' });
@@ -13959,32 +13984,43 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
 
     let detectedCount = 0;
     let syncedCount = 0;
+    let failedCount = 0;
     const syncedList: any[] = [];
+    const warnings: string[] = [];
 
     for (const msg of chronologicalMessages) {
-      if (isTimeRexEmail(msg.from_email || '', msg.subject || '', msg.text_body || '')) {
+      const detectBody = msg.text_body || String(msg.html_body || '').replace(/<[^>]+>/g, ' ');
+      if (isTimeRexEmail(msg.from_email || '', msg.subject || '', detectBody)) {
         detectedCount++;
         const booking = parseTimeRexEmail(msg.subject || '', msg.text_body || '', msg.html_body || '', ownerHostEmail);
-        if (booking) {
-          const syncRes = await syncTimeRexBookingToCrm(booking, lineSupabase, user.id);
-          if (syncRes.success && syncRes.action !== 'skipped_no_change' && syncRes.action !== 'reminder_acknowledged') {
-            syncedCount++;
-            if (
-              syncRes.contactId &&
-              (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled') &&
-              booking.meetingDate >= todayJstStr
-            ) {
-              await enqueueScenariosForContact(syncRes.contactId, 'booking_created', user.id);
-            }
-            syncedList.push({
-              guestName: booking.guestName,
-              meetingDate: booking.meetingDate,
-              bookingAction: booking.bookingAction,
-              action: syncRes.action,
-              leadId: syncRes.leadId,
-              dealId: syncRes.dealId,
-            });
+        if (!booking) {
+          failedCount++;
+          warnings.push(`メール「${msg.subject || '(件名なし)'}」から予約情報（ゲストメール/日時）を抽出できませんでした。`);
+          continue;
+        }
+        const syncRes = await syncTimeRexBookingToCrm(booking, lineSupabase, user.id);
+        if (!syncRes.success) {
+          failedCount++;
+          warnings.push(`「${booking.guestName}」のCRM同期に失敗: ${syncRes.error || '不明なエラー'}`);
+          continue;
+        }
+        if (syncRes.action !== 'skipped_no_change' && syncRes.action !== 'reminder_acknowledged') {
+          syncedCount++;
+          if (
+            syncRes.contactId &&
+            (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled') &&
+            booking.meetingDate >= todayJstStr
+          ) {
+            await enqueueScenariosForContact(syncRes.contactId, 'booking_created', user.id);
           }
+          syncedList.push({
+            guestName: booking.guestName,
+            meetingDate: booking.meetingDate,
+            bookingAction: booking.bookingAction,
+            action: syncRes.action,
+            leadId: syncRes.leadId,
+            dealId: syncRes.dealId,
+          });
         }
       }
     }
@@ -13994,6 +14030,8 @@ app.post('/api/timerex/sync-inbox-history', requireAuth, async (req, res) => {
       scannedMessages: messages?.length || 0,
       detectedTimeRexEmails: detectedCount,
       syncedCount,
+      failedCount,
+      warnings: warnings.slice(0, 5),
       syncedBookings: syncedList,
     });
   } catch (err: any) {

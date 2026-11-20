@@ -16,7 +16,8 @@ const RecordFormModal = React.lazy(() => import('./components/RecordFormModal').
 import { TableKey } from './types/database';
 import { getSupabase, getAuthHeaders } from './lib/supabaseClient';
 import { deleteTableRecord } from './services/dataService';
-import { Loader2 } from 'lucide-react';
+import { ensureCustomerRegisteredFromPaidInvoice } from './services/paidInvoiceCustomerSync';
+import { Loader2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 
 // AI President Views and Modals
 const ChatView = React.lazy(() => import('./components/ai-president/ChatView').then((m) => ({ default: m.ChatView })));
@@ -119,6 +120,7 @@ import { publishManagedProductToSalesCatalog, syncManagedProductToSalesCatalog }
 import { deleteWorkspaceAttachment, downloadWorkspaceAttachment, uploadWorkspaceAttachment } from './services/knowledgeAttachmentService';
 import {
   loadOrMigrateWorkspaceData,
+  reloadWorkspaceFromCloudPurely,
   saveWorkspaceData,
   WorkspaceData,
   isWorkspaceConflictError,
@@ -480,6 +482,8 @@ function AppContent() {
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState<'loading' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
   const [workspaceSaveError, setWorkspaceSaveError] = useState('');
+  const [isSyncErrorModalOpen, setIsSyncErrorModalOpen] = useState(false);
+  const [isSyncRecovering, setIsSyncRecovering] = useState(false);
 
   const refreshInboxSummary = async () => {
     if (!user) return;
@@ -846,55 +850,94 @@ function AppContent() {
     };
   }, [user?.id]);
 
+  const hydrateWorkspaceState = (data: WorkspaceData) => {
+    setTopGoal(data.topGoal);
+    setCharacters(data.characters);
+    const nextActiveCharacterId = data.characters.some((character) => character.id === data.activeCharacterId)
+      ? data.activeCharacterId
+      : data.characters[0]?.id || activeCharacterId;
+    setActiveCharacterId(nextActiveCharacterId);
+    setUserProfile(data.userProfile);
+    setAiModelSettings(data.aiModelSettings);
+    setProjects(data.projects);
+    setTasks(data.tasks);
+    setApprovals(data.approvals);
+    setActivityLogs(data.activityLogs);
+    setPricingRates(data.pricingRates);
+    setTokenUsageRecords(data.tokenUsage);
+    setProducts(data.products);
+    setContracts(data.contracts);
+    setInvoices(data.invoices);
+    setTools(data.tools);
+    setCustomLists(data.customLists);
+    setAutomations(matrixService.normalizeAutomationRules(data.automations));
+    setMarketingScenarios(data.marketingScenarios || []);
+    setKnowledgeItems(data.knowledgeItems || []);
+    setWorkModeHistories(data.workModeHistories || {});
+    workspaceSaveCoordinator.setInitialSavedSnapshot(data);
+    workspaceSyncEnabledRef.current = true;
+    setWorkspaceSyncStatus('saved');
+    setWorkspaceSaveError('');
+    setWorkspaceReady(true);
+  };
+
+  const applyWorkspaceLoadError = (error: unknown, logPrefix: string) => {
+    console.error(logPrefix, error);
+    workspaceSyncEnabledRef.current = false;
+    if (isWorkspaceConflictError(error)) {
+      workspaceSaveCoordinator.haltOnConflict('他の端末で更新されました。再読み込みしてください');
+      setWorkspaceSyncStatus('conflict');
+      setWorkspaceSaveError('他の端末で更新されました。再読み込みしてください');
+    } else {
+      const errObj = error as { message?: string; details?: string; code?: string } | null;
+      const detailParts = [errObj?.code ? `[${errObj.code}]` : '', errObj?.message || '', errObj?.details || '']
+        .filter(Boolean)
+        .join(' ');
+      setWorkspaceSyncStatus('error');
+      setWorkspaceSaveError(
+        detailParts
+          ? `クラウド同期に失敗しました: ${detailParts}`
+          : 'クラウド同期に失敗しました。接続設定とデータベースのマイグレーション状態をご確認ください。'
+      );
+    }
+    setWorkspaceReady(true);
+  };
+
   const handleRetrySync = () => {
-    if (!user) return;
+    if (!user || isSyncRecovering) return;
+    setIsSyncRecovering(true);
     setWorkspaceSyncStatus('loading');
     setWorkspaceSaveError('');
     loadOrMigrateWorkspaceData(user.id)
       .then((data) => {
-        setTopGoal(data.topGoal);
-        setCharacters(data.characters);
-        const nextActiveCharacterId = data.characters.some((character) => character.id === data.activeCharacterId)
-          ? data.activeCharacterId
-          : data.characters[0]?.id || activeCharacterId;
-        setActiveCharacterId(nextActiveCharacterId);
-        setUserProfile(data.userProfile);
-        setAiModelSettings(data.aiModelSettings);
-        setProjects(data.projects);
-        setTasks(data.tasks);
-        setApprovals(data.approvals);
-        setActivityLogs(data.activityLogs);
-        setPricingRates(data.pricingRates);
-        setTokenUsageRecords(data.tokenUsage);
-        setProducts(data.products);
-        setContracts(data.contracts);
-        setInvoices(data.invoices);
-        setTools(data.tools);
-        setCustomLists(data.customLists);
-        setAutomations(matrixService.normalizeAutomationRules(data.automations));
-        setMarketingScenarios(data.marketingScenarios || []);
-        setKnowledgeItems(data.knowledgeItems || []);
-        setWorkModeHistories(data.workModeHistories || {});
-        workspaceSaveCoordinator.setInitialSavedSnapshot(data);
-        workspaceSyncEnabledRef.current = true;
-        setWorkspaceSyncStatus('saved');
-        setWorkspaceReady(true);
+        hydrateWorkspaceState(data);
+        setIsSyncErrorModalOpen(false);
+        showToast('クラウド同期を復旧しました。', 'success');
       })
       .catch((error) => {
-        console.error('Retry workspace cloud load failed:', error);
-        workspaceSyncEnabledRef.current = false;
-        if (isWorkspaceConflictError(error)) {
-          workspaceSaveCoordinator.haltOnConflict('他の端末で更新されました。再読み込みしてください');
-          setWorkspaceSyncStatus('conflict');
-          setWorkspaceSaveError('他の端末で更新されました。再読み込みしてください');
-        } else {
-          const errorMessage = (error as { message?: string })?.message || '';
-          setWorkspaceSyncStatus('error');
-          setWorkspaceSaveError(errorMessage
-            ? `クラウド同期に失敗しました: ${errorMessage}`
-            : 'クラウド同期に失敗しました。接続設定と mst_workspace_state テーブルのマイグレーションを確認してください。');
-        }
-        setWorkspaceReady(true);
+        applyWorkspaceLoadError(error, 'Retry workspace cloud load failed:');
+      })
+      .finally(() => {
+        setIsSyncRecovering(false);
+      });
+  };
+
+  const handleForceReloadFromCloud = () => {
+    if (!user || isSyncRecovering) return;
+    setIsSyncRecovering(true);
+    setWorkspaceSyncStatus('loading');
+    setWorkspaceSaveError('');
+    reloadWorkspaceFromCloudPurely(user.id)
+      .then((data) => {
+        hydrateWorkspaceState(data);
+        setIsSyncErrorModalOpen(false);
+        showToast('クラウドの最新データでローカルキャッシュを再同期しました。', 'success');
+      })
+      .catch((error) => {
+        applyWorkspaceLoadError(error, 'Force cloud reload failed:');
+      })
+      .finally(() => {
+        setIsSyncRecovering(false);
       });
   };
 
@@ -2617,12 +2660,47 @@ function AppContent() {
     setActivityLogs(loadActivityLogs());
   };
 
-  const handleUpdateInvoiceStatus = (id: string, status: any) => {
+  const handleUpdateInvoiceStatus = (id: string, status: any, paidDate?: string) => {
     const current = invoices.find((invoice) => invoice.id === id);
-    matrixService.updateInvoice(id, { status, paidDate: status === 'paid' ? todayJst() : undefined });
+    const resolvedPaidDate = status === 'paid' ? (paidDate || current?.paidDate || todayJst()) : undefined;
+    matrixService.updateInvoice(id, { status, paidDate: resolvedPaidDate });
     setInvoices(matrixService.loadInvoices());
     recordActivityLog('task_status_changed', `請求書ステータスが更新されました`, '人間');
     setActivityLogs(loadActivityLogs());
+    if (status === 'paid' && current) {
+      const supabase = getSupabase();
+      if (supabase) {
+        void ensureCustomerRegisteredFromPaidInvoice(supabase, {
+          invoiceId: current.id,
+          companyId: current.companyId,
+          recipientName: current.recipientName,
+          invoiceTitle: current.title,
+          invoiceNumber: current.invoiceNumber,
+          paidDate: resolvedPaidDate,
+        })
+          .then(async (res) => {
+            const resolvedCompanyId = res.companyId || current.companyId;
+            if (!current.companyId && resolvedCompanyId) {
+              matrixService.updateInvoice(id, { companyId: resolvedCompanyId });
+              setInvoices(matrixService.loadInvoices());
+            }
+            if (resolvedCompanyId) {
+              await supabase
+                .from('deals')
+                .update({ proposal_status: '成約', updated_at: new Date().toISOString() })
+                .eq('company_id', resolvedCompanyId)
+                .neq('proposal_status', '成約');
+            }
+            if (res.status === 'created') {
+              recordActivityLog('task_status_changed', `請求書「${current.title}」の入金確認に伴い、顧客台帳へ自動登録しました`, 'システム');
+              setActivityLogs(loadActivityLogs());
+            }
+          })
+          .catch((err) => {
+            console.warn('Paid invoice customer auto-registration warning:', err);
+          });
+      }
+    }
     if (current && status === 'overdue' && current.status !== 'overdue') {
       createAutomationTask({
         ruleId: 'workflow-invoice-overdue',
@@ -2891,6 +2969,7 @@ function AppContent() {
       onOpenProfile={() => openModalWithHistory('profile')}
       onOpenModelSettings={() => openModalWithHistory('model_settings')}
       onRetrySync={handleRetrySync}
+      onOpenSyncErrorModal={() => setIsSyncErrorModalOpen(true)}
     >
       <Suspense fallback={<ViewLoadingFallback />}>
         {/* ================= SECTION 1: MST AI経営OS ================= */}
@@ -3427,6 +3506,60 @@ function AppContent() {
 
 
       {/* Global Modals */}
+      {isSyncErrorModalOpen && (
+        <ModalShell
+          title="クラウド同期エラーの詳細と復旧"
+          onClose={() => setIsSyncErrorModalOpen(false)}
+          maxWidthClass="max-w-lg"
+        >
+          <div className="p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-rose-100 text-rose-600 shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-bold text-slate-900">クラウド同期エラー</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  データベースとの同期処理で以下のエラーが返却されました。再試行するか、ブラウザ内のキャッシュを初期化してクラウドから最新データを再取得してください。
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 whitespace-pre-wrap break-words font-mono">
+              {workspaceSaveError || '原因不明の同期エラーが発生しました。'}
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isSyncRecovering}
+                onClick={handleRetrySync}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncRecovering ? 'animate-spin' : ''}`} />
+                <span>{isSyncRecovering ? '同期を実行中...' : 'このまま再同期を試行する'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSyncRecovering}
+                onClick={handleForceReloadFromCloud}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 px-4 py-2.5 text-xs font-bold text-amber-900 transition cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>ローカルキャッシュを破棄してクラウドから再取得</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSyncErrorModalOpen(false)}
+                className="w-full rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600 transition cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
       <ConfigGuideModal
         isOpen={isConfigOpen}
         onClose={() => closeModalWithHistory('config')}

@@ -209,6 +209,39 @@ export interface MinimalSupabaseRpcClient {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
 }
 
+async function runSilentSupabaseWrite(builder: unknown): Promise<void> {
+  try {
+    await Promise.resolve(builder);
+  } catch {
+    // Non-fatal fallback write
+  }
+}
+
+function normalizeIsoDateString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const slashMatch = trimmed.match(/^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/);
+  if (slashMatch) {
+    const iso = `${slashMatch[1]}-${slashMatch[2].padStart(2, '0')}-${slashMatch[3].padStart(2, '0')}`;
+    return Number.isNaN(Date.parse(iso)) ? undefined : iso;
+  }
+  const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})(?:T.*)?$/);
+  if (isoMatch) {
+    return Number.isNaN(Date.parse(isoMatch[1])) ? undefined : isoMatch[1];
+  }
+  return undefined;
+}
+
+function toSafeFiniteNumber(value: unknown, fallback: number): number;
+function toSafeFiniteNumber(value: unknown, fallback: undefined): number | undefined;
+function toSafeFiniteNumber(value: unknown, fallback: number | undefined): number | undefined {
+  if (value === null || value === undefined || value === '') return fallback;
+  const cleaned = typeof value === 'string' ? value.replace(/,/g, '').trim() : value;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 export async function saveRelationalMatrixWorkspace(
   userId: string,
   data: WorkspaceData,
@@ -220,14 +253,23 @@ export async function saveRelationalMatrixWorkspace(
   const sentInvoiceIds = [...pendingDeletions.invoices];
   const sentProductIds = [...pendingDeletions.products];
 
-  // 1. 請求データの番号重複排除・サニタイズ（同一請求書番号によるINSERT衝突の防止）
+  // 1. 契約・請求データのサニタイズ（日付フォーマット不正や同一請求書番号によるINSERT衝突の防止）
+  const sanitizedContracts: ManagedContract[] = (data.contracts || [])
+    .filter((c) => Boolean(c && c.id))
+    .map((c) => ({
+      ...c,
+      amount: toSafeFiniteNumber(c.amount, 0),
+      startDate: normalizeIsoDateString(c.startDate),
+      endDate: normalizeIsoDateString(c.endDate),
+    }));
+
   const seenNumbers = new Set<string>();
   const seenIds = new Set<string>();
   const sanitizedInvoices: ManagedInvoice[] = [];
 
   for (let i = 0; i < (data.invoices || []).length; i++) {
     const inv = data.invoices[i];
-    if (seenIds.has(inv.id)) continue;
+    if (!inv || !inv.id || seenIds.has(inv.id)) continue;
     seenIds.add(inv.id);
     let num = (inv.invoiceNumber || '').trim();
     if (!num) num = `INV-${new Date().toISOString().slice(0, 7).replace('-', '')}-${String(i + 1).padStart(4, '0')}`;
@@ -235,36 +277,46 @@ export async function saveRelationalMatrixWorkspace(
       num = `${num}-${i + 1}`;
     }
     seenNumbers.add(num);
-    sanitizedInvoices.push({ ...inv, invoiceNumber: num });
+    sanitizedInvoices.push({
+      ...inv,
+      invoiceNumber: num,
+      amount: toSafeFiniteNumber(inv.amount, 0),
+      taxAmount: toSafeFiniteNumber(inv.taxAmount, undefined),
+      issueDate: normalizeIsoDateString(inv.issueDate) || '',
+      dueDate: normalizeIsoDateString(inv.dueDate) || '',
+      paidDate: normalizeIsoDateString(inv.paidDate),
+    });
   }
 
   // 2. 削除対象の契約・請求は、RPC実行前にクライアントから直接DELETE（万一RPCが古い場合でも確実に削除）
   if (sentContractIds.length > 0 && 'from' in (supabase as any)) {
-    try {
-      for (const cid of sentContractIds) {
-        await (supabase as any).from('customer_service_engagements').update({ contract_id: null }).eq('contract_id', cid).catch(() => {});
-        await (supabase as any).from('customer_contracts').delete().eq('legacy_id', cid).catch(() => {});
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cid);
-        if (isUuid) {
-          await (supabase as any).from('customer_contracts').delete().eq('id', cid).catch(() => {});
-        }
+    for (const cid of sentContractIds) {
+      await runSilentSupabaseWrite(
+        (supabase as any).from('customer_service_engagements').update({ contract_id: null }).eq('contract_id', cid)
+      );
+      await runSilentSupabaseWrite(
+        (supabase as any).from('customer_contracts').delete().eq('legacy_id', cid)
+      );
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cid);
+      if (isUuid) {
+        await runSilentSupabaseWrite(
+          (supabase as any).from('customer_contracts').delete().eq('id', cid)
+        );
       }
-    } catch {
-      // Direct delete fallback failure is non-fatal
     }
   }
 
   if (sentInvoiceIds.length > 0 && 'from' in (supabase as any)) {
-    try {
-      for (const iid of sentInvoiceIds) {
-        await (supabase as any).from('customer_invoices').delete().eq('legacy_id', iid).catch(() => {});
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(iid);
-        if (isUuid) {
-          await (supabase as any).from('customer_invoices').delete().eq('id', iid).catch(() => {});
-        }
+    for (const iid of sentInvoiceIds) {
+      await runSilentSupabaseWrite(
+        (supabase as any).from('customer_invoices').delete().eq('legacy_id', iid)
+      );
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(iid);
+      if (isUuid) {
+        await runSilentSupabaseWrite(
+          (supabase as any).from('customer_invoices').delete().eq('id', iid)
+        );
       }
-    } catch {
-      // Direct delete fallback failure is non-fatal
     }
   }
 
@@ -272,7 +324,7 @@ export async function saveRelationalMatrixWorkspace(
   let rpcResult = await supabase.rpc('mst_save_matrix_workspace', {
     p_user_id: userId,
     p_products: data.products,
-    p_contracts: data.contracts,
+    p_contracts: sanitizedContracts,
     p_invoices: sanitizedInvoices,
     p_tools: data.tools,
     p_custom_lists: data.customLists,
@@ -299,11 +351,12 @@ export async function saveRelationalMatrixWorkspace(
             for (const inv of sanitizedInvoices) {
               const match = dbInvoices.find((r: any) => r.invoice_number === inv.invoiceNumber);
               if (match && match.legacy_id !== inv.id) {
-                await (supabase as any)
-                  .from('customer_invoices')
-                  .update({ legacy_id: inv.id })
-                  .eq('id', match.id)
-                  .catch(() => {});
+                await runSilentSupabaseWrite(
+                  (supabase as any)
+                    .from('customer_invoices')
+                    .update({ legacy_id: inv.id })
+                    .eq('id', match.id)
+                );
               }
             }
           }
@@ -312,7 +365,7 @@ export async function saveRelationalMatrixWorkspace(
           rpcResult = await supabase.rpc('mst_save_matrix_workspace', {
             p_user_id: userId,
             p_products: data.products,
-            p_contracts: data.contracts,
+            p_contracts: sanitizedContracts,
             p_invoices: sanitizedInvoices,
             p_tools: data.tools,
             p_custom_lists: data.customLists,
@@ -334,10 +387,11 @@ export async function saveRelationalMatrixWorkspace(
     if (/customer_invoices_owner_id_invoice_number_key|duplicate key/i.test(errMsg)) {
       console.warn('[WorkspaceSave] Bypassing invoice unique constraint error to maintain operational continuity:', errMsg);
       if ('from' in (supabase as any)) {
-        await (supabase as any)
-          .from('mst_matrix_workspace_sync_state')
-          .upsert({ user_id: userId, updated_at: new Date().toISOString() })
-          .catch(() => {});
+        await runSilentSupabaseWrite(
+          (supabase as any)
+            .from('mst_matrix_workspace_sync_state')
+            .upsert({ user_id: userId, updated_at: new Date().toISOString() })
+        );
       }
     } else {
       throw rpcResult.error;
@@ -1293,3 +1347,99 @@ export async function saveWorkspaceData(
 
   return { savedData: currentData, wasMerged };
 }
+
+/**
+ * ローカルストレージの不整合キャッシュ・削除待ちキューを破棄し、
+ * クラウド（Supabase）の最新データのみを正として再取得・適用する復旧用関数。
+ */
+export async function reloadWorkspaceFromCloudPurely(userId: string): Promise<WorkspaceData> {
+  matrixService.setActiveUserId(userId);
+  matrixService.clearPendingDeletions(userId);
+  matrixWorkspaceUpdatedAtByUser.delete(userId);
+  try {
+    localStorage.removeItem(`${LAST_SYNC_PREFIX}${userId}`);
+  } catch {
+    // ignore storage errors
+  }
+
+  const supabase = getSupabaseClient();
+  const { data: row, error } = await supabase
+    .from(WORKSPACE_STATE_TABLE)
+    .select('data')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const localDefaults = loadLocalWorkspaceData();
+  const remote = row?.data && typeof row.data === 'object' && !Array.isArray(row.data)
+    ? (row.data as Partial<WorkspaceData>)
+    : {};
+
+  const cloudData: WorkspaceData = {
+    ...localDefaults,
+    ...remote,
+    projects: remote.projects || [],
+    tasks: remote.tasks || [],
+    approvals: remote.approvals || [],
+    activityLogs: (remote.activityLogs || []).slice(0, 100),
+    tokenUsage: (remote.tokenUsage || []).slice(0, 300),
+    products: remote.products || [],
+    contracts: remote.contracts || [],
+    invoices: remote.invoices || [],
+    tools: remote.tools || [],
+    customLists: remote.customLists || [],
+    automations: remote.automations || [],
+    workModeHistories: remote.workModeHistories || {},
+    knowledgeItems: remote.knowledgeItems || [],
+    marketingScenarios: deduplicateMarketingScenarios(remote.marketingScenarios || []),
+  };
+
+  const relationalAI = await loadRelationalAIOperations(userId);
+  if (relationalAI) {
+    cloudData.topGoal = relationalAI.topGoal;
+    cloudData.characters = relationalAI.characters;
+    cloudData.activeCharacterId = relationalAI.activeCharacterId;
+    cloudData.userProfile = relationalAI.userProfile;
+    cloudData.aiModelSettings = relationalAI.aiModelSettings;
+    cloudData.pricingRates = relationalAI.pricingRates;
+    cloudData.tokenUsage = relationalAI.tokenUsage.slice(0, 300);
+    cloudData.workModeHistories = relationalAI.workModeHistories;
+    cloudData.knowledgeItems = relationalAI.knowledgeItems;
+    cloudData.projects = relationalAI.projects;
+    cloudData.tasks = relationalAI.tasks;
+    cloudData.approvals = relationalAI.approvals;
+    cloudData.automations = relationalAI.automations;
+    cloudData.activityLogs = relationalAI.activityLogs.slice(0, 100);
+  }
+
+  const relationalMatrix = await loadRelationalMatrixWorkspace(userId);
+  if (relationalMatrix) {
+    cloudData.products = relationalMatrix.products;
+    cloudData.tools = relationalMatrix.tools;
+    cloudData.customLists = relationalMatrix.customLists;
+    cloudData.marketingScenarios = deduplicateMarketingScenarios(relationalMatrix.marketingScenarios);
+  }
+
+  cloudData.products = await syncAllProductsBidirectionally(cloudData.products);
+
+  const relationalSales = await loadRelationalSalesOperations();
+  if (relationalSales) {
+    cloudData.contracts = relationalSales.contracts;
+    cloudData.invoices = relationalSales.invoices;
+  }
+
+  cloudData.contracts = cloudData.contracts.filter((record) => !SAMPLE_RECORD_IDS.contracts.has(record.id));
+  cloudData.invoices = cloudData.invoices.filter((record) => !SAMPLE_RECORD_IDS.invoices.has(record.id));
+  cloudData.tools = cloudData.tools.filter((record) => !SAMPLE_RECORD_IDS.tools.has(record.id));
+  cloudData.products = (cloudData.products || []).filter((record) => !SAMPLE_RECORD_IDS.products?.has(record.id));
+
+  applyWorkspaceData(cloudData);
+  try {
+    localStorage.setItem(`${LAST_SYNC_PREFIX}${userId}`, JSON.stringify(cloudData));
+  } catch {
+    // ignore storage errors
+  }
+
+  return cloudData;
+}
+
