@@ -16,11 +16,16 @@ import {
   extractConsultationDetailsText,
 } from '../server/publicFormReply';
 import {
+  ONE_SHOT_SCENARIO_ID,
   ONE_SHOT_SCENARIO_NAME,
+  MONITOR_ONE_SHOT_SCENARIO_ID,
+  MONITOR_ONE_SHOT_SCENARIO_NAME,
   getNurturingStepTemplate,
   getOneShotOutreachTemplate,
+  getMonitorOutreachTemplate,
   getSalesEmailTemplate,
   resolveOneShotOutreachDraft,
+  resolveMonitorOutreachDraft,
   PRIORITY_INDUSTRY_KEYS,
   INDUSTRY_MESSAGES,
 } from '../src/utils/salesOutreachTemplates';
@@ -955,6 +960,60 @@ assert.equal(
   }),
   false
 );
+console.log('  ✓ passed');
+
+console.log('Test 38: 1業種1社モニター提案テンプレート生成・カスタム差し替え・分類順の検証');
+const monitorDefault = getMonitorOutreachTemplate('テスト建設株式会社', '山田太郎', '建設業', 'https://example.com/check');
+assert.equal(monitorDefault.step, -1);
+assert.match(monitorDefault.subject, /1業種1社限定|モニター/);
+assert.match(monitorDefault.body, /山田太郎 様/);
+assert.match(monitorDefault.body, /【建設業】/);
+assert.match(monitorDefault.body, /1業種1社限定/);
+assert.match(monitorDefault.body, /https:\/\/example\.com\/check/);
+
+const monitorCustom = resolveMonitorOutreachDraft(
+  {
+    emailSubject: '【{industry}・1社限定】{company_name}様へモニターのご案内',
+    emailBody: '{recipient_name} 様\n業種:{industry}\nURL:{link_url}',
+  },
+  '株式会社サンプル',
+  '佐藤花子',
+  '医療・クリニック',
+  'https://example.com/monitor'
+);
+assert.equal(monitorCustom.name, MONITOR_ONE_SHOT_SCENARIO_NAME);
+assert.equal(monitorCustom.subject, '【医療・クリニック・1社限定】株式会社サンプル様へモニターのご案内');
+assert.equal(monitorCustom.body, '佐藤花子 様\n業種:医療・クリニック\nURL:https://example.com/monitor');
+
+const baseOutreachScenario = MST_OUTREACH_STARTER_SCENARIOS[0];
+const monitorScenarioMock = {
+  ...baseOutreachScenario,
+  id: MONITOR_ONE_SHOT_SCENARIO_ID,
+  name: MONITOR_ONE_SHOT_SCENARIO_NAME,
+  trigger: 'manual' as const,
+  updatedAt: 1,
+};
+const oneShotScenarioMock = {
+  ...baseOutreachScenario,
+  id: ONE_SHOT_SCENARIO_ID,
+  name: ONE_SHOT_SCENARIO_NAME,
+  trigger: 'manual' as const,
+  updatedAt: 1,
+};
+const step1ScenarioMock = {
+  ...baseOutreachScenario,
+  id: 'outreach-step-1',
+  name: '【営業メール第1通】導入・簡易診断のご案内',
+  trigger: 'manual' as const,
+  updatedAt: 1,
+};
+
+assert.equal(classifyScenarioTrack(monitorScenarioMock), 'sales_outreach');
+const oneShotSort = getScenarioSortKey(oneShotScenarioMock);
+const monitorSort = getScenarioSortKey(monitorScenarioMock);
+const step1Sort = getScenarioSortKey(step1ScenarioMock);
+assert.ok(oneShotSort.stepNumber < monitorSort.stepNumber, 'モニター提案は一発直球の直後に並ぶ');
+assert.ok(monitorSort.stepNumber < step1Sort.stepNumber, 'モニター提案はステップ第1通より前に並ぶ');
 console.log('  ✓ passed');
 
 console.log('=== All Outreach Footer & Follow-up Tests Passed! ===');

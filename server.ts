@@ -21,9 +21,11 @@ import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyB
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, calculateDueAt, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
 import {
   ONE_SHOT_SCENARIO_ID,
+  MONITOR_ONE_SHOT_SCENARIO_ID,
   getOneShotOutreachTemplate,
   getSalesEmailTemplate,
   resolveOneShotOutreachDraft,
+  resolveMonitorOutreachDraft,
 } from './src/utils/salesOutreachTemplates.js';
 import { generateDocumentPdf } from './server/pdfService.js';
 import { prepareEmailPayloadContent } from './server/emailFooter.js';
@@ -6905,7 +6907,12 @@ app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, r
     return res.status(400).json({ error: '対象の見込み企業が選択されていません。' });
   }
 
-  const mode: 'one_shot' | 'sequence' = req.body?.mode === 'sequence' ? 'sequence' : 'one_shot';
+  const mode: 'one_shot' | 'monitor_one_shot' | 'sequence' =
+    req.body?.mode === 'sequence'
+      ? 'sequence'
+      : req.body?.mode === 'monitor_one_shot'
+      ? 'monitor_one_shot'
+      : 'one_shot';
   const sendTiming: 'immediate' | 'preferred' = req.body?.sendTiming === 'preferred' ? 'preferred' : 'immediate';
   const rawPreferredTime = typeof req.body?.preferredSendTime === 'string' ? req.body.preferredSendTime.trim() : '';
   const validPreferredTime = /^(\d{1,2}):(\d{2})$/.test(rawPreferredTime) ? rawPreferredTime : '';
@@ -6973,6 +6980,9 @@ app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, r
     const oneShotScenarioRow = (ownerScenarios || []).find(
       (s: any) => s.scenario_id === ONE_SHOT_SCENARIO_ID || String(s?.config?.name || '').includes('一発直球')
     );
+    const monitorScenarioRow = (ownerScenarios || []).find(
+      (s: any) => s.scenario_id === MONITOR_ONE_SHOT_SCENARIO_ID || String(s?.config?.name || '').includes('モニター提案')
+    );
 
     for (const prospect of prospects) {
       const company = prospect.company_id ? companyMap.get(String(prospect.company_id)) : null;
@@ -7009,21 +7019,32 @@ app.post('/api/marketing/prospects/trigger-outreach', requireAuth, async (req, r
         : 'https://corp.mstcorp.info/diagnosis';
       const consentBasis = '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）';
 
-      if (mode === 'one_shot') {
-        const draft = resolveOneShotOutreachDraft(
-          oneShotScenarioRow?.config,
-          companyName,
-          targetContact.full_name,
-          companyIndustry,
-          diagUrl
-        );
-        const eventKey = `prospect_one_shot:${prospect.id}:${targetContact.id}:${dateKey}`;
+      if (mode === 'one_shot' || mode === 'monitor_one_shot') {
+        const isMonitor = mode === 'monitor_one_shot';
+        const draft = isMonitor
+          ? resolveMonitorOutreachDraft(
+              monitorScenarioRow?.config,
+              companyName,
+              targetContact.full_name,
+              companyIndustry,
+              diagUrl
+            )
+          : resolveOneShotOutreachDraft(
+              oneShotScenarioRow?.config,
+              companyName,
+              targetContact.full_name,
+              companyIndustry,
+              diagUrl
+            );
+        const eventKey = isMonitor
+          ? `prospect_monitor_one_shot:${prospect.id}:${targetContact.id}:${dateKey}`
+          : `prospect_one_shot:${prospect.id}:${targetContact.id}:${dateKey}`;
         const { error: insErr } = await lineSupabase
           .from('marketing_automation_jobs')
           .upsert({
             owner_id: authUser.id,
             event_key: eventKey,
-            scenario_id: 'prospect-one-shot',
+            scenario_id: isMonitor ? MONITOR_ONE_SHOT_SCENARIO_ID : ONE_SHOT_SCENARIO_ID,
             contact_id: targetContact.id,
             channel: 'email',
             subject: draft.subject,

@@ -43,9 +43,13 @@ import {
   PRIORITY_INDUSTRY_KEYS,
   ONE_SHOT_SCENARIO_ID,
   ONE_SHOT_SCENARIO_NAME,
+  MONITOR_ONE_SHOT_SCENARIO_ID,
+  MONITOR_ONE_SHOT_SCENARIO_NAME,
   getSalesEmailTemplate,
   getOneShotOutreachTemplate,
   resolveOneShotOutreachDraft,
+  getMonitorOutreachTemplate,
+  resolveMonitorOutreachDraft,
   getIndustryMessage,
   getNurturingStepTemplate
 } from '../../utils/salesOutreachTemplates';
@@ -1385,7 +1389,9 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
 
   const isSalesOutreachScenario = (s: MarketingScenario) =>
     s.id === ONE_SHOT_SCENARIO_ID ||
+    s.id === MONITOR_ONE_SHOT_SCENARIO_ID ||
     s.name.includes('一発直球') ||
+    s.name.includes('モニター提案') ||
     s.name.includes('営業メール') ||
     s.name.includes('【営業') ||
     s.trigger === 'outreach_first_sent' ||
@@ -1514,10 +1520,18 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
     ) || null;
   }, [scenarios]);
 
+  const monitorOneShotScenario = useMemo(() => {
+    return scenarios.find(
+      (s) => s.id === MONITOR_ONE_SHOT_SCENARIO_ID || s.name.includes('モニター提案')
+    ) || null;
+  }, [scenarios]);
+
   const outreachScenarios = useMemo(() => {
     return scenarios.filter(s =>
       s.id !== ONE_SHOT_SCENARIO_ID &&
+      s.id !== MONITOR_ONE_SHOT_SCENARIO_ID &&
       !s.name.includes('一発直球') &&
+      !s.name.includes('モニター提案') &&
       isSalesOutreachScenario(s)
     );
   }, [scenarios]);
@@ -1545,6 +1559,38 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
       trigger: 'manual',
       channel: 'email',
       audience: '未接触の見込み企業（一発直球提案）',
+      waitMinutes: 0,
+      emailSubject: rawDefault.subject,
+      emailBody: rawDefault.body,
+      messageBody: '',
+      lineMessageType: 'text',
+      lineImageUrl: '',
+      linePreviewImageUrl: '',
+      flexAltText: '',
+      flexTitle: '',
+      flexBody: '',
+      flexButtonLabel: '',
+      flexButtonUrl: '',
+      status: 'prepared',
+      automationEnabled: false,
+      sendTimeWindow: '09:00-18:00',
+      preferredSendTime: '',
+      stopOnBooking: true,
+      stopOnDeal: true,
+      consentBasis: '特定電子メール法に基づく業務改善情報の提供（オプトアウト明記）',
+      updatedAt: Date.now(),
+    };
+    handleOpenInspector(target);
+  };
+
+  const handleOpenMonitorOneShotEditor = () => {
+    const rawDefault = getMonitorOutreachTemplate('{company_name}', '{recipient_name}', '{industry}', '{link_url}');
+    const target: MarketingScenario = monitorOneShotScenario || {
+      id: MONITOR_ONE_SHOT_SCENARIO_ID,
+      name: MONITOR_ONE_SHOT_SCENARIO_NAME,
+      trigger: 'manual',
+      channel: 'email',
+      audience: '未接触の見込み企業（1業種1社・モニター提案）',
       waitMinutes: 0,
       emailSubject: rawDefault.subject,
       emailBody: rawDefault.body,
@@ -2139,6 +2185,46 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
                     type="button"
                     onClick={handleOpenOneShotEditor}
                     className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>テンプレートを編集</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+          {/* 単発営業メール（1業種1社モニター提案）クイック編集バー */}
+          {(tableTrackFilter === 'all' || tableTrackFilter === 'sales_outreach') &&
+            (tableChannelFilter === 'all' || tableChannelFilter === 'email') && (
+              <div className="bg-white border border-teal-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
+                      単発営業メール（1業種1社モニター提案）
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {monitorOneShotScenario ? 'カスタム編集済み' : '標準テンプレート使用中'}
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold text-slate-900 truncate mt-1">
+                    {MONITOR_ONE_SHOT_SCENARIO_NAME}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {monitorOneShotScenario && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteInspectorScenario(monitorOneShotScenario.id)}
+                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>標準に戻す</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleOpenMonitorOneShotEditor}
+                    className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>テンプレートを編集</span>
@@ -5094,12 +5180,80 @@ export const MarketingFlowStudio: React.FC<MarketingFlowStudioProps> = ({
             );
           })()}
 
+          {/* 単発②: 1業種1社限定 モニター価格ご提案テンプレート編集スロット */}
+          {(() => {
+            const sampleMonitorDraft = resolveMonitorOutreachDraft(
+              monitorOneShotScenario,
+              'サンプル株式会社',
+              '山田 太郎',
+              selectedIndustry,
+              'https://corp.mstcorp.info/diagnosis'
+            );
+            const isMonitorCustomized = Boolean(monitorOneShotScenario);
+            return (
+              <div className="bg-white border border-teal-200 rounded-2xl p-5 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-teal-800">
+                        単発営業メール（1業種1社モニター提案）
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        · {isMonitorCustomized ? 'カスタム編集済み' : '標準テンプレート使用中'}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-900 mt-0.5">
+                      {MONITOR_ONE_SHOT_SCENARIO_NAME}
+                    </h4>
+                    <div className="text-xs text-slate-600 mt-0.5 truncate">
+                      件名: {sampleMonitorDraft.subject}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    {isMonitorCustomized && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInspectorScenario(monitorOneShotScenario!.id)}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold border border-slate-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        title="カスタム編集を解除して初期の標準テンプレートに戻します"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>標準に戻す</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleOpenMonitorOneShotEditor}
+                      className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>テンプレート編集</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-sans text-xs text-slate-700 max-h-24 overflow-hidden relative">
+                  <pre className="whitespace-pre-wrap font-sans leading-relaxed">{sampleMonitorDraft.body}</pre>
+                  <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 5ステップのタイムラインカード */}
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((stepNum) => {
               const draft = getSalesEmailTemplate(stepNum, 'サンプル株式会社', '山田 太郎', selectedIndustry, 'https://corp.mstcorp.info/diagnosis');
               const waitDays = stepNum === 1 ? '0日目（初回）' : `${(stepNum - 1) * 3}日後`;
-              const matchedScenario = outreachScenarios.find(s => s.id !== ONE_SHOT_SCENARIO_ID && !s.name.includes('一発直球') && s.name.includes(String(stepNum)));
+              const matchedScenario = outreachScenarios.find(
+                (s) =>
+                  s.id !== ONE_SHOT_SCENARIO_ID &&
+                  s.id !== MONITOR_ONE_SHOT_SCENARIO_ID &&
+                  !s.name.includes('一発直球') &&
+                  !s.name.includes('モニター提案') &&
+                  s.name.includes(String(stepNum))
+              );
               const displaySubject = matchedScenario?.emailSubject || draft.subject;
               const displayBody = matchedScenario?.emailBody || draft.body;
 

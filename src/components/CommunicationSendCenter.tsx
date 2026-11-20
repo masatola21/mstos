@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   getSalesEmailTemplate,
   resolveOneShotOutreachDraft,
+  resolveMonitorOutreachDraft,
   ONE_SHOT_SCENARIO_ID,
+  MONITOR_ONE_SHOT_SCENARIO_ID,
   type CustomOneShotConfig,
 } from '../utils/salesOutreachTemplates';
 import { EmailHtmlPreviewCard } from './common/EmailHtmlPreviewCard';
@@ -332,6 +334,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
   });
   const [savingSenderSettings, setSavingSenderSettings] = useState(false);
   const [customOneShotConfig, setCustomOneShotConfig] = useState<CustomOneShotConfig | null>(null);
+  const [customMonitorOneShotConfig, setCustomMonitorOneShotConfig] = useState<CustomOneShotConfig | null>(null);
   const [isComposerExpanded, setIsComposerExpanded] = useState(false);
   const [showDrawerSettings, setShowDrawerSettings] = useState(false);
 
@@ -606,6 +609,15 @@ export const CommunicationSendCenter: React.FC<Props> = ({
               emailBody: matchedOneShot.config.emailBody || '',
             });
           }
+          const matchedMonitor = scenarioResult.data.find(
+            (row: any) => row.scenario_id === MONITOR_ONE_SHOT_SCENARIO_ID || String(row?.config?.name || '').includes('モニター提案')
+          );
+          if (matchedMonitor?.config) {
+            setCustomMonitorOneShotConfig({
+              emailSubject: matchedMonitor.config.emailSubject || '',
+              emailBody: matchedMonitor.config.emailBody || '',
+            });
+          }
         }
       })
       .catch((e) => ok && setError(e.message || '読み込みに失敗しました。'));
@@ -643,14 +655,22 @@ export const CommunicationSendCenter: React.FC<Props> = ({
     }
   }, [kind, channel, templateKey, templates, doc?.id, templateChannel, documentDeliveryFormat]);
 
-  const applySalesStep = (stepNum: number, c = contact, oneShotOverride = customOneShotConfig) => {
+  const applySalesStep = (
+    stepNum: number,
+    c = contact,
+    oneShotOverride = customOneShotConfig,
+    monitorOverride = customMonitorOneShotConfig
+  ) => {
     const compName = c?.company_id ? companies[c.company_id] || '貴社' : '貴社';
     const compInd = c?.company_id ? companyIndustries[c.company_id] || '' : '';
     const diagForm = forms.find((f: any) => f.form_type === 'diagnosis') || forms[0];
     const diagUrl = diagForm ? `${window.location.origin}/f/${encodeURIComponent(diagForm.public_slug)}${c ? `?cid=${encodeURIComponent(c.id)}` : ''}` : bookingUrl || url.trim();
-    const outreach = stepNum === 0
-      ? resolveOneShotOutreachDraft(oneShotOverride, compName, c?.full_name, compInd, diagUrl)
-      : getSalesEmailTemplate(stepNum, compName, c?.full_name, compInd, diagUrl);
+    const outreach =
+      stepNum === -1
+        ? resolveMonitorOutreachDraft(monitorOverride, compName, c?.full_name, compInd, diagUrl)
+        : stepNum === 0
+        ? resolveOneShotOutreachDraft(oneShotOverride, compName, c?.full_name, compInd, diagUrl)
+        : getSalesEmailTemplate(stepNum, compName, c?.full_name, compInd, diagUrl);
     setSubject(outreach.subject);
     setBody(outreach.body);
     if (diagUrl && diagUrl !== '{{diagnostic_url}}') setUrl(diagUrl);
@@ -659,9 +679,9 @@ export const CommunicationSendCenter: React.FC<Props> = ({
 
   useEffect(() => {
     if (kind === 'sales_outreach') {
-      applySalesStep(salesStep, contact, customOneShotConfig);
+      applySalesStep(salesStep, contact, customOneShotConfig, customMonitorOneShotConfig);
     }
-  }, [kind, salesStep, contact?.id, contact?.company_id, customOneShotConfig]);
+  }, [kind, salesStep, contact?.id, contact?.company_id, customOneShotConfig, customMonitorOneShotConfig]);
 
   useEffect(() => {
     if ((kind === 'form' || kind === 'diagnosis') && form) {
@@ -1218,6 +1238,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                             className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
                           >
                             <option value={0}>【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発メール）</option>
+                            <option value={-1}>【モニター提案】1業種1社限定・特別モニター価格のご提案（単発メール）</option>
                             <option value={1}>【5ステップ初回】業界急所提起 ＆ 3分無料診断ギフト（送信後2〜5通目の自動追客可）</option>
                           </select>
                         </label>
@@ -1702,6 +1723,7 @@ export const CommunicationSendCenter: React.FC<Props> = ({
                       className="mt-1 block w-full bg-white p-2.5 text-xs text-slate-900 rounded-lg border border-purple-200 focus:outline-none focus:border-purple-600"
                     >
                       <option value={0}>【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発メール）</option>
+                      <option value={-1}>【モニター提案】1業種1社限定・特別モニター価格のご提案（単発メール）</option>
                       <option value={1}>【5ステップ初回】業界急所提起 ＆ 3分無料診断ギフト（送信後2〜5通目の自動追客可）</option>
                     </select>
                   </label>

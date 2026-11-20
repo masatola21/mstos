@@ -231,6 +231,99 @@ export const resolveOneShotOutreachDraft = (
 };
 
 // ============================================================
+// 【営業メール（モニター提案）】1業種1社限定・特別モニター価格のご提案
+// ============================================================
+
+export const MONITOR_ONE_SHOT_SCENARIO_ID = 'prospect-monitor-one-shot';
+export const MONITOR_ONE_SHOT_SCENARIO_NAME = '【モニター提案】1業種1社限定・特別モニター価格のご提案';
+
+export const getMonitorOutreachTemplate = (
+  companyName: string = '貴社',
+  personName?: string,
+  industry?: string,
+  diagnosticUrl?: string
+): SalesEmailDraft => {
+  const salutation = personName && personName.trim() ? `${personName} 様` : `${companyName} ご担当者 様`;
+  const targetUrl = diagnosticUrl || '{{diagnostic_url}}';
+  const cleanIndustry = industry && industry.trim() ? industry.trim() : '';
+  const industryTarget = cleanIndustry ? `【${cleanIndustry}】` : '各業種';
+  const industryLine = cleanIndustry
+    ? `${cleanIndustry}の領域において「1業種1社限定」での業務仕組み化・AI活用モニター企業様を募集しており、`
+    : '現在、地域・業界ごとに「1業種1社限定」での業務仕組み化・AI活用モニター企業様を募集しており、';
+
+  return {
+    step: -1,
+    name: MONITOR_ONE_SHOT_SCENARIO_NAME,
+    subject: cleanIndustry
+      ? `【${cleanIndustry}・1社限定】AI業務仕組み化・特別モニター価格での導入ご提案`
+      : '【1業種1社限定】AI業務仕組み化・特別モニター価格での導入ご提案',
+    body: `${salutation}
+
+突然のご連絡にて大変恐縮です。
+中小・小規模法人様向けに、AIと専用業務システムによる「業務の仕組み化・経営サポート」を行っております、有限会社MST 代表の大橋真人と申します。
+
+現在弊社では、${industryLine}その一環として${companyName}様へ特別なご案内をお送りしております。
+
+▼ なぜ「1業種1社限定」のモニター募集なのか？
+同業他社様と競合しない形で、${industryTarget}の実務に本当にフィットする「顧客管理・問い合わせ対応・見積請求・業務効率化」の仕組みを、貴社と二人三脚で1社に集中して作り込みたいためです。
+
+▼ モニター企業様への特別条件
+導入後のご感想や改善事例（※社名非公開・匿名での掲載も可）への簡単なご協力をお願いする代わりに、
+・初期の業務整理〜専用管理仕組みの構築
+・AIによる定型事務・問い合わせ対応・書類作成の自動化
+・LINE / メール / 予約・請求導線の自動連携
+を【通常価格より大幅に抑えた特別モニター価格】にてご提供いたします。
+
+「大掛かりなシステム開発までは考えていないが、今の事務負担や属人化を現実的なコストで減らしたい」という企業様に最適な枠となっております。
+
+もし少しでもご関心をお持ちいただけましたら、まずは特別モニター価格の詳細と、他社様での具体的な仕組み化画面をお見せしながら、15〜20分ほどオンラインでご説明（個別お見立て）させていただけませんか？
+
+また、ご返信不要で貴社の現状をチェックできる3分無料診断もございますので、ご参考にご覧いただけますと幸いです。
+
+▼ 【無料・3分】貴社の業務・利益ボトルネック診断
+${targetUrl}
+
+※1業種1社のご案内枠が埋まり次第終了となりますため、ご興味がございましたら本メールへの一言ご返信（「モニター詳細希望」等）でお気軽にお知らせください。`,
+  };
+};
+
+export const resolveMonitorOutreachDraft = (
+  customConfig: CustomOneShotConfig | null | undefined,
+  companyName: string = '貴社',
+  personName?: string,
+  industry?: string,
+  diagnosticUrl?: string
+): SalesEmailDraft => {
+  const fallback = getMonitorOutreachTemplate(companyName, personName, industry, diagnosticUrl);
+  const customSubject = typeof customConfig?.emailSubject === 'string' ? customConfig.emailSubject.trim() : '';
+  const customBody = typeof customConfig?.emailBody === 'string' ? customConfig.emailBody.trim() : '';
+  if (!customSubject && !customBody) {
+    return fallback;
+  }
+
+  const resolvedCompany = (companyName || '').trim() || '貴社';
+  const resolvedRecipient = personName && personName.trim() ? personName.trim() : `${resolvedCompany} ご担当者`;
+  const targetUrl = (diagnosticUrl || '').trim() || '{{diagnostic_url}}';
+  const resolvedIndustry = (industry || '').trim() || '中小・小規模法人';
+
+  const applyVars = (text: string) =>
+    text
+      .replace(/\{\{diagnostic_url\}\}/g, targetUrl)
+      .replace(/\{(company_name|会社名|企業名|法人名)\}/g, resolvedCompany)
+      .replace(/\{(recipient_name|name|お名前|氏名|宛名)\}/g, resolvedRecipient)
+      .replace(/\{(link_url|案内URL|診断URL|リンクURL)\}/g, targetUrl)
+      .replace(/\{(booking_url|面談予約URL|予約URL)\}/g, targetUrl)
+      .replace(/\{(industry|業種)\}/g, resolvedIndustry);
+
+  return {
+    step: -1,
+    name: MONITOR_ONE_SHOT_SCENARIO_NAME,
+    subject: customSubject ? applyVars(customSubject) : fallback.subject,
+    body: customBody ? applyVars(customBody) : fallback.body,
+  };
+};
+
+// ============================================================
 // 【営業メール】ブラッシュアップ版 全5ステップ（アウトバウンド）
 // ============================================================
 

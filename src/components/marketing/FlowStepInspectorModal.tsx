@@ -27,7 +27,12 @@ import { renderPlaceholders, PLACEHOLDER_SAMPLE_VALUES } from '../../utils/place
 import { UNIFIED_TAG_MASTER } from '../../constants/tagMaster';
 import { QUESTIONNAIRE_V1 } from '../../constants/questionnaire';
 import { getSupabase } from '../../lib/supabaseClient';
-import { ONE_SHOT_SCENARIO_ID, getOneShotOutreachTemplate } from '../../utils/salesOutreachTemplates';
+import {
+  ONE_SHOT_SCENARIO_ID,
+  MONITOR_ONE_SHOT_SCENARIO_ID,
+  getOneShotOutreachTemplate,
+  getMonitorOutreachTemplate,
+} from '../../utils/salesOutreachTemplates';
 import { EmailHtmlPreviewCard } from '../common/EmailHtmlPreviewCard';
 import { PlaceholderAssist } from '../common/PlaceholderAssist';
 import { ScenarioDryRunModal } from './ScenarioDryRunModal';
@@ -75,8 +80,12 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
 }) => {
   if (!isOpen || !scenario) return null;
 
+  const isMonitorOneShot =
+    scenario.id === MONITOR_ONE_SHOT_SCENARIO_ID || (scenario.name || '').includes('モニター提案');
   const isOneShot =
-    scenario.id === ONE_SHOT_SCENARIO_ID || (scenario.name || '').includes('一発直球');
+    isMonitorOneShot ||
+    scenario.id === ONE_SHOT_SCENARIO_ID ||
+    (scenario.name || '').includes('一発直球');
 
   const [activeTab, setActiveTab] = useState<'editor' | 'safety'>('editor');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -297,12 +306,9 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
   };
 
   const handleResetOneShotToDefault = () => {
-    const rawDefault = getOneShotOutreachTemplate(
-      '{company_name}',
-      '{recipient_name}',
-      undefined,
-      '{link_url}'
-    );
+    const rawDefault = isMonitorOneShot
+      ? getMonitorOutreachTemplate('{company_name}', '{recipient_name}', '{industry}', '{link_url}')
+      : getOneShotOutreachTemplate('{company_name}', '{recipient_name}', undefined, '{link_url}');
     setEmailSubject(rawDefault.subject);
     setEmailBody(rawDefault.body);
   };
@@ -444,10 +450,13 @@ export const FlowStepInspectorModal: React.FC<FlowStepInspectorModalProps> = ({
           <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-3 bg-white shrink-0">
             <div className="min-w-0">
               <div className="text-xs font-semibold text-purple-700">
-                単発営業メール テンプレート編集
+                {isMonitorOneShot ? 'モニター提案メール テンプレート編集' : '単発営業メール テンプレート編集'}
               </div>
               <h3 className="text-base font-bold text-slate-900 truncate mt-0.5">
-                {name || '【一発直球】IT担当＋経営サポート「社外右腕」のご提案'}
+                {name ||
+                  (isMonitorOneShot
+                    ? '【モニター提案】1業種1社限定・特別モニター価格のご提案'
+                    : '【一発直球】IT担当＋経営サポート「社外右腕」のご提案')}
               </h3>
             </div>
             <div className="flex items-center gap-2 shrink-0">

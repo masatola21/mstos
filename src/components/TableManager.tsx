@@ -99,7 +99,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
   // 見込み企業リスト：営業メールトリガー発火モーダル
   const [outreachModalProspects, setOutreachModalProspects] = useState<any[]>([]);
-  const [outreachMode, setOutreachMode] = useState<'one_shot' | 'sequence'>('one_shot');
+  const [outreachMode, setOutreachMode] = useState<'one_shot' | 'monitor_one_shot' | 'sequence'>('one_shot');
   const [outreachSendTiming, setOutreachSendTiming] = useState<'immediate' | 'preferred'>('immediate');
   const [outreachPreferredTime, setOutreachPreferredTime] = useState<string>('10:00');
   const [isTriggeringOutreach, setIsTriggeringOutreach] = useState(false);
@@ -139,7 +139,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
         throw new Error(json.error || `配信予約に失敗しました (HTTP ${res.status})`);
       }
 
-      const modeLabel = outreachMode === 'one_shot' ? '一発直球提案（社外右腕）' : '5ステップ自動追客';
+      const modeLabel =
+        outreachMode === 'monitor_one_shot'
+          ? '1業種1社モニター提案'
+          : outreachMode === 'one_shot'
+          ? '一発直球提案（社外右腕）'
+          : '5ステップ自動追客';
       const timingLabel = outreachSendTiming === 'preferred'
         ? `希望時刻 ${outreachPreferredTime}頃（JST）に配信予約`
         : '即時配信キューへ投入';
@@ -2012,6 +2017,28 @@ export const TableManager: React.FC<TableManagerProps> = ({
                       <div className="font-bold">【一発直球提案】IT担当＋経営サポート「社外右腕」のご提案（単発）</div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         正社員1人未満のコストでIT・経営右腕を丸ごと代行する直球提案＋無料お見立て・3分診断を1通で送ります。
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition ${
+                      outreachMode === 'monitor_one_shot'
+                        ? 'bg-teal-50/70 border-teal-400 text-teal-950'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="outreachMode"
+                      checked={outreachMode === 'monitor_one_shot'}
+                      onChange={() => setOutreachMode('monitor_one_shot')}
+                      className="mt-0.5 accent-teal-600"
+                    />
+                    <div>
+                      <div className="font-bold">【モニター提案】1業種1社限定・特別モニター価格のご提案（単発）</div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        事例・フィードバック協力の代わりに、仕組み化・AI導入を特別モニター価格で提供する1業種1社限定の案内を1通送ります。
                       </p>
                     </div>
                   </label>

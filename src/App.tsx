@@ -1692,34 +1692,73 @@ function AppContent() {
       createdAt: now,
       updatedAt: now,
     };
-    const automationRule = event.transitionType === 'deal_to_customer'
-      ? automations.find((rule) => rule.id === 'workflow-deal-won' && rule.isEnabled)
-      : undefined;
-    const duplicateAutomationTask = automationRule && targetRecordId
-      ? tasks.some((item) => item.sourceAutomationId === automationRule.id && item.relatedRecord?.id === targetRecordId)
+    const dealWonRules = event.transitionType === 'deal_to_customer'
+      ? automations.filter((rule) => rule.isEnabled && (rule.id === 'workflow-deal-won' || rule.triggerEvent === 'deal_won'))
+      : [];
+    const primaryDealRule = dealWonRules.find((r) => r.id === 'workflow-deal-won') || dealWonRules[0];
+    const extraDealRules = dealWonRules.filter((r) => r !== primaryDealRule);
+
+    const duplicatePrimaryRuleTask = primaryDealRule && targetRecordId
+      ? tasks.some((item) => item.sourceAutomationId === primaryDealRule.id && item.relatedRecord?.id === targetRecordId)
       : false;
-    if (duplicateAutomationTask) return;
-    const taskWithRule: TaskItem = automationRule
-      ? {
-          ...task,
-          description: `${task.description} 自動化ルール「${automationRule.name}」: ${automationRule.description}`,
-          assignee: automationRule.aiMode === 'suggest'
-            ? { type: 'human', name: '人間 (あなた)' }
-            : task.assignee,
-          sourceAutomationId: automationRule.id,
-          dueDate: (() => {
-            const due = new Date();
-            due.setDate(due.getDate() + automationRule.taskDueInDays);
-            return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
-          })(),
-        }
-      : task;
-    const nextTasks = [taskWithRule, ...tasks];
+
+    const toDueDate = (days: number) => {
+      const due = new Date();
+      due.setDate(due.getDate() + Math.max(1, days || 3));
+      return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+    };
+
+    const tasksToPrepend: TaskItem[] = [];
+    if (!duplicatePrimaryRuleTask) {
+      const taskWithRule: TaskItem = primaryDealRule
+        ? {
+            ...task,
+            description: `${task.description} 自動化ルール「${primaryDealRule.name}」: ${primaryDealRule.description}`,
+            assignee: primaryDealRule.aiMode === 'suggest'
+              ? { type: 'human', name: '人間 (あなた)' }
+              : (() => {
+                  const rMode = AI_WORK_MODES.find((m) => m.id === (primaryDealRule.workModeId || preset.assigneeMode)) || assigneeMode;
+                  const resolvedR = resolveWorkMode(rMode, aiModelSettings.roleOverrides);
+                  return { type: 'role_ai', workModeId: rMode.id, name: `${resolvedR.name}（${rMode.label}）` };
+                })(),
+            sourceAutomationId: primaryDealRule.id,
+            sourceAutomationRecordId: targetRecordId,
+            automationAutoRun: primaryDealRule.aiMode === 'execute',
+            dueDate: toDueDate(primaryDealRule.taskDueInDays),
+          }
+        : task;
+      tasksToPrepend.push(taskWithRule);
+    }
+
+    for (const extraRule of extraDealRules) {
+      const extraRecordKey = targetRecordId || `${event.transitionType}-${now}`;
+      if (tasks.some((item) => item.sourceAutomationId === extraRule.id && item.sourceAutomationRecordId === extraRecordKey)) {
+        continue;
+      }
+      const rMode = AI_WORK_MODES.find((m) => m.id === (extraRule.workModeId || preset.assigneeMode)) || assigneeMode;
+      const resolvedR = resolveWorkMode(rMode, aiModelSettings.roleOverrides);
+      tasksToPrepend.push({
+        ...task,
+        id: `task-automation-${extraRule.id}-${extraRecordKey}`,
+        title: `${extraRule.name}（${sourceLabel}）`,
+        description: `${task.description} 独自自動化ルール「${extraRule.name}」: ${extraRule.description}`,
+        assignee: extraRule.aiMode === 'suggest'
+          ? { type: 'human', name: '人間 (あなた)' }
+          : { type: 'role_ai', workModeId: rMode.id, name: `${resolvedR.name}（${rMode.label}）` },
+        sourceAutomationId: extraRule.id,
+        sourceAutomationRecordId: extraRecordKey,
+        automationAutoRun: extraRule.aiMode === 'execute',
+        dueDate: toDueDate(extraRule.taskDueInDays),
+      });
+    }
+
+    if (tasksToPrepend.length === 0) return;
+    const nextTasks = [...tasksToPrepend, ...tasks];
     setTasks(nextTasks);
     saveTasks(nextTasks);
-    recordActivityLog('task_created', `CRMの段階移行からタスク「${taskWithRule.title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
-    if (automationRule) {
-      recordActivityLog('task_created', `自動化ルール「${automationRule.name}」を適用し、期限付きタスクを作成しました（期限: ${taskWithRule.dueDate}）`, 'システム');
+    recordActivityLog('task_created', `CRMの段階移行からタスク「${tasksToPrepend[0].title}」を作成しました（関連: ${sourceLabel}）`, 'システム');
+    for (const rule of dealWonRules) {
+      recordActivityLog('task_created', `自動化ルール「${rule.name}」を適用し、期限付きタスクを作成しました`, 'システム');
     }
     setActivityLogs(loadActivityLogs());
   };
@@ -2404,6 +2443,7 @@ function AppContent() {
 
   const createAutomationTask = (input: {
     ruleId: string;
+    triggerEvent: AutomationRule['triggerEvent'];
     recordId: string;
     title: string;
     description: string;
@@ -2415,40 +2455,54 @@ function AppContent() {
     workModeId: string;
     relatedRecord?: TaskItem['relatedRecord'];
   }) => {
-    const rule = automations.find((item) => item.id === input.ruleId && item.isEnabled);
-    if (!rule || tasks.some((item) => item.sourceAutomationId === rule.id && item.sourceAutomationRecordId === input.recordId)) return false;
-    const assignedWorkModeId = rule.workModeId || input.workModeId;
-    const mode = AI_WORK_MODES.find((item) => item.id === assignedWorkModeId) || AI_WORK_MODES[0];
-    const resolved = resolveWorkMode(mode, aiModelSettings.roleOverrides);
-    const due = new Date();
-    due.setDate(due.getDate() + rule.taskDueInDays);
-    const dueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
-    const task: TaskItem = {
-      id: `task-automation-${rule.id}-${input.recordId}`,
-      title: input.title,
-      description: `${input.description} 自動化ルール「${rule.name}」に基づくタスクです。顧客への連絡・外部処理は実行せず、担当者が内容を確認してください。`,
-      projectId: '',
-      workArea: input.workArea,
-      sourceCategory: input.sourceCategory,
-      taskKind: input.taskKind,
-      relatedRecord: input.relatedRecord,
-      priority: input.priority,
-      assignee: rule.aiMode === 'suggest'
-        ? { type: 'human', name: '人間 (あなた)' }
-        : { type: 'role_ai', workModeId: mode.id, name: `${resolved.name}（${mode.label}）` },
-      status: 'waiting',
-      completionCriteria: input.completionCriteria,
-      sourceAutomationId: rule.id,
-      sourceAutomationRecordId: input.recordId,
-      automationAutoRun: rule.aiMode === 'execute',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      dueDate,
-    };
-    const nextTasks = [task, ...tasks];
+    // 標準ルールIDまたは同じtriggerEventを持つ有効なカスタムルールをすべて起動する
+    const matchingRules = automations.filter(
+      (item) => item.isEnabled && (item.id === input.ruleId || item.triggerEvent === input.triggerEvent)
+    );
+    if (matchingRules.length === 0) return false;
+
+    const createdTasks: TaskItem[] = [];
+    for (const rule of matchingRules) {
+      if (tasks.some((item) => item.sourceAutomationId === rule.id && item.sourceAutomationRecordId === input.recordId)) {
+        continue;
+      }
+      const assignedWorkModeId = rule.workModeId || input.workModeId;
+      const mode = AI_WORK_MODES.find((item) => item.id === assignedWorkModeId) || AI_WORK_MODES[0];
+      const resolved = resolveWorkMode(mode, aiModelSettings.roleOverrides);
+      const due = new Date();
+      due.setDate(due.getDate() + Math.max(1, rule.taskDueInDays || 3));
+      const dueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+      const isCustomRule = rule.id !== input.ruleId;
+      const taskTitle = isCustomRule ? `${rule.name}｜${input.title}` : input.title;
+      createdTasks.push({
+        id: `task-automation-${rule.id}-${input.recordId}`,
+        title: taskTitle,
+        description: `${input.description}${isCustomRule && rule.description ? `\n【ルール方針】${rule.description}` : ''} 自動化ルール「${rule.name}」に基づくタスクです。顧客への連絡・外部処理は実行せず、担当者が内容を確認してください。`,
+        projectId: '',
+        workArea: input.workArea,
+        sourceCategory: input.sourceCategory,
+        taskKind: input.taskKind,
+        relatedRecord: input.relatedRecord,
+        priority: input.priority,
+        assignee: rule.aiMode === 'suggest'
+          ? { type: 'human', name: '人間 (あなた)' }
+          : { type: 'role_ai', workModeId: mode.id, name: `${resolved.name}（${mode.label}）` },
+        status: 'waiting',
+        completionCriteria: input.completionCriteria,
+        sourceAutomationId: rule.id,
+        sourceAutomationRecordId: input.recordId,
+        automationAutoRun: rule.aiMode === 'execute',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        dueDate,
+      });
+      recordActivityLog('task_created', `自動化ルール「${rule.name}」から期限付きタスク「${taskTitle}」を作成しました（期限: ${dueDate}）`, 'システム');
+    }
+
+    if (createdTasks.length === 0) return false;
+    const nextTasks = [...createdTasks, ...tasks];
     setTasks(nextTasks);
     saveTasks(nextTasks);
-    recordActivityLog('task_created', `自動化ルール「${rule.name}」から期限付きタスク「${task.title}」を作成しました（期限: ${dueDate}）`, 'システム');
     setActivityLogs(loadActivityLogs());
     return true;
   };
@@ -2456,6 +2510,7 @@ function AppContent() {
   const handleDiagnosisSubmissionAutomation = (event: DiagnosisSubmissionAutomationEvent): boolean => {
     return createAutomationTask({
       ruleId: 'workflow-diagnosis-submitted',
+      triggerEvent: 'diagnosis_submitted',
       recordId: event.id,
       title: '診断回答を確認・分析する',
       description: `公開診断フォームに新しい回答が届きました。診断レコード（${event.diagnosis_id || '未作成'}）とリード情報を開き、回答を確認して追加確認事項を整理してください。`,
@@ -2482,6 +2537,7 @@ function AppContent() {
     if (created.status === 'signed') {
       createAutomationTask({
         ruleId: 'workflow-contract-signed',
+        triggerEvent: 'contract_signed',
         recordId: created.id,
         title: `契約締結後の請求・提供準備：${created.counterpartyName}`,
         description: `契約「${created.title}」が締結済みとして登録されました。契約内容と開始日・金額を確認し、請求やサービス開始に必要な準備を整理してください。`,
@@ -2499,6 +2555,7 @@ function AppContent() {
   const handleServiceMilestoneReached = (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => {
     createAutomationTask({
       ruleId: 'workflow-project-milestone',
+      triggerEvent: 'project_milestone',
       recordId: `${event.engagementId}:${event.milestoneId}`,
       title: `支援マイルストーンの振り返り：${event.milestoneTitle}`,
       description: `顧問・構築支援「${event.milestoneTitle}」が到達済みになりました。${event.companyName ? `会社：${event.companyName}。` : ''}進捗・成果・残課題を支援記録と照らして整理し、次の対応案を作成してください。顧客への連絡や契約・請求の確定は行わず、人が確認してください。`,
@@ -2515,6 +2572,7 @@ function AppContent() {
   const handleOperationalContractSigned = (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => {
     createAutomationTask({
       ruleId: 'workflow-contract-signed',
+      triggerEvent: 'contract_signed',
       recordId: event.id,
       title: `契約締結後の請求・提供準備：${event.companyName || event.title}`,
       description: `契約「${event.title}」が締結済みになりました。${event.companyName ? `会社：${event.companyName}。` : ''}${event.amount == null ? '' : `契約金額：${event.amount.toLocaleString()}円。`}契約条件と開始日を確認し、請求とサービス開始に必要な準備を整理してください。`,
@@ -2531,6 +2589,7 @@ function AppContent() {
   const handleOperationalInvoiceOverdue = (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => {
     createAutomationTask({
       ruleId: 'workflow-invoice-overdue',
+      triggerEvent: 'invoice_overdue',
       recordId: event.id,
       title: `請求期限超過の対応案：${event.companyName || '請求先'}`,
       description: `請求書「${event.title}」（請求番号: ${event.invoiceNumber || '未設定'}${event.amount == null ? '' : `、金額: ${event.amount.toLocaleString()}円`}${event.dueDate ? `、期限: ${event.dueDate}` : ''}）が期限超過になりました。入金状況と社内対応を確認し、必要なら連絡文案を作成してください。`,
@@ -2567,6 +2626,7 @@ function AppContent() {
     if (current && status === 'overdue' && current.status !== 'overdue') {
       createAutomationTask({
         ruleId: 'workflow-invoice-overdue',
+        triggerEvent: 'invoice_overdue',
         recordId: current.id,
         title: `請求期限超過の対応案：${current.recipientName}`,
         description: `請求書「${current.title}」（請求番号: ${current.invoiceNumber}、金額: ${current.amount.toLocaleString()}円、期限: ${current.dueDate}）が期限超過として登録されました。入金状況と社内対応を確認し、必要なら連絡文案を作成してください。`,

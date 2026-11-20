@@ -486,7 +486,9 @@ export function classifyScenarioTrack(
   }
   if (
     s.id === 'prospect-one-shot' ||
+    s.id === 'prospect-monitor-one-shot' ||
     name.includes('一発直球') ||
+    name.includes('モニター提案') ||
     trigger === 'outreach_first_sent' ||
     name.includes('営業メール') ||
     name.includes('【営業') ||
@@ -567,6 +569,8 @@ export function getScenarioSortKey(scenario: MarketingScenario): {
 
   if (track === 'sales_outreach' && (scenario.id === 'prospect-one-shot' || name.includes('一発直球'))) {
     stepNumber = 0;
+  } else if (track === 'sales_outreach' && (scenario.id === 'prospect-monitor-one-shot' || name.includes('モニター提案'))) {
+    stepNumber = 0.5;
   } else if (track === 'post_meeting') {
     const baseSubStep = numMatch ? parseInt(numMatch[1], 10) : 1;
     if (scenario.trigger === 'meeting_completed') {

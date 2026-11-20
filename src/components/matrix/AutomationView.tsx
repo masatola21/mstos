@@ -1,8 +1,66 @@
 import React, { useState } from 'react';
-import { Bot, Check, Clock3, GitBranch, ShieldCheck, Sparkles, Zap, Plus, Trash2, X } from 'lucide-react';
+import { Bot, Check, Clock3, GitBranch, ShieldCheck, Sparkles, Zap, Plus, Trash2, X, Server, CheckCircle2 } from 'lucide-react';
 import { AutomationRule, AutomationTriggerEvent, AutomationAiMode, AutomationApprovalPolicy } from '../../types/matrix';
 import { ActivityLog } from '../../types';
 import { AI_WORK_MODES } from '../../data/aiWorkModes';
+
+interface BuiltInAutomationEntry {
+  id: string;
+  category: string;
+  title: string;
+  trigger: string;
+  action: string;
+  stopOrSafety: string;
+  manageWhere: string;
+}
+
+const BUILT_IN_PROGRAM_AUTOMATIONS: BuiltInAutomationEntry[] = [
+  {
+    id: 'builtin-public-forms',
+    category: '集客・Webフォーム',
+    title: 'HPフォーム即時受付・CRM登録・お礼返信',
+    trigger: '相談・診断・資料請求・介護開業フォーム送信時',
+    action: '企業/連絡先/リードを自動登録・更新し、お礼メール（＋LINE未連携時はメール／連携時はLINE）と管理者通知を即時送信',
+    stopOrSafety: '重複送信を冪等キーで防止。資料請求は選択資料URLのみ自動添付',
+    manageWhere: 'フォーム作成・配布資料 / 配信ジョブ',
+  },
+  {
+    id: 'builtin-step-delivery',
+    category: 'ステップ追客・配信',
+    title: 'LINE・メール自動ステップ配信エンジン',
+    trigger: 'LINE友だち追加・診断完了・資料請求（経営改善/介護開業）・面談完了・提案送付・営業1通目',
+    action: '待機ジョブを時刻指定で自動予約し、LINE連携済みはLINE優先・未連携時はメールで1本配信（二重配信なし）',
+    stopOrSafety: '返信・面談予約・成約・オプトアウト・不達で待機中ジョブを自動停止',
+    manageWhere: 'LINE・メール自動配信（導線管理 / 配信ジョブ）',
+  },
+  {
+    id: 'builtin-timerex',
+    category: '面談・日程調整',
+    title: 'TimeRex予約同期 ＆ 確定案内・前日リマインド',
+    trigger: 'TimeRex予約確定 / キャンセル受信、または定期同期',
+    action: '商談予定・Googleカレンダーを自動同期し、予約確定メール・前日/当日リマインドを送信、待機中ナーチャリングを自動停止',
+    stopOrSafety: '顧客の過去商談有無に応じ案内文面を自動切替',
+    manageWhere: '予定カレンダー / 商談パイプライン',
+  },
+  {
+    id: 'builtin-line-welcome',
+    category: 'LINE公式アカウント',
+    title: '友だち追加ウェルカム ＆ タグ分岐ヒアリング',
+    trigger: 'LINE友だち追加・メニュー選択・postback受信時',
+    action: 'あいさつFlex送信、選択に応じた自動タグ付け、介護開業2問ヒアリング応答、診断リンク（cid/luid付き）発行',
+    stopOrSafety: 'ブロック/配信停止ユーザーは自動除外',
+    manageWhere: 'LINE・メール自動配信（LINE設定 / あいさつ）',
+  },
+  {
+    id: 'builtin-crm-tasks',
+    category: '社内タスク連携',
+    title: 'CRM段階移行 ＆ 送信後ステータス連動',
+    trigger: '見込み→リード→商談→顧客への移行／提案書・見積書送信時',
+    action: '次工程の準備タスクを自動起票し、人の確認後フォローや教育ステップ合流（4日後〜）を制御',
+    stopOrSafety: '顧客への対外送信・請求確定はAIが自動実行せず必ず人が送信',
+    manageWhere: '全社タスク・承認 / 商談パイプライン',
+  },
+];
 
 interface AutomationViewProps {
   automations: AutomationRule[];
@@ -55,6 +113,8 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
   const [newApproval, setNewApproval] = useState<AutomationApprovalPolicy>('always');
   const [newDueDays, setNewDueDays] = useState(3);
   const [newWorkModeId, setNewWorkModeId] = useState<AutomationRule['workModeId']>('customer_product');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showSystemAutomations, setShowSystemAutomations] = useState(true);
 
   const enabledCount = automations.filter((rule) => rule.isEnabled).length;
   const automationHistory = activityLogs
@@ -91,7 +151,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            診断回答・商談成約・契約締結などの検知時に、AIの自動処理範囲と人の承認ポリシーを定めます。
+            システム側で常時稼働している自動化の把握と、業務イベント検知時のAIタスク生成・独自ルールの管理を行います。
           </p>
         </div>
         {onAddAutomation && (
@@ -105,6 +165,80 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
           </button>
         )}
       </header>
+
+      {/* プログラム実装済みの常時稼働自動化一覧 */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Server className="h-3.5 w-3.5" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900">現在プログラムで稼働中の自動化一覧</h2>
+                <span className="rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  常時稼働中 {BUILT_IN_PROGRAM_AUTOMATIONS.length}系統
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                下段の「AIタスク・承認ルール」が停止中でも、以下のシステム自動化はすでにプログラム上で稼働しています。
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSystemAutomations((prev) => !prev)}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition cursor-pointer"
+          >
+            {showSystemAutomations ? '折りたたむ' : '一覧を開く'}
+          </button>
+        </div>
+
+        {showSystemAutomations && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 pt-1">
+            {BUILT_IN_PROGRAM_AUTOMATIONS.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 shrink-0">
+                      {item.category}
+                    </span>
+                    <h3 className="text-xs font-bold text-slate-900 truncate">{item.title}</h3>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">
+                    <CheckCircle2 className="h-3 w-3" /> 稼働中
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-700 leading-relaxed">
+                  <span className="font-semibold text-slate-600">きっかけ：</span>{item.trigger}
+                </p>
+                <p className="text-[11px] text-slate-700 leading-relaxed">
+                  <span className="font-semibold text-slate-600">自動処理：</span>{item.action}
+                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/70 text-[10px] text-slate-500">
+                  <span>🛡 {item.stopOrSafety}</span>
+                  <span className="font-semibold text-slate-600">管理場所: {item.manageWhere}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-purple-600" />
+            <span>イベント連動 AIタスク・承認ルール（標準＋独自追加）</span>
+          </h2>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            有効にしたルール（独自追加を含む）は、対象イベント発生時に自動で社内タスク起票・担当AI草案作成まで連動します。
+          </p>
+        </div>
+      </div>
 
       {/* ルール追加モーダル / フォーム */}
       {isCreating && (
@@ -272,18 +406,36 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
                     </span>
                   </label>
                   {onDeleteAutomation && (
-                    <button
-                      type="button"
-                      title="このルールを削除"
-                      onClick={() => {
-                        if (window.confirm(`自動化ルール「${rule.name}」を削除しますか？`)) {
-                          onDeleteAutomation(rule.id);
-                        }
-                      }}
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    confirmDeleteId === rule.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteAutomation(rule.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          className="px-2 py-0.5 rounded bg-rose-600 text-white text-[10px] font-bold hover:bg-rose-700 cursor-pointer"
+                        >
+                          削除実行
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-1.5 py-0.5 rounded border border-slate-200 bg-white text-slate-600 text-[10px] hover:bg-slate-50 cursor-pointer"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        title="このルールを削除"
+                        onClick={() => setConfirmDeleteId(rule.id)}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )
                   )}
                 </div>
               </div>
