@@ -12,6 +12,9 @@ import {
 } from '../types';
 import {
   hasLocalCharactersCache,
+  hasLocalKnowledgeCache,
+  hasSeededDefaultKnowledge,
+  markDefaultKnowledgeSeeded,
   loadActivityLogs,
   loadActiveCharacterId,
   loadAllChatHistories,
@@ -37,6 +40,7 @@ import {
   saveTokenUsageRecords,
   saveTopGoal,
 } from '../utils/storage';
+import { seedMissingDefaultKnowledge } from '../data/defaultKnowledge';
 import { getSupabase } from '../lib/supabaseClient';
 import { MarketingScenario } from '../types/marketing';
 import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios, hasLocalMarketingScenariosCache } from '../utils/marketingStorage';
@@ -923,6 +927,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   const localDefaults = loadLocalWorkspaceData();
   const localMarketingScenariosReady = hasLocalMarketingScenariosCache();
   const localCharactersReady = hasLocalCharactersCache();
+  const localKnowledgeReady = hasLocalKnowledgeCache();
   const localAiSettingsReady = hasLocalAIModelSettingsCache();
   const baseline = loadLastSyncedData(userId);
   const remote = row?.data && typeof row.data === 'object' && !Array.isArray(row.data)
@@ -958,7 +963,9 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
           localDefaults.workModeHistories,
           baseline.workModeHistories || {}
         ),
-        knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
+        knowledgeItems: localKnowledgeReady
+          ? mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || [])
+          : (remote.knowledgeItems || localDefaults.knowledgeItems),
         marketingScenarios: deduplicateMarketingScenarios(
           localMarketingScenariosReady
             ? mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || [])
@@ -994,7 +1001,9 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.pricingRates = mergeRecordsByKey(relationalAI.pricingRates, localDefaults.pricingRates, baseline.pricingRates || [], (rate) => rate.model);
     merged.tokenUsage = mergeRecords(relationalAI.tokenUsage, localDefaults.tokenUsage, baseline.tokenUsage || []).slice(0, 300);
     merged.workModeHistories = mergeChatHistories(relationalAI.workModeHistories, localDefaults.workModeHistories, baseline.workModeHistories || {});
-    merged.knowledgeItems = mergeRecords(relationalAI.knowledgeItems, localDefaults.knowledgeItems, baseline.knowledgeItems || []);
+    merged.knowledgeItems = localKnowledgeReady
+      ? mergeRecords(relationalAI.knowledgeItems, localDefaults.knowledgeItems, baseline.knowledgeItems || [])
+      : relationalAI.knowledgeItems;
     merged.projects = mergeRecords(relationalAI.projects, localDefaults.projects, baseline.projects || []);
     merged.tasks = mergeRecords(relationalAI.tasks, localDefaults.tasks, baseline.tasks || []);
     merged.approvals = mergeRecords(relationalAI.approvals, localDefaults.approvals, baseline.approvals || []);
@@ -1027,6 +1036,11 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   merged.products = merged.products.filter((record) => !pendingDeletions.products.has(record.id));
   merged.contracts = merged.contracts.filter((record) => !pendingDeletions.contracts.has(record.id));
   merged.invoices = merged.invoices.filter((record) => !pendingDeletions.invoices.has(record.id));
+
+  if (!hasSeededDefaultKnowledge()) {
+    merged.knowledgeItems = seedMissingDefaultKnowledge(merged.knowledgeItems || []);
+    markDefaultKnowledgeSeeded();
+  }
 
   applyWorkspaceData(merged);
 

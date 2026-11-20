@@ -5,6 +5,7 @@ import {
   type AIWorkMode,
   type RoleAIOverride,
 } from '../src/data/aiWorkModes.js';
+import { MST_CORE_BUSINESS_PROFILE } from '../src/data/defaultKnowledge.js';
 
 export interface ChatUserProfile {
   userName?: string;
@@ -98,6 +99,10 @@ export function buildSystemInstruction(char: ChatCharacterConfig): string {
   if (char.firstPerson) parts.push(`- 自分の一人称: ${char.firstPerson}`);
   if (char.secondPerson) parts.push(`- 相手（ユーザー）の呼び方・二人称: ${char.secondPerson}`);
   if (char.speechStyle) parts.push(`- 特徴的な口癖・語尾・話し方: ${char.speechStyle}`);
+
+  parts.push(`\n【自社・経営OSの標準前提知識（有限会社MST公式HP・OSベース）】`);
+  parts.push(MST_CORE_BUSINESS_PROFILE);
+  parts.push(`※上記は自社の標準前提知識です。個別商談や提案ではユーザーから指示・確定情報がない限りサービス名や金額を勝手に断定・売り込みしないこと。`);
 
   if (char.userProfile) {
     const up = char.userProfile;

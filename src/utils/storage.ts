@@ -13,6 +13,11 @@ import {
   KnowledgeItem,
 } from '../types';
 import { PRESET_CHARACTERS } from '../data/presets';
+import {
+  DEFAULT_KNOWLEDGE_ITEMS,
+  DEFAULT_KNOWLEDGE_SEED_VERSION,
+  seedMissingDefaultKnowledge,
+} from '../data/defaultKnowledge';
 import type { AIProviderId } from '../data/aiModels';
 
 const STORAGE_KEYS = {
@@ -660,12 +665,57 @@ export function exportAllData(): string {
 
 // --- Knowledge Library Storage ---
 const KNOWLEDGE_LIBRARY_KEY = 'mst_knowledge_library_v1';
+const DEFAULT_KNOWLEDGE_SEED_KEY = 'mst_default_knowledge_seed_v1';
+
+export function hasLocalKnowledgeCache(): boolean {
+  try {
+    return localStorage.getItem(KNOWLEDGE_LIBRARY_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function hasSeededDefaultKnowledge(): boolean {
+  try {
+    return localStorage.getItem(DEFAULT_KNOWLEDGE_SEED_KEY) === DEFAULT_KNOWLEDGE_SEED_VERSION;
+  } catch {
+    return false;
+  }
+}
+
+export function markDefaultKnowledgeSeeded(): void {
+  try {
+    localStorage.setItem(DEFAULT_KNOWLEDGE_SEED_KEY, DEFAULT_KNOWLEDGE_SEED_VERSION);
+  } catch (e) {
+    console.error('Failed to mark default knowledge seeded', e);
+  }
+}
+
+function cloneDefaultKnowledge(): KnowledgeItem[] {
+  return DEFAULT_KNOWLEDGE_ITEMS.map((item) => ({
+    ...item,
+    tags: [...item.tags],
+    knowledgeAccess: item.knowledgeAccess ? { ...item.knowledgeAccess, roleIds: [...(item.knowledgeAccess.roleIds || [])] } : undefined,
+  }));
+}
 
 export function loadKnowledgeItems(): KnowledgeItem[] {
   try {
     const raw = localStorage.getItem(KNOWLEDGE_LIBRARY_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (raw === null) {
+      return cloneDefaultKnowledge();
+    }
+    const parsed = JSON.parse(raw);
+    const list: KnowledgeItem[] = Array.isArray(parsed) ? parsed : [];
+    if (!hasSeededDefaultKnowledge()) {
+      const seeded = seedMissingDefaultKnowledge(list);
+      markDefaultKnowledgeSeeded();
+      if (seeded.length !== list.length) {
+        saveKnowledgeItems(seeded);
+      }
+      return seeded;
+    }
+    return list;
   } catch (e) {
     console.error('Failed to load knowledge items', e);
     return [];
@@ -675,6 +725,7 @@ export function loadKnowledgeItems(): KnowledgeItem[] {
 export function saveKnowledgeItems(items: KnowledgeItem[]): void {
   try {
     localStorage.setItem(KNOWLEDGE_LIBRARY_KEY, JSON.stringify(items));
+    markDefaultKnowledgeSeeded();
   } catch (e) {
     console.error('Failed to save knowledge items', e);
   }

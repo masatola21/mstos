@@ -9802,7 +9802,7 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
       if (!res.writableEnded) abortController.abort();
     });
     const result = await runWithFallback(resolveModelSetting(undefined), {
-      systemInstruction: 'あなたは事実に忠実で慎重な、経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、結論から簡潔に、明確で丁寧な日本語で書きます。',
+      systemInstruction: 'あなたは有限会社MST（「経営の仕組み化 × 利益改善」）の視点に立つ、事実に忠実で慎重な経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、結論から簡潔に、明確で丁寧な日本語で書きます。',
       messages: [{ role: 'user', content: DIAGNOSIS_REPORT_PROMPT_V2 + JSON.stringify(context, null, 2) }],
       temperature: 0.4,
       signal: abortController.signal,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, FilePlus2, Search, Trash2, Save, Download, Paperclip, Loader2 } from 'lucide-react';
+import { BookOpen, FilePlus2, Search, Trash2, Save, Download, Paperclip, Loader2, RefreshCw } from 'lucide-react';
 import { KnowledgeAttachment, KnowledgeCategory, KnowledgeItem } from '../types';
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 
@@ -7,6 +7,7 @@ interface KnowledgeHubViewProps {
   items: KnowledgeItem[];
   onSave: (item: KnowledgeItem) => void;
   onDelete: (id: string) => void;
+  onSyncOfficialKnowledge?: () => { addedCount: number; updatedCount: number };
   selectedItemId?: string | null;
   onUploadAttachment: (itemId: string, file: File) => Promise<KnowledgeAttachment>;
   onDownloadAttachment: (attachment: KnowledgeAttachment) => Promise<Blob>;
@@ -33,7 +34,7 @@ const blankItem = (): KnowledgeItem => ({
   knowledgeAccess: { scope: 'president', roleIds: [] },
 });
 
-export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete, selectedItemId, onUploadAttachment, onDownloadAttachment, onDeleteAttachment }) => {
+export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSave, onDelete, onSyncOfficialKnowledge, selectedItemId, onUploadAttachment, onDownloadAttachment, onDeleteAttachment }) => {
   const [activeCategory, setActiveCategory] = useState<KnowledgeCategory | 'all'>('all');
   const [activeRoleId, setActiveRoleId] = useState<AIWorkModeId | 'all'>('all');
   const [query, setQuery] = useState('');
@@ -42,7 +43,19 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
   const [isUploading, setIsUploading] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
   const [itemToDelete, setItemToDelete] = useState<KnowledgeItem | null>(null);
+  const [syncNotice, setSyncNotice] = useState('');
   const lastOpenedSelection = useRef<string | null>(null);
+
+  const handleSyncOfficial = () => {
+    if (!onSyncOfficialKnowledge) return;
+    const { addedCount, updatedCount } = onSyncOfficialKnowledge();
+    if (addedCount === 0 && updatedCount === 0) {
+      setSyncNotice('公式HP・OS初期ナレッジはすでに最新です。');
+    } else {
+      setSyncNotice(`公式HP・OS初期ナレッジを取り込みました（新規 ${addedCount}件 / 更新 ${updatedCount}件）。`);
+    }
+    window.setTimeout(() => setSyncNotice(''), 4000);
+  };
 
   const saveMarkdown = (item: KnowledgeItem) => {
     const safeTitle = item.title.trim().replace(/[\\/:*?"<>|]/g, '_') || 'knowledge';
@@ -149,8 +162,27 @@ export const KnowledgeHubView: React.FC<KnowledgeHubViewProps> = ({ items, onSav
             AIが意思決定・対話・文面作成で参照する社内ナレッジ・事業情報・規程等を蓄積します（※営業資料・投稿案・配布PDFは「集客戦略 ＞ 資料・成果物保管庫」で管理されます）。
           </p>
         </div>
-        <button onClick={startNew} className="shrink-0 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white flex items-center gap-1.5 hover:bg-purple-700 transition cursor-pointer self-start sm:self-center"><FilePlus2 className="w-3.5 h-3.5" />資料を追加</button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-center">
+          {onSyncOfficialKnowledge && (
+            <button
+              type="button"
+              onClick={handleSyncOfficial}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 flex items-center gap-1.5 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+              title="公式HP・LP・OSの基本情報から作成した標準ナレッジを取り込み・最新化します"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
+              公式HP・OSナレッジを取込
+            </button>
+          )}
+          <button onClick={startNew} className="shrink-0 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white flex items-center gap-1.5 hover:bg-purple-700 transition cursor-pointer"><FilePlus2 className="w-3.5 h-3.5" />資料を追加</button>
+        </div>
       </div>
+
+      {syncNotice && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-medium text-emerald-800">
+          {syncNotice}
+        </div>
+      )}
 
       {editing && (
         <section className="rounded-2xl border border-purple-200 bg-white p-5 space-y-3 shadow-md">

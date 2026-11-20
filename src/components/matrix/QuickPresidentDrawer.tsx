@@ -14,9 +14,10 @@ import {
   Mic,
   MicOff
 } from 'lucide-react';
-import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
+import { ApiUsageData, CharacterConfig, ChatMessage, KnowledgeItem, UserProfile } from '../../types/ai-president';
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
 import { getAuthHeaders } from '../../lib/supabaseClient';
+import { retrieveKnowledgeContext } from '../../utils/knowledgeContext';
 import { getPageAssistantProfile, PageAssistantProfile } from '../../utils/pageAssistantProfiles';
 export { getPageAssistantProfile, type PageAssistantProfile };
 
@@ -33,6 +34,8 @@ interface QuickPresidentDrawerProps {
   onClose: () => void;
   character: CharacterConfig;
   userProfile: UserProfile;
+  knowledgeItems?: KnowledgeItem[];
+  getBusinessSummaryContext?: () => string;
   onOpenPlanProposal?: (plan: any) => void;
   onRecordUsage?: (params: { endpoint: 'chat'; endpointName: string; model?: string; usage: ApiUsageData }) => void;
 }
@@ -43,6 +46,8 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   onClose,
   character,
   userProfile,
+  knowledgeItems = [],
+  getBusinessSummaryContext,
   onOpenPlanProposal,
   onRecordUsage,
 }) => {
@@ -204,6 +209,14 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
 
     try {
       const authHeaders = await getAuthHeaders();
+      const retrievedKnowledge = knowledgeItems.length > 0
+        ? await retrieveKnowledgeContext(knowledgeItems, text.trim(), selectedWorkModeId)
+        : '';
+      const pageContext = '現在開いているページ: ' + pageProfile.label + '（画面ID: ' + pageId + '）。依頼モード: ' + requestMode + '。ページ固有の業務役割を選んで回答してください。画面上の個別顧客・案件データは自動共有されていないため、未提示の個別顧客情報を推測しないでください。';
+      const combinedKnowledgeContext = retrievedKnowledge
+        ? `${pageContext}\n\n${retrievedKnowledge}`
+        : pageContext;
+      const businessSummaryContext = getBusinessSummaryContext?.();
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
@@ -217,7 +230,8 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
           userProfile,
           workModeId: selectedWorkModeId,
           roleOverride: requestMode === 'consult' ? undefined : { extraInstruction: requestMode === 'external_prompt' ? '外部のAI・開発者・業者へそのまま渡せる日本語の依頼プロンプトを作成してください。背景、目的、作業範囲、守る制約、完了条件を明記し、不明な事実は捏造せず確認事項として残してください。プロンプト本文を独立してコピーできる形で提示してください。' : 'この画面で解決したい依頼について、実行可能な操作と必要な確認を分けた具体的な実行案を作成してください。データ変更・送信・削除は必ず事前確認を求め、接続されていない機能を実行できると主張せず、実行したふりをしないでください。' },
-          knowledgeContext: '現在開いているページ: ' + pageProfile.label + '（画面ID: ' + pageId + '）。依頼モード: ' + requestMode + '。ページ固有の業務役割を選んで回答してください。実データは自動共有されていないため、未提示の情報を推測しないでください。',
+          knowledgeContext: combinedKnowledgeContext,
+          businessSummaryContext,
         }),
       });
 
