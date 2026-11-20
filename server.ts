@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getAIWorkMode, sanitizeRoleOverride } from './src/data/aiWorkModes.js';
+import { buildSystemInstruction, resolveRoleCharacter } from './server/chatPromptBuilder.js';
 import { type AIModelSetting, DEFAULT_MODEL_SETTING, sanitizeModelSetting } from './src/data/aiModels.js';
 import { getProviderStatus, runWithFallback, getEmbedding, cosineSimilarity } from './server/aiProviders.js';
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto';
@@ -9801,7 +9802,7 @@ app.post('/api/diagnosis-submissions/:id/generate-report', requireAuth, async (r
       if (!res.writableEnded) abortController.abort();
     });
     const result = await runWithFallback(resolveModelSetting(undefined), {
-      systemInstruction: 'あなたは事実に忠実で慎重な、経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、明確で丁寧な日本語で書きます。',
+      systemInstruction: 'あなたは事実に忠実で慎重な、経営診断レポート作成の専門AIです。回答に書かれていない事実は作らず、結論から簡潔に、明確で丁寧な日本語で書きます。',
       messages: [{ role: 'user', content: DIAGNOSIS_REPORT_PROMPT_V2 + JSON.stringify(context, null, 2) }],
       temperature: 0.4,
       signal: abortController.signal,
@@ -13265,85 +13266,6 @@ async function generateText(setting: AIModelSetting, prompt: string, temperature
   return runWithFallback(setting, { messages: [{ role: 'user', content: prompt }], temperature });
 }
 
-interface UserProfile {
-  userName?: string;
-  userOccupation?: string;
-  userGoals?: string;
-  userHobbies?: string;
-  userValues?: string;
-  userNotes?: string;
-}
-
-interface CharacterConfig {
-  id?: string;
-  name: string;
-  role: string;
-  tagline?: string;
-  avatarEmoji?: string;
-  avatarColor?: string;
-  personality: string;
-  tone: string;
-  speechStyle?: string;
-  firstPerson?: string; // 一人称 (私, 僕, 俺, うち, 拙者 etc.)
-  secondPerson?: string; // 二人称 (あなた, 君, お前, ◯◯さん etc.)
-  userProfile?: UserProfile;
-  behaviorRules?: string[];
-  customInstructions?: string;
-  responseLength?: 'short' | 'medium' | 'detailed';
-}
-
-function buildSystemInstruction(char: CharacterConfig): string {
-  const parts: string[] = [];
-
-  parts.push(`あなたはユーザー専属のカスタムAIアシスタントです。`);
-  parts.push(`【あなたの基本プロファイル】`);
-  parts.push(`- 名前: ${char.name || 'AI'}`);
-  parts.push(`- 役割・肩書: ${char.role || '専属パートナー'}`);
-  if (char.tagline) parts.push(`- キャッチフレーズ: ${char.tagline}`);
-  if (char.personality) parts.push(`- 性格・パーソナリティ: ${char.personality}`);
-  if (char.tone) parts.push(`- 口調・話し方の雰囲気: ${char.tone}`);
-  if (char.firstPerson) parts.push(`- 自分の一人称: ${char.firstPerson}`);
-  if (char.secondPerson) parts.push(`- 相手（ユーザー）の呼び方・二人称: ${char.secondPerson}`);
-  if (char.speechStyle) parts.push(`- 特徴的な口癖・語尾・話し方: ${char.speechStyle}`);
-
-  if (char.userProfile) {
-    const up = char.userProfile;
-    parts.push(`\n【あなたの大切な相手（ユーザー）についての記憶とプロファイル】`);
-    if (up.userName) parts.push(`- ユーザーの名前/呼ばれたい名: ${up.userName}（必ずこの呼び名、または設定された二人称を遵守して接してください）`);
-    if (up.userOccupation) parts.push(`- 職業・活動: ${up.userOccupation}`);
-    if (up.userGoals) parts.push(`- 目標・目指していること: ${up.userGoals}`);
-    if (up.userHobbies) parts.push(`- 趣味・興味: ${up.userHobbies}`);
-    if (up.userValues) parts.push(`- 大切にしている価値観: ${up.userValues}`);
-    if (up.userNotes) parts.push(`- AIが記憶している重要メモ・パーソナル背景:\n${up.userNotes}`);
-  }
-
-  if (char.behaviorRules && char.behaviorRules.length > 0) {
-    parts.push(`\n【絶対遵守すべき行動指針・ルール】`);
-    char.behaviorRules.forEach((rule, idx) => {
-      if (rule.trim()) parts.push(`${idx + 1}. ${rule}`);
-    });
-  }
-
-  if (char.responseLength === 'short') {
-    parts.push(`\n- 回答の長さ: 原則として簡潔・短め（1〜3文程度でテンポの良い会話）を保ってください。長文の講釈は避け、要点のみを返してください。`);
-  } else if (char.responseLength === 'detailed') {
-    parts.push(`\n- 回答の長さ: 思考の背景や理由、実践ステップを丁寧に詳しく解説してください。`);
-  } else {
-    parts.push(`\n- 回答の長さ: 自然で対話的な適度な長さ（長すぎず短すぎず、心地よいテンポ）を保ってください。`);
-  }
-
-  if (char.customInstructions && char.customInstructions.trim()) {
-    parts.push(`\n【追加の個別システム指示】\n${char.customInstructions.trim()}`);
-  }
-
-  parts.push(`\n【対話時の注意事項】`);
-  parts.push(`- 設定された性格・口調・語尾・一人称・二人称を最初から最後まで徹底的に演じきってください。ロールプレイから外れた定型的なAI謝罪や無機質な文体に戻らないこと。`);
-  parts.push(`- ユーザーの記憶・プロファイルを踏まえて、親身であなたならではの独自の視点から返答してください。`);
-  parts.push(`- Markdown記法（見出し、太字、箇条書き、コードブロック）を適宜利用し、読みやすく表現力豊かな回答を行ってください。`);
-
-  return parts.join('\n');
-}
-
 // 0. 接続先ごとのAPIキー設定状況（キー自体は返さない）
 app.get('/api/ai-providers', (_req, res) => {
   res.json({ providers: getProviderStatus() });
@@ -13380,27 +13302,7 @@ app.post('/api/chat', requireAuth, async (req, res) => {
       tone: '丁寧で親しみやすい',
     };
     const roleName = roleOverride.name ?? workMode.name;
-    const roleDescription = roleOverride.description ?? workMode.description;
-    const roleCharacter = workMode.id === 'president'
-      ? {
-          ...activeCharacter,
-          name: roleOverride.name ?? activeCharacter.name,
-          tagline: roleOverride.description ?? activeCharacter.tagline,
-          tone: roleOverride.tone ?? activeCharacter.tone,
-          behaviorRules: roleOverride.behaviorRules ?? activeCharacter.behaviorRules,
-          responseLength: roleOverride.responseLength ?? activeCharacter.responseLength,
-        }
-      : {
-          ...activeCharacter,
-          name: roleName,
-          role: workMode.label,
-          tagline: roleDescription,
-          personality: `${roleName}は${workMode.label}の専門担当です。担当領域の情報を整理し、根拠と不確実性を明確にして成果物を作ります。`,
-          tone: roleOverride.tone ?? '専門的で明快。必要なときだけ確認し、成果物と次の一手を具体的に示す。',
-          behaviorRules: roleOverride.behaviorRules ?? [],
-          responseLength: roleOverride.responseLength ?? activeCharacter.responseLength,
-          customInstructions: '',
-        };
+    const roleCharacter = resolveRoleCharacter(workMode, roleOverride, activeCharacter);
     const characterInstruction = buildSystemInstruction(roleCharacter);
     const boundedKnowledgeContext = typeof knowledgeContext === 'string'
       ? knowledgeContext.slice(0, 8000)
@@ -13596,11 +13498,11 @@ ${userProfile ? `【ユーザー自身の情報】:\n- 名前: ${userProfile.use
   "secondPerson": "二人称 (例: ◯◯さん, 君, マスター, あなた, お前)",
   "speechStyle": "特徴的な口癖や語尾のパターン (例: 『〜だよ！』『〜でござる』『〜かしら？』『〜っすね』)",
   "behaviorRules": [
-    "行動指針1 (例: 結論から端的にアドバイスする)",
+    "結論から簡潔に伝える（前置きや重複説明を省き、要点を端的に整理する）",
     "行動指針2 (例: 落ち込んでいる時はまず温かく共感する)",
     "行動指針3 (例: 次のアクションに繋がる問いかけを1つ添える)"
   ],
-  "responseLength": "short" | "medium" | "detailed",
+  "responseLength": "medium (特段の指定がなければ標準の 'medium' にする)",
   "customInstructions": "プロンプトとしての追加の補足指示や背景設定",
   "greetingMessage": "最初にユーザーに話しかける挨拶メッセージ（キャラクターの口調が存分に出ている魅力的な第一声）",
   "suggestedTopics": [
@@ -13636,7 +13538,7 @@ ${userProfile ? `【ユーザー自身の情報】:\n- 名前: ${userProfile.use
         firstPerson: '私',
         secondPerson: 'あなた',
         speechStyle: '〜ですね、〜でしょうか？',
-        behaviorRules: ['常にユーザー目線で考える', '建設的なアイデアを提供する'],
+        behaviorRules: ['結論から簡潔に伝える（前置きや重複説明を省き、要点を端的に整理する）', '常にユーザー目線で考える', '建設的なアイデアを提供する'],
         responseLength: 'medium',
         greetingMessage: 'こんにちは！あなたの専属アシスタントです。どんなことでも気軽に相談してくださいね！',
         suggestedTopics: ['今日のタスクを整理したい', '新しいアイデアの相談', '気分転換におしゃべり'],

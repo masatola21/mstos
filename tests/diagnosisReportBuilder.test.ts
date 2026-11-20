@@ -70,6 +70,7 @@ for (const bad of ['Phase 1', 'Phase 2', 'システム構築・業務自動化',
 }
 assert(!/\d+\s*(円|万円|時間|か月|ヶ月)/.test(DIAGNOSIS_REPORT_PROMPT_V2), 'プロンプトに具体的な数値を例示しない');
 assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('600〜900字') && DIAGNOSIS_REPORT_PROMPT_V2.includes('**〜**'), '分量目安と強調の指示が含まれる');
+assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('結論から簡潔に'), '結論から簡潔に書く指示が含まれる');
 assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('要ヒアリング'), '要ヒアリングの指示');
 assert(DIAGNOSIS_REPORT_PROMPT_V2.includes('決め直したり'), '急所を決め直さない指示');
 for (const h of ['## D0', '## D2', '## D3', '## D4', '## D5']) assert(DIAGNOSIS_REPORT_PROMPT_V2.includes(h), `プロンプトに ${h}`);

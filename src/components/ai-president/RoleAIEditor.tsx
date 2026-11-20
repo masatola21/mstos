@@ -3,7 +3,14 @@ import { Save, RotateCcw } from 'lucide-react';
 import { ModalShell } from '../ModalShell';
 import { ModelSettingEditor, ProviderStatus } from './ModelSettingEditor';
 import { AIModelSetting, sanitizeModelSetting } from '../../data/aiModels';
-import { AIWorkMode, RoleAIOverride, RoleResponseLength, sanitizeRoleOverride } from '../../data/aiWorkModes';
+import {
+  AIWorkMode,
+  DEFAULT_ROLE_BEHAVIOR_RULES,
+  DEFAULT_ROLE_TONE,
+  RoleAIOverride,
+  RoleResponseLength,
+  sanitizeRoleOverride,
+} from '../../data/aiWorkModes';
 
 interface RoleAIEditorProps {
   mode: AIWorkMode;
@@ -68,7 +75,7 @@ export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
             {(emoji || mode.avatarEmoji)} {(name || mode.name)}｜{mode.label}
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            名前・口調・追加指示・使うモデルを変更できます。空欄の項目は標準設定のままです。
+            名前・口調・追加指示・使うモデルを変更できます。空欄の項目は標準設定（結論から簡潔に回答）が適用されます。
           </p>
         </div>
 
@@ -91,12 +98,12 @@ export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className={labelClass}>
             口調
-            <input value={tone} maxLength={200} onChange={(e) => setTone(e.target.value)} placeholder="例: 簡潔で結論から話す" className={fieldClass} />
+            <input value={tone} maxLength={200} onChange={(e) => setTone(e.target.value)} placeholder={`標準: ${DEFAULT_ROLE_TONE}`} className={fieldClass} />
           </label>
           <label className={labelClass}>
             回答の長さ
             <select value={responseLength} onChange={(e) => setResponseLength(e.target.value as RoleResponseLength | '')} className={fieldClass}>
-              <option value="">標準</option>
+              <option value="">標準（結論から簡潔に・ふつう）</option>
               <option value="short">短め</option>
               <option value="medium">ふつう</option>
               <option value="detailed">詳しく</option>
@@ -106,7 +113,13 @@ export const RoleAIEditor: React.FC<RoleAIEditorProps> = ({
 
         <label className={labelClass}>
           行動ルール（1行に1つ、最大10個）
-          <textarea value={rules} rows={4} onChange={(e) => setRules(e.target.value)} placeholder={'例:\n結論を最初に書く\n不明点は推測せず質問する'} className={fieldClass} />
+          <textarea
+            value={rules}
+            rows={4}
+            onChange={(e) => setRules(e.target.value)}
+            placeholder={`標準:\n${DEFAULT_ROLE_BEHAVIOR_RULES.join('\n')}\n（上書きする場合のみ入力）`}
+            className={fieldClass}
+          />
         </label>
 
         <label className={labelClass}>

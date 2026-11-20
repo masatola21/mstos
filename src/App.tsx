@@ -1359,7 +1359,11 @@ function AppContent() {
       firstPerson: '私',
       secondPerson: 'あなた',
       speechStyle: '〜ですね、〜でしょうか？',
-      behaviorRules: ['常にユーザー目線で考える', '建設的で具体的な提案を行う'],
+      behaviorRules: [
+        '結論から簡潔に伝える（前置きや重複説明を省き、要点を端的に整理する）',
+        '常にユーザー目線で考える',
+        '建設的で具体的な提案を行う',
+      ],
       responseLength: 'medium',
       customInstructions: '',
       greetingMessage: 'こんにちは！お任せいただくタスクについて何でもご相談ください。',

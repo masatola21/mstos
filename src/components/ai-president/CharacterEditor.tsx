@@ -137,24 +137,31 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         });
       }
 
-      setFormData((prev) => ({
-        ...prev,
-        name: data.name || prev.name,
-        role: data.role || prev.role,
-        tagline: data.tagline || prev.tagline,
-        avatarEmoji: data.avatarEmoji || prev.avatarEmoji,
-        avatarColor: (data.avatarColor as AvatarColor) || prev.avatarColor,
-        personality: data.personality || prev.personality,
-        tone: data.tone || prev.tone,
-        firstPerson: data.firstPerson || prev.firstPerson,
-        secondPerson: data.secondPerson || prev.secondPerson,
-        speechStyle: data.speechStyle || prev.speechStyle,
-        behaviorRules: data.behaviorRules || prev.behaviorRules,
-        responseLength: data.responseLength || prev.responseLength,
-        customInstructions: data.customInstructions || prev.customInstructions,
-        greetingMessage: data.greetingMessage || prev.greetingMessage,
-        suggestedTopics: data.suggestedTopics || prev.suggestedTopics,
-      }));
+      setFormData((prev) => {
+        const generatedRules: string[] = Array.isArray(data.behaviorRules) ? data.behaviorRules : prev.behaviorRules;
+        const conciseRule = '結論から簡潔に伝える（前置きや重複説明を省き、要点を端的に整理する）';
+        const normalizedRules = generatedRules.some((r) => String(r).includes('結論'))
+          ? generatedRules
+          : [conciseRule, ...generatedRules];
+        return {
+          ...prev,
+          name: data.name || prev.name,
+          role: data.role || prev.role,
+          tagline: data.tagline || prev.tagline,
+          avatarEmoji: data.avatarEmoji || prev.avatarEmoji,
+          avatarColor: (data.avatarColor as AvatarColor) || prev.avatarColor,
+          personality: data.personality || prev.personality,
+          tone: data.tone || prev.tone,
+          firstPerson: data.firstPerson || prev.firstPerson,
+          secondPerson: data.secondPerson || prev.secondPerson,
+          speechStyle: data.speechStyle || prev.speechStyle,
+          behaviorRules: normalizedRules,
+          responseLength: data.responseLength || prev.responseLength,
+          customInstructions: data.customInstructions || prev.customInstructions,
+          greetingMessage: data.greetingMessage || prev.greetingMessage,
+          suggestedTopics: data.suggestedTopics || prev.suggestedTopics,
+        };
+      });
 
       // Switch to manual to inspect or save
       setActiveSubTab('manual');
@@ -560,9 +567,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">返答の長さ</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'short', title: '簡潔・短め', desc: '1〜3文程度でテンポの良い会話' },
-                  { id: 'medium', title: '標準・自然', desc: '長すぎず短すぎず対話的' },
-                  { id: 'detailed', title: '詳しく丁寧', desc: '思考の背景や理由を詳しく解説' },
+                  { id: 'short', title: '極短・要点のみ', desc: '1〜3文程度で結論のみを即答' },
+                  { id: 'medium', title: '標準（結論から簡潔に）', desc: '結論を先に述べ、要点を簡潔に整理' },
+                  { id: 'detailed', title: '詳しく丁寧', desc: '結論を先に述べ、背景や手順も解説' },
                 ].map((item) => (
                   <button
                     key={item.id}
