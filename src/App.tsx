@@ -104,7 +104,7 @@ import {
   saveTokenUsageRecords,
   recordTokenUsage,
 } from './utils/storage';
-import { loadMarketingScenarios, saveMarketingScenarios } from './utils/marketingStorage';
+import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios } from './utils/marketingStorage';
 import { PRESET_CHARACTERS } from './data/presets';
 import { AI_WORK_MODES, getAIWorkMode, resolveWorkMode, AIWorkModeId, RoleAIOverride } from './data/aiWorkModes';
 import { AIModelSetting, AIProviderId, AI_PROVIDERS, isProviderId } from './data/aiModels';
@@ -567,7 +567,13 @@ function AppContent() {
         setInvoices((current) => mergeCollectionPreservingUserEdits(current, savingData.invoices || [], mergedData.invoices || []));
         setTools((current) => mergeCollectionPreservingUserEdits(current, savingData.tools || [], mergedData.tools || []));
         setCustomLists((current) => mergeCollectionPreservingUserEdits(current, savingData.customLists || [], mergedData.customLists || []));
-        setMarketingScenarios((current) => mergeCollectionPreservingUserEdits(current, savingData.marketingScenarios || [], mergedData.marketingScenarios || []));
+        setMarketingScenarios((current) => {
+          const next = deduplicateMarketingScenarios(
+            mergeCollectionPreservingUserEdits(current, savingData.marketingScenarios || [], mergedData.marketingScenarios || [])
+          );
+          saveMarketingScenarios(next);
+          return next;
+        });
       },
     });
     return unsubscribe;
@@ -1044,6 +1050,32 @@ function AppContent() {
     workModeHistories,
     knowledgeItems,
   ]);
+
+  useEffect(() => {
+    if (!user || !workspaceReady) return;
+    const flush = () => {
+      workspaceSaveCoordinator.flushPendingDebounce();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flush();
+      }
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.id, workspaceReady]);
+
+  const handleUpdateMarketingScenarios = (nextScenarios: MarketingScenario[]) => {
+    const deduped = deduplicateMarketingScenarios(nextScenarios);
+    setMarketingScenarios(deduped);
+    saveMarketingScenarios(deduped);
+  };
 
   // Active character
   const activeCharacter =
@@ -3185,7 +3217,7 @@ function AppContent() {
         )}
 
         {currentTab === 'marketing_automation' && (
-          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={setMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} lineInboxContact={lineInboxContact} />
+          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={handleUpdateMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} lineInboxContact={lineInboxContact} />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
@@ -3462,20 +3494,49 @@ function AppContent() {
           workModeHistories={workModeHistories}
           marketingScenarios={marketingScenarios}
           onRestoreData={(restored) => {
-            if (restored.characters) setCharacters(restored.characters);
-            if (restored.userProfile) setUserProfile(restored.userProfile);
-            if (restored.projects) setProjects(restored.projects);
-            if (restored.tasks) setTasks(restored.tasks);
-            if (restored.approvals) setApprovals(restored.approvals);
-            if (restored.activityLogs) setActivityLogs(restored.activityLogs);
-            if (restored.topGoal) setTopGoal(restored.topGoal);
-            if (restored.pricingRates) setPricingRates(restored.pricingRates);
-            if (restored.tokenUsageRecords) setTokenUsageRecords(restored.tokenUsageRecords);
+            if (restored.characters) {
+              setCharacters(restored.characters);
+              saveCharacters(restored.characters);
+            }
+            if (restored.userProfile) {
+              setUserProfile(restored.userProfile);
+              saveUserProfile(restored.userProfile);
+            }
+            if (restored.projects) {
+              setProjects(restored.projects);
+              saveProjects(restored.projects);
+            }
+            if (restored.tasks) {
+              setTasks(restored.tasks);
+              saveTasks(restored.tasks);
+            }
+            if (restored.approvals) {
+              setApprovals(restored.approvals);
+              saveApprovals(restored.approvals);
+            }
+            if (restored.activityLogs) {
+              setActivityLogs(restored.activityLogs);
+              saveActivityLogs(restored.activityLogs);
+            }
+            if (restored.topGoal) {
+              setTopGoal(restored.topGoal);
+              saveTopGoal(restored.topGoal);
+            }
+            if (restored.pricingRates) {
+              setPricingRates(restored.pricingRates);
+              savePricingRates(restored.pricingRates);
+            }
+            if (restored.tokenUsageRecords) {
+              setTokenUsageRecords(restored.tokenUsageRecords);
+              saveTokenUsageRecords(restored.tokenUsageRecords);
+            }
             if (restored.knowledgeItems) {
               setKnowledgeItems(restored.knowledgeItems);
               saveKnowledgeItems(restored.knowledgeItems);
             }
-            if (restored.marketingScenarios) setMarketingScenarios(restored.marketingScenarios);
+            if (restored.marketingScenarios) {
+              handleUpdateMarketingScenarios(restored.marketingScenarios);
+            }
             if (restored.workModeHistories) {
               setWorkModeHistories(restored.workModeHistories);
               Object.entries(restored.workModeHistories).forEach(([key, history]) => saveChatHistory(key, history));

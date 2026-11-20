@@ -157,6 +157,43 @@ const buildActionsForCount = (count: number, current: Action[] = []): Action[] =
       : { type: 'uri', label: `メニュー ${i + 1}`, value: '' }
   );
 
+const RICH_MENU_STORAGE_KEY = 'mst_line_rich_menu_config_v1';
+
+interface StoredRichMenuConfig {
+  title: string;
+  chatBarText: string;
+  layout: LayoutId;
+  actions: Action[];
+  updatedAt?: number;
+}
+
+function loadStoredRichMenuConfig(): StoredRichMenuConfig | null {
+  try {
+    const raw = localStorage.getItem(RICH_MENU_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredRichMenuConfig>;
+    const layoutConfig = parsed.layout ? getRichMenuLayoutConfig(parsed.layout) : undefined;
+    if (!layoutConfig || !Array.isArray(parsed.actions) || parsed.actions.length === 0) return null;
+    return {
+      title: typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : 'MST公式リッチメニュー',
+      chatBarText: typeof parsed.chatBarText === 'string' && parsed.chatBarText.trim() ? parsed.chatBarText : 'メニュー',
+      layout: layoutConfig.id,
+      actions: buildActionsForCount(layoutConfig.cellCount, parsed.actions),
+      updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredRichMenuConfig(config: StoredRichMenuConfig): void {
+  try {
+    localStorage.setItem(RICH_MENU_STORAGE_KEY, JSON.stringify({ ...config, updatedAt: Date.now() }));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export interface MarketingLineSettingsViewProps {
   onNavigateToWelcomeFlow?: () => void;
 }
@@ -166,14 +203,16 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
   const fileRef = useRef<HTMLInputElement>(null);
 
   const initialPreset = createMstRecommendedRichMenuPreset(DEFAULT_MST_BOOKING_URL);
+  const initialStoredRef = useRef<StoredRichMenuConfig | null>(loadStoredRichMenuConfig());
+  const initialConfig = initialStoredRef.current || initialPreset;
 
   // ─── リッチメニュー用状態 ───
-  const [title, setTitle] = useState(initialPreset.title);
-  const [chatBarText, setChatBarText] = useState(initialPreset.chatBarText);
-  const [layout, setLayout] = useState<LayoutId>(initialPreset.layout);
+  const [title, setTitle] = useState(initialConfig.title);
+  const [chatBarText, setChatBarText] = useState(initialConfig.chatBarText);
+  const [layout, setLayout] = useState<LayoutId>(initialConfig.layout);
   const selectedLayout = getRichMenuLayoutConfig(layout) || RICH_MENU_LAYOUTS[0];
   const layoutBounds = getRichMenuLayoutAreas(selectedLayout.id);
-  const [actions, setActions] = useState<Action[]>(initialPreset.actions);
+  const [actions, setActions] = useState<Action[]>(initialConfig.actions);
   const [bookingUrlDefault, setBookingUrlDefault] = useState(DEFAULT_MST_BOOKING_URL);
   const [image, setImage] = useState<{
     base64: string;
@@ -216,12 +255,13 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
     }
   };
 
-  // 初回マウント時にMSTデザイン画像を自動生成 ＋ DBから現在のメニューID・TimeRex予約URLを取得
+  // 初回マウント時にMSTデザイン画像を自動生成 ＋ DB/LINE APIから現在のメニュー設定・TimeRex予約URLを取得
   useEffect(() => {
     let active = true;
+    const hadStoredConfig = Boolean(initialStoredRef.current);
     void renderMstRichMenuImage({
-      layout: initialPreset.layout,
-      actions: initialPreset.actions,
+      layout: initialConfig.layout,
+      actions: initialConfig.actions,
     })
       .then((rendered) => {
         if (active) {
@@ -233,11 +273,12 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
     if (db) {
       void (async () => {
         try {
-          const { data: auth } = await db.auth.getUser();
-          const uid = auth.user?.id;
+          const { data: sessionData } = await db.auth.getSession();
+          const token = sessionData.session?.access_token;
+          const uid = sessionData.session?.user?.id;
           if (!uid || !active) return;
 
-          const [{ data: integration }, { data: salesSettings }] = await Promise.all([
+          const [{ data: integration }, { data: salesSettings }, richMenuApiResp] = await Promise.all([
             db
               .from('line_channel_integrations')
               .select('rich_menu_id')
@@ -248,12 +289,44 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
               .select('booking_page_url')
               .eq('owner_id', uid)
               .maybeSingle(),
+            !hadStoredConfig && token
+              ? fetch('/api/line/rich-menu', { headers: { Authorization: 'Bearer ' + token } })
+                  .then((r) => (r.ok ? r.json() : null))
+                  .catch(() => null)
+              : Promise.resolve(null),
           ]);
 
           if (!active) return;
           if (integration?.rich_menu_id) {
             setCurrentId(integration.rich_menu_id);
           }
+
+          if (!hadStoredConfig && richMenuApiResp?.config) {
+            const rc = richMenuApiResp.config as StoredRichMenuConfig;
+            const rcLayout = getRichMenuLayoutConfig(rc.layout);
+            if (rcLayout && Array.isArray(rc.actions) && rc.actions.length > 0) {
+              const normalizedActions = buildActionsForCount(rcLayout.cellCount, rc.actions);
+              const restoredTitle = rc.title || initialPreset.title;
+              const restoredChatBar = rc.chatBarText || initialPreset.chatBarText;
+              setTitle(restoredTitle);
+              setChatBarText(restoredChatBar);
+              setLayout(rcLayout.id);
+              setActions(normalizedActions);
+              saveStoredRichMenuConfig({
+                title: restoredTitle,
+                chatBarText: restoredChatBar,
+                layout: rcLayout.id,
+                actions: normalizedActions,
+              });
+              void renderMstRichMenuImage({ layout: rcLayout.id, actions: normalizedActions })
+                .then((rendered) => {
+                  if (active) setImage({ ...rendered, isGenerated: true });
+                })
+                .catch(() => {});
+              return;
+            }
+          }
+
           const rawBookingUrl =
             typeof salesSettings?.booking_page_url === 'string' &&
             /^https:\/\//i.test(salesSettings.booking_page_url.trim())
@@ -292,6 +365,16 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
       active = false;
     };
   }, []);
+
+  // フォーム変更をローカルストレージに即時保存して更新時の設定戻りを防止
+  const hasMountedRichMenuPersistRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRichMenuPersistRef.current) {
+      hasMountedRichMenuPersistRef.current = true;
+      return;
+    }
+    saveStoredRichMenuConfig({ title, chatBarText, layout, actions });
+  }, [title, chatBarText, layout, actions]);
 
   // ラベルやアクション変更時、MST自動生成画像を使っている場合はリアルタイムに画像プレビューを最新化
   useEffect(() => {
@@ -399,6 +482,12 @@ export const MarketingLineSettingsView: React.FC<MarketingLineSettingsViewProps>
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'リッチメニューを反映できませんでした');
+      saveStoredRichMenuConfig({
+        title: title.trim(),
+        chatBarText: chatBarText.trim(),
+        layout,
+        actions,
+      });
       setCurrentId(result.richMenuId || '');
       setNotice('リッチメニューをLINE公式アカウントの全友だちに反映しました');
     } catch (e: any) {

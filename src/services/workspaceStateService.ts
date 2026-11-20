@@ -38,7 +38,7 @@ import {
 } from '../utils/storage';
 import { getSupabase } from '../lib/supabaseClient';
 import { MarketingScenario } from '../types/marketing';
-import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios } from '../utils/marketingStorage';
+import { loadMarketingScenarios, saveMarketingScenarios, deduplicateMarketingScenarios, hasLocalMarketingScenariosCache } from '../utils/marketingStorage';
 import { AIModelSettings, loadAIModelSettings, saveAIModelSettings } from '../utils/aiSettingsStorage';
 import { matrixService, SAMPLE_RECORD_IDS } from './matrixService';
 import { stableStringify } from '../utils/stableSerialize';
@@ -527,6 +527,12 @@ async function saveRelationalAIOperations(
   }
 }
 
+function parseRecordUpdatedAt<T>(record: T | undefined): number {
+  if (!record) return NaN;
+  const raw = (record as T & { updatedAt?: unknown }).updatedAt;
+  return typeof raw === 'number' ? raw : typeof raw === 'string' ? Date.parse(raw) : NaN;
+}
+
 export function mergeRecordsByKey<T>(
   remoteRecords: T[],
   localRecords: T[],
@@ -557,6 +563,15 @@ export function mergeRecordsByKey<T>(
     const remote = remoteById.get(key);
     const localChanged = !baseline || stableStringify(local) !== stableStringify(baseline);
     if (!localChanged) return;
+
+    // 古いLocalStorageキャッシュ（updatedAt が baseline より古い）が
+    // 新しい baseline/remote の状態（例：稼働中→停止中など）を巻き戻さないよう保護
+    const localTime = parseRecordUpdatedAt(local);
+    const baselineTime = parseRecordUpdatedAt(baseline);
+    if (baseline && Number.isFinite(localTime) && Number.isFinite(baselineTime) && localTime < baselineTime) {
+      return;
+    }
+
     if (!remote || (baseline && stableStringify(remote) === stableStringify(baseline))) {
       merged.set(key, local);
       return;
@@ -569,10 +584,7 @@ export function mergeRecordsByKey<T>(
     // （将来の改善提案: updatedAt を持たないエンティティに作成/更新タイムスタンプを付与するか、
     //   フィールド単位の3-wayマージを導入してローカル編集の消失を防ぐ）
     // =========================================================================================
-    const localUpdatedAt = (local as T & { updatedAt?: unknown }).updatedAt;
-    const remoteUpdatedAt = (remote as T & { updatedAt?: unknown }).updatedAt;
-    const localTime = typeof localUpdatedAt === 'number' ? localUpdatedAt : typeof localUpdatedAt === 'string' ? Date.parse(localUpdatedAt) : NaN;
-    const remoteTime = typeof remoteUpdatedAt === 'number' ? remoteUpdatedAt : typeof remoteUpdatedAt === 'string' ? Date.parse(remoteUpdatedAt) : NaN;
+    const remoteTime = parseRecordUpdatedAt(remote);
     if (Number.isFinite(localTime) && Number.isFinite(remoteTime) && localTime > remoteTime) merged.set(key, local);
   });
 
@@ -747,6 +759,7 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
   if (error) throw error;
 
   const localDefaults = loadLocalWorkspaceData();
+  const localMarketingScenariosReady = hasLocalMarketingScenariosCache();
   const baseline = loadLastSyncedData(userId);
   const remote = row?.data && typeof row.data === 'object' && !Array.isArray(row.data)
     ? row.data as Partial<WorkspaceData>
@@ -773,7 +786,11 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
           baseline.workModeHistories || {}
         ),
         knowledgeItems: mergeRecords(remote.knowledgeItems || [], localDefaults.knowledgeItems, baseline.knowledgeItems || []),
-        marketingScenarios: deduplicateMarketingScenarios(mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || [])),
+        marketingScenarios: deduplicateMarketingScenarios(
+          localMarketingScenariosReady
+            ? mergeRecords(remote.marketingScenarios || [], localDefaults.marketingScenarios, baseline.marketingScenarios || [])
+            : (remote.marketingScenarios || [])
+        ),
       }
     : localDefaults;
 
@@ -806,7 +823,11 @@ export async function loadOrMigrateWorkspaceData(userId: string): Promise<Worksp
     merged.products = mergeRecords(relationalMatrix.products, localDefaults.products, baseline.products || []);
     merged.tools = mergeRecords(relationalMatrix.tools, localDefaults.tools, baseline.tools || []);
     merged.customLists = mergeRecords(relationalMatrix.customLists, localDefaults.customLists, baseline.customLists || []);
-    merged.marketingScenarios = deduplicateMarketingScenarios(mergeRecords(relationalMatrix.marketingScenarios, localDefaults.marketingScenarios, baseline.marketingScenarios || []));
+    merged.marketingScenarios = deduplicateMarketingScenarios(
+      localMarketingScenariosReady
+        ? mergeRecords(relationalMatrix.marketingScenarios, localDefaults.marketingScenarios, baseline.marketingScenarios || [])
+        : relationalMatrix.marketingScenarios
+    );
   }
 
   // Ensure CRM products table and ManagedProducts are bidirectionally unified
@@ -1257,9 +1278,11 @@ export async function saveWorkspaceData(
     .upsert({ user_id: userId, data: snapshotData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;
 
-  // 4. マージが発生した場合はローカルストレージも最新データで更新
+  // 4. マージが発生した場合はローカルストレージも最新データで更新（通常保存時も未初期化キャッシュを同期）
   if (wasMerged) {
     applyWorkspaceData(currentData);
+  } else if (!hasLocalMarketingScenariosCache()) {
+    saveMarketingScenarios(currentData.marketingScenarios || []);
   }
 
   try {

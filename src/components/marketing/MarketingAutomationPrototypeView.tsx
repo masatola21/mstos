@@ -389,6 +389,13 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   const [form, setForm] = useState(emptyScenario());
   const [notice, setNotice] = useState('');
   const scenarioSyncRevision = useRef(0);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const [externalGoal, setExternalGoal] = useState('');
   const [externalResult, setExternalResult] = useState('');
   const [automationHealth, setAutomationHealth] = useState<MarketingAutomationHealth | null>(null);
@@ -421,26 +428,31 @@ export const MarketingAutomationPrototypeView: React.FC<Props> = ({ scenarios, o
   }, []);
   useEffect(() => {
     const revision = ++scenarioSyncRevision.current;
-    let cancelled = false;
     const sync = async () => {
       const db = getSupabase();
       if (!db) return;
-      const { data: auth } = await db.auth.getUser();
-      const ownerId = auth.user?.id;
-      if (!ownerId || cancelled || revision !== scenarioSyncRevision.current) return;
+      const { data: sessionData } = await db.auth.getSession();
+      let ownerId = sessionData.session?.user?.id;
+      if (!ownerId) {
+        const { data: auth } = await db.auth.getUser();
+        ownerId = auth.user?.id;
+      }
+      if (!ownerId || revision !== scenarioSyncRevision.current) return;
       const rows = scenarios.map((scenario) => ({ owner_id: ownerId, scenario_id: scenario.id, config: scenario, updated_at: new Date().toISOString() }));
       if (rows.length) {
         const { error } = await db.from('marketing_automation_scenarios').upsert(rows, { onConflict: 'owner_id,scenario_id' });
-        if (error) { setNotice('自動化設定をサーバーに同期できません。DBマイグレーションを確認してください。'); return; }
+        if (error) {
+          if (isMountedRef.current) setNotice('自動化設定をサーバーに同期できません。DBマイグレーションを確認してください。');
+          return;
+        }
       }
       const { data: saved, error: loadError } = await db.from('marketing_automation_scenarios').select('scenario_id').eq('owner_id', ownerId);
-      if (loadError || cancelled || revision !== scenarioSyncRevision.current) return;
+      if (loadError || revision !== scenarioSyncRevision.current) return;
       const keep = new Set(scenarios.map((scenario) => scenario.id));
       const stale = (saved || []).map((row: any) => row.scenario_id).filter((id: string) => !keep.has(id));
       if (stale.length) await db.from('marketing_automation_scenarios').delete().eq('owner_id', ownerId).in('scenario_id', stale);
     };
     void sync();
-    return () => { cancelled = true; };
   }, [scenarios]);
   const preparedCount = scenarios.filter((scenario) => scenario.status === 'prepared').length;
   const activeAutomatedCount = scenarios.filter((scenario) => scenario.automationEnabled).length;

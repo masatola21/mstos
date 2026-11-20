@@ -32,11 +32,16 @@ function shouldPreferIncomingScenario(existing: MarketingScenario, incoming: Mar
     const existingIsOfficial = (existing.name || '').trim() === officialName;
     const incomingIsOfficial = (incoming.name || '').trim() === officialName;
     if (incomingIsOfficial !== existingIsOfficial) return incomingIsOfficial;
-    if (Boolean(incoming.automationEnabled) !== Boolean(existing.automationEnabled)) {
-      return Boolean(incoming.automationEnabled);
-    }
   }
-  return (incoming.updatedAt || 0) >= (existing.updatedAt || 0);
+  const existingTime = existing.updatedAt || 0;
+  const incomingTime = incoming.updatedAt || 0;
+  if (incomingTime !== existingTime) {
+    return incomingTime > existingTime;
+  }
+  if (ep !== null && Boolean(incoming.automationEnabled) !== Boolean(existing.automationEnabled)) {
+    return Boolean(incoming.automationEnabled);
+  }
+  return incomingTime >= existingTime;
 }
 
 export function deduplicateMarketingScenarios(scenarios: MarketingScenario[]): MarketingScenario[] {
@@ -52,6 +57,14 @@ export function deduplicateMarketingScenarios(scenarios: MarketingScenario[]): M
     }
   }
   return Array.from(map.values());
+}
+
+export function hasLocalMarketingScenariosCache(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
 }
 
 export function loadMarketingScenarios(): MarketingScenario[] {

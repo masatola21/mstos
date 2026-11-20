@@ -78,6 +78,7 @@ import {
 import {
   RICH_MENU_WIDTH,
   RICH_MENU_HEIGHT,
+  RICH_MENU_LAYOUTS,
   getRichMenuLayoutConfig,
   getRichMenuLayoutAreas,
 } from './src/utils/lineRichMenuLayouts.js';
@@ -4676,6 +4677,79 @@ app.post('/api/email/unsubscribe', async (req, res) => {
   if (error) return res.status(500).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>処理できませんでした</h1><p>時間をおいて再度お試しください。</p></html>');
   if (!data) return res.status(400).type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><title>配信停止</title><h1>リンクを確認できません</h1><p>配信停止リンクが無効です。</p></html>');
   return res.type('html').send('<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>配信停止完了</title><main><h1>配信を停止しました</h1><p>今後の営業・案内メールの配信を停止しました。</p></main></html>');
+});
+
+app.get('/api/line/rich-menu', async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'LINE連携サーバーのSupabase設定がありません。' });
+  const authorization = req.header('authorization') || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'ログインしてください。' });
+  const { data: authData, error: authError } = await lineSupabase.auth.getUser(token);
+  if (authError || !authData.user) return res.status(401).json({ error: 'ログイン状態を確認できません。' });
+
+  const { data: integration, error: integrationError } = await lineSupabase
+    .from('line_channel_integrations')
+    .select('rich_menu_id')
+    .eq('owner_id', authData.user.id)
+    .maybeSingle();
+  if (integrationError) return res.status(500).json({ error: integrationError.message });
+
+  const richMenuId = typeof integration?.rich_menu_id === 'string' ? integration.rich_menu_id : '';
+  if (!richMenuId || !lineChannelAccessToken) {
+    return res.json({ richMenuId: richMenuId || null, config: null });
+  }
+
+  try {
+    const lineResp = await fetch('https://api.line.me/v2/bot/richmenu/' + encodeURIComponent(richMenuId), {
+      headers: { Authorization: 'Bearer ' + lineChannelAccessToken },
+    });
+    if (!lineResp.ok) {
+      return res.json({ richMenuId, config: null });
+    }
+    const lineMenu = await lineResp.json().catch(() => null) as {
+      name?: string;
+      chatBarText?: string;
+      areas?: Array<{
+        bounds?: { x?: number; y?: number; width?: number; height?: number };
+        action?: { type?: string; label?: string; uri?: string; text?: string };
+      }>;
+    } | null;
+    if (!lineMenu || !Array.isArray(lineMenu.areas)) {
+      return res.json({ richMenuId, config: null });
+    }
+    const matchedLayout = RICH_MENU_LAYOUTS.find((layoutDef) => {
+      const expected = getRichMenuLayoutAreas(layoutDef.id);
+      return (
+        expected.length === lineMenu.areas!.length &&
+        expected.every((b, idx) => {
+          const actual = lineMenu.areas![idx]?.bounds;
+          return actual && actual.x === b.x && actual.y === b.y && actual.width === b.width && actual.height === b.height;
+        })
+      );
+    }) || RICH_MENU_LAYOUTS.find((layoutDef) => layoutDef.cellCount === lineMenu.areas!.length);
+
+    if (!matchedLayout) {
+      return res.json({ richMenuId, config: null });
+    }
+    const actions = lineMenu.areas.map((area, idx) => {
+      const act = area?.action;
+      if (act?.type === 'message') {
+        return { type: 'message' as const, label: act.label || `メニュー ${idx + 1}`, value: act.text || '' };
+      }
+      return { type: 'uri' as const, label: act?.label || `メニュー ${idx + 1}`, value: act?.uri || '' };
+    });
+    return res.json({
+      richMenuId,
+      config: {
+        title: lineMenu.name || '',
+        chatBarText: lineMenu.chatBarText || '',
+        layout: matchedLayout.id,
+        actions,
+      },
+    });
+  } catch {
+    return res.json({ richMenuId, config: null });
+  }
 });
 
 app.post('/api/line/rich-menu', async (req, res) => {

@@ -29,6 +29,7 @@ export class WorkspaceSaveCoordinator {
   private pendingData: WorkspaceData | null = null;
   private pendingDeferreds: QueuedDeferred[] = [];
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingDebouncedArgs: { userId: string; getData: () => WorkspaceData } | null = null;
   private lastSavedSnapshot: string = '';
   private syncStatus: WorkspaceSyncStatus = 'loading';
   private syncError: string = '';
@@ -164,12 +165,28 @@ export class WorkspaceSaveCoordinator {
       clearTimeout(this.debounceTimer);
     }
 
+    this.pendingDebouncedArgs = { userId, getData };
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
+      this.pendingDebouncedArgs = null;
       if (this.isConflictStopped) return;
       const data = getData();
       this.enqueueSave(userId, data);
     }, delayMs);
+  }
+
+  /**
+   * ページ離脱・リロード時用：保留中のデバウンス保存があれば即座に実行キューへ流す。
+   */
+  public flushPendingDebounce(): boolean {
+    if (this.isConflictStopped || !this.pendingDebouncedArgs) {
+      return false;
+    }
+    const { userId, getData } = this.pendingDebouncedArgs;
+    this.cancelDebounce();
+    const data = getData();
+    this.enqueueSave(userId, data);
+    return true;
   }
 
   /**
@@ -188,6 +205,7 @@ export class WorkspaceSaveCoordinator {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    this.pendingDebouncedArgs = null;
 
     return new Promise<SaveWorkspaceResult>((resolve, reject) => {
       this.enqueueSave(userId, data, { resolve, reject });
@@ -397,6 +415,7 @@ export class WorkspaceSaveCoordinator {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    this.pendingDebouncedArgs = null;
   }
 }
 
