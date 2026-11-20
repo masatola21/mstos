@@ -335,15 +335,73 @@ function extractMissingColumn(error: any): string | null {
   return null;
 }
 
+function emitCrmDataChanged(detail: {
+  tableKey?: string;
+  deletedContractIds?: string[];
+  deletedInvoiceIds?: string[];
+  clearedAllOps?: boolean;
+}) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent('mst:crm-data-changed', { detail }));
+    window.dispatchEvent(new CustomEvent('mst:documents-changed'));
+  } catch {
+    // ignore event dispatch errors in non-browser tests
+  }
+}
+
 export async function deleteTableRecord(
   tableKey: TableKey,
   record: { id: string | number; company_id?: string | null },
-  options?: { force?: boolean },
+  options?: { force?: boolean; deleteDocuments?: boolean; deleteLinkedCrm?: boolean },
 ): Promise<{ error?: DataFetchError; blockedBy?: string }> {
   const supabase = getSupabase();
   if (!supabase) return { error: { type: 'NOT_CONFIGURED', message: 'Supabaseが初期化されていません。' } };
 
+  const shouldUseServerCascade = Boolean(options?.deleteDocuments || options?.deleteLinkedCrm);
+
   try {
+    if (shouldUseServerCascade) {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const params = new URLSearchParams({
+          force: options?.force ? 'true' : 'false',
+          deleteDocuments: options?.deleteDocuments ? 'true' : 'false',
+          deleteLinkedCrm: options?.deleteLinkedCrm ? 'true' : 'false',
+        });
+        const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/records/${encodeURIComponent(String(record.id))}?${params.toString()}`, {
+          method: 'DELETE',
+          headers,
+        });
+        if (resp.ok) {
+          const okJson = await resp.json().catch(() => ({}));
+          if (tableKey === 'products') {
+            const prodId = String(record.id);
+            matrixService.deleteProduct(prodId);
+            await supabase.from('mst_managed_products').delete().eq('id', prodId);
+          }
+          emitCrmDataChanged({
+            tableKey,
+            deletedContractIds: Array.isArray(okJson?.deletedContractIds) ? okJson.deletedContractIds : [],
+            deletedInvoiceIds: Array.isArray(okJson?.deletedInvoiceIds) ? okJson.deletedInvoiceIds : [],
+          });
+          return {};
+        } else {
+          const errJson = await resp.json().catch(() => null);
+          if (errJson?.error) {
+            return { error: { type: 'UNKNOWN', message: errJson.error } };
+          }
+        }
+      } catch {
+        // fall through to standard path
+      }
+    }
+
     if (options?.force && tableKey === 'products') {
       const prodId = String(record.id);
       // 関連テーブルの参照を安全に解除（NULL設定）
@@ -355,7 +413,7 @@ export async function deleteTableRecord(
         supabase.from('leads').update({ interested_product_id: null }).eq('interested_product_id', prodId),
         supabase.from('ai_reports').update({ recommended_product_id: null }).eq('recommended_product_id', prodId),
       ]);
-    } else {
+    } else if (!options?.force) {
       for (const reference of TABLE_REFERENCE_CHECKS[tableKey] || []) {
         const { data, error } = await supabase
           .from(reference.table)
@@ -385,29 +443,33 @@ export async function deleteTableRecord(
       }
     }
 
-    // 1. クライアント側からの直接削除を試行
-    const { data, error } = await supabase.from(tableKey).delete().eq('id', record.id).select('id');
-    if (!error && data && data.length > 0) {
-      if (tableKey === 'products') {
-        const prodId = String(record.id);
-        matrixService.deleteProduct(prodId);
-        await supabase.from('mst_managed_products').delete().eq('id', prodId);
+    // 1. クライアント側からの直接削除を試行（forceなし通常削除時）
+    if (!options?.force) {
+      const { data, error } = await supabase.from(tableKey).delete().eq('id', record.id).select('id');
+      if (!error && data && data.length > 0) {
+        if (tableKey === 'products') {
+          const prodId = String(record.id);
+          matrixService.deleteProduct(prodId);
+          await supabase.from('mst_managed_products').delete().eq('id', prodId);
+        }
+        emitCrmDataChanged({ tableKey });
+        return {};
       }
-      return {};
+
+      // 2. 既に削除済みかチェック（存在しない場合は正常終了とする）
+      const { data: existingCheck } = await supabase.from(tableKey).select('id').eq('id', record.id).maybeSingle();
+      if (!existingCheck) {
+        if (tableKey === 'products') {
+          const prodId = String(record.id);
+          matrixService.deleteProduct(prodId);
+          await supabase.from('mst_managed_products').delete().eq('id', prodId);
+        }
+        emitCrmDataChanged({ tableKey });
+        return {};
+      }
     }
 
-    // 2. 既に削除済みかチェック（存在しない場合は正常終了とする）
-    const { data: existingCheck } = await supabase.from(tableKey).select('id').eq('id', record.id).maybeSingle();
-    if (!existingCheck) {
-      if (tableKey === 'products') {
-        const prodId = String(record.id);
-        matrixService.deleteProduct(prodId);
-        await supabase.from('mst_managed_products').delete().eq('id', prodId);
-      }
-      return {};
-    }
-
-    // 3. RLSポリシー等でクライアント側から削除できない場合のサーバーAPIフォールバック
+    // 3. RLSポリシー等でクライアント側から削除できない場合、またはforce削除時のサーバーAPI呼び出し
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
@@ -415,16 +477,27 @@ export async function deleteTableRecord(
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/records/${encodeURIComponent(String(record.id))}?force=${options?.force ? 'true' : 'false'}`, {
+      const params = new URLSearchParams({
+        force: options?.force ? 'true' : 'false',
+        deleteDocuments: options?.deleteDocuments ? 'true' : 'false',
+        deleteLinkedCrm: options?.deleteLinkedCrm ? 'true' : 'false',
+      });
+      const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/records/${encodeURIComponent(String(record.id))}?${params.toString()}`, {
         method: 'DELETE',
         headers,
       });
       if (resp.ok) {
+        const okJson = await resp.json().catch(() => ({}));
         if (tableKey === 'products') {
           const prodId = String(record.id);
           matrixService.deleteProduct(prodId);
           await supabase.from('mst_managed_products').delete().eq('id', prodId);
         }
+        emitCrmDataChanged({
+          tableKey,
+          deletedContractIds: Array.isArray(okJson?.deletedContractIds) ? okJson.deletedContractIds : [],
+          deletedInvoiceIds: Array.isArray(okJson?.deletedInvoiceIds) ? okJson.deletedInvoiceIds : [],
+        });
         return {};
       } else {
         const errJson = await resp.json().catch(() => null);
@@ -436,11 +509,7 @@ export async function deleteTableRecord(
       // ネットワークエラー時は元の判定へフォールバック
     }
 
-    if (error) return { error: parseSupabaseError(error) };
-    if (!data?.length) {
-      return { error: { type: 'UNKNOWN', message: '削除対象が見つからないか、削除権限がありません。' } };
-    }
-    return {};
+    return { error: { type: 'UNKNOWN', message: '削除対象が見つからないか、削除権限がありません。' } };
   } catch (err: any) {
     return { error: parseSupabaseError(err) };
   }
@@ -451,6 +520,8 @@ export interface BulkDeleteResult {
   deletedIds: string[];
   failedCount: number;
   failedDetails: Array<{ id: string; reason: string }>;
+  deletedContractIds?: string[];
+  deletedInvoiceIds?: string[];
   error?: DataFetchError;
 }
 
@@ -458,7 +529,7 @@ export interface BulkDeleteResult {
 export async function bulkDeleteTableRecords(
   tableKey: TableKey,
   ids: (string | number)[],
-  options?: { force?: boolean }
+  options?: { force?: boolean; deleteDocuments?: boolean; deleteLinkedCrm?: boolean }
 ): Promise<BulkDeleteResult> {
   const supabase = getSupabase();
   if (!supabase) {
@@ -488,7 +559,12 @@ export async function bulkDeleteTableRecords(
     const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/bulk-delete`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ids: stringIds, force: options?.force ?? false }),
+      body: JSON.stringify({
+        ids: stringIds,
+        force: options?.force ?? false,
+        deleteDocuments: options?.deleteDocuments ?? false,
+        deleteLinkedCrm: options?.deleteLinkedCrm ?? false,
+      }),
     });
 
     if (resp.ok) {
@@ -504,11 +580,19 @@ export async function bulkDeleteTableRecords(
           }
         }
 
+        const deletedContractIds = Array.isArray(resJson.deletedContractIds) ? resJson.deletedContractIds.map(String) : [];
+        const deletedInvoiceIds = Array.isArray(resJson.deletedInvoiceIds) ? resJson.deletedInvoiceIds.map(String) : [];
+        if (deletedIds.length > 0) {
+          emitCrmDataChanged({ tableKey, deletedContractIds, deletedInvoiceIds });
+        }
+
         return {
           successCount: resJson.count,
           deletedIds,
           failedCount: resJson.failedCount ?? (stringIds.length - resJson.count),
           failedDetails: resJson.failedDetails || [],
+          deletedContractIds,
+          deletedInvoiceIds,
         };
       }
     } else {
@@ -541,6 +625,9 @@ export async function bulkDeleteTableRecords(
         matrixService.deleteProduct(String(id));
       }
     }
+    if (deletedIds.length > 0) {
+      emitCrmDataChanged({ tableKey });
+    }
     const deletedSet = new Set(deletedIds);
     return {
       successCount: deletedIds.length,
@@ -561,10 +648,16 @@ export async function bulkDeleteTableRecords(
   }
 }
 
-// ダミーデータ一括初期化（依存関係順）
+// ダミーデータ一括初期化・全削除（依存関係順）
 export async function cleanDummyData(
-  targets: string[] = ['prospects', 'leads', 'deals', 'customers', 'companies']
-): Promise<{ success: boolean; deleted?: Record<string, number>; error?: string }> {
+  targets: string[] = ['prospects', 'leads', 'deals', 'customers', 'companies', 'customer_documents']
+): Promise<{
+  success: boolean;
+  deleted?: Record<string, number>;
+  deletedContractIds?: string[];
+  deletedInvoiceIds?: string[];
+  error?: string;
+}> {
   try {
     const supabase = getSupabase();
     const sessionData = await supabase?.auth.getSession();
@@ -582,11 +675,23 @@ export async function cleanDummyData(
 
     if (!resp.ok) {
       const errJson = await resp.json().catch(() => null);
-      return { success: false, error: errJson?.error || 'ダミーデータ削除に失敗しました。' };
+      return { success: false, error: errJson?.error || 'データ一括削除に失敗しました。' };
     }
 
     const json = await resp.json();
-    return { success: true, deleted: json.deleted };
+    const deletedContractIds = Array.isArray(json.deletedContractIds) ? json.deletedContractIds.map(String) : [];
+    const deletedInvoiceIds = Array.isArray(json.deletedInvoiceIds) ? json.deletedInvoiceIds.map(String) : [];
+    emitCrmDataChanged({
+      deletedContractIds,
+      deletedInvoiceIds,
+      clearedAllOps: targets.includes('customers') || targets.includes('companies'),
+    });
+    return {
+      success: true,
+      deleted: json.deleted,
+      deletedContractIds,
+      deletedInvoiceIds,
+    };
   } catch (err: any) {
     return { success: false, error: err.message || '通信エラーが発生しました。' };
   }

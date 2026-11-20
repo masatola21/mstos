@@ -22,8 +22,10 @@ interface ApprovalsViewProps {
   activityLogs: ActivityLog[];
   onResolveApproval: (id: string, status: 'approved' | 'rejected', note?: string) => void;
   onDeleteApproval?: (id: string) => void;
+  onBatchDeleteApprovals?: (ids: string[]) => void;
   onClearApprovals?: (statusFilter?: 'pending' | 'approved' | 'rejected' | 'all') => void;
   onDeleteActivityLog?: (id: string) => void;
+  onBatchDeleteActivityLogs?: (ids: string[]) => void;
   onClearActivityLogs?: () => void;
   initialTab?: 'approvals' | 'logs';
   embedded?: boolean;
@@ -35,8 +37,10 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   activityLogs,
   onResolveApproval,
   onDeleteApproval,
+  onBatchDeleteApprovals,
   onClearApprovals,
   onDeleteActivityLog,
+  onBatchDeleteActivityLogs,
   onClearActivityLogs,
   initialTab = 'approvals',
   embedded = false,
@@ -46,10 +50,24 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
   const [approvalFilter, setApprovalFilter] = useState<string>('all');
   const [resolutionNote, setResolutionNote] = useState<Record<string, string>>({});
 
+  // Selection states
+  const [selectedApprovalIds, setSelectedApprovalIds] = useState<string[]>([]);
+  const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
+
   // Deletion modals state
   const [approvalToDelete, setApprovalToDelete] = useState<ApprovalItem | null>(null);
   const [batchDeleteType, setBatchDeleteType] = useState<'all' | 'rejected' | 'approved' | 'pending' | null>(null);
+  const [isDeleteSelectedApprovalsModalOpen, setIsDeleteSelectedApprovalsModalOpen] = useState(false);
   const [isClearingLogsModalOpen, setIsClearingLogsModalOpen] = useState(false);
+  const [isDeleteSelectedLogsModalOpen, setIsDeleteSelectedLogsModalOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedApprovalIds((prev) => prev.filter((id) => approvals.some((a) => a.id === id)));
+  }, [approvals]);
+
+  useEffect(() => {
+    setSelectedLogIds((prev) => prev.filter((id) => activityLogs.some((l) => l.id === id)));
+  }, [activityLogs]);
 
   const pendingApprovalsCount = approvals.filter((a) => a.status === 'pending').length;
   const approvedApprovalsCount = approvals.filter((a) => a.status === 'approved').length;
@@ -77,11 +95,42 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
     setBatchDeleteType(null);
   };
 
+  const confirmDeleteSelectedApprovals = () => {
+    if (selectedApprovalIds.length === 0) return;
+    if (onBatchDeleteApprovals) {
+      onBatchDeleteApprovals(selectedApprovalIds);
+    } else if (onDeleteApproval) {
+      selectedApprovalIds.forEach((id) => onDeleteApproval(id));
+    }
+    setSelectedApprovalIds([]);
+    setIsDeleteSelectedApprovalsModalOpen(false);
+  };
+
   const confirmClearAllLogs = () => {
     if (!onClearActivityLogs) return;
     onClearActivityLogs();
+    setSelectedLogIds([]);
     setIsClearingLogsModalOpen(false);
   };
+
+  const confirmDeleteSelectedLogs = () => {
+    if (selectedLogIds.length === 0) return;
+    if (onBatchDeleteActivityLogs) {
+      onBatchDeleteActivityLogs(selectedLogIds);
+    } else if (onDeleteActivityLog) {
+      selectedLogIds.forEach((id) => onDeleteActivityLog(id));
+    }
+    setSelectedLogIds([]);
+    setIsDeleteSelectedLogsModalOpen(false);
+  };
+
+  const selectedApprovalsPendingCount = approvals.filter(
+    (a) => selectedApprovalIds.includes(a.id) && a.status === 'pending'
+  ).length;
+  const allFilteredApprovalsSelected =
+    filteredApprovals.length > 0 && filteredApprovals.every((a) => selectedApprovalIds.includes(a.id));
+  const allLogsSelected =
+    activityLogs.length > 0 && activityLogs.every((l) => selectedLogIds.includes(l.id));
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -191,6 +240,39 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
             )}
           </div>
 
+          {filteredApprovals.length > 0 && (onBatchDeleteApprovals || onDeleteApproval) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs shadow-2xs">
+              <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={allFilteredApprovalsSelected}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedApprovalIds(filteredApprovals.map((a) => a.id));
+                    } else {
+                      setSelectedApprovalIds([]);
+                    }
+                  }}
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <span>表示中の全{filteredApprovals.length}件を選択</span>
+              </label>
+              {selectedApprovalIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-purple-700">{selectedApprovalIds.length}件選択中</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsDeleteSelectedApprovalsModalOpen(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>選択削除 ({selectedApprovalIds.length}件)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {filteredApprovals.length === 0 ? (
             <div className="p-10 rounded-2xl bg-white border border-slate-200 text-center space-y-2 shadow-xs">
               <ShieldCheck className="w-8 h-8 text-slate-400 mx-auto" />
@@ -204,13 +286,31 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
               {filteredApprovals.map((item) => {
                 const relatedTask = item.taskId ? tasks.find((task) => task.id === item.taskId) : undefined;
                 const reviewArtifact = item.reviewArtifact || relatedTask?.draftArtifact;
+                const isSelected = selectedApprovalIds.includes(item.id);
                 return (
                   <div
                     key={item.id}
-                    className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-xs group hover:border-purple-300 transition-all"
+                    className={`p-5 rounded-2xl bg-white border space-y-3 shadow-xs group transition-all ${
+                      isSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200 hover:border-purple-300'
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {(onBatchDeleteApprovals || onDeleteApproval) && (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedApprovalIds((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+                              } else {
+                                setSelectedApprovalIds((prev) => prev.filter((id) => id !== item.id));
+                              }
+                            }}
+                            aria-label={`選択 ${item.actionTitle}`}
+                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                          />
+                        )}
                         {item.status === 'pending' && (
                           <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
                             <Clock className="w-3 h-3" /> 確認待ち
@@ -330,21 +430,52 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
       {/* Tab: Logs */}
       {activeTab === 'logs' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Activity className="w-4 h-4 text-purple-600" />
-              <span>全 {activityLogs.length} 件のシステム活動記録</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              {activityLogs.length > 0 && (onBatchDeleteActivityLogs || onDeleteActivityLog) && (
+                <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allLogsSelected}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedLogIds(activityLogs.map((l) => l.id));
+                      } else {
+                        setSelectedLogIds([]);
+                      }
+                    }}
+                    className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span>全選択</span>
+                </label>
+              )}
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-purple-600" />
+                <span>全 {activityLogs.length} 件のシステム活動記録</span>
+              </div>
             </div>
-            {onClearActivityLogs && activityLogs.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsClearingLogsModalOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 hover:border-rose-300 transition-all cursor-pointer shadow-2xs"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>ログ全件クリア</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedLogIds.length > 0 && (onBatchDeleteActivityLogs || onDeleteActivityLog) && (
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteSelectedLogsModalOpen(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer shadow-2xs"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>選択削除 ({selectedLogIds.length}件)</span>
+                </button>
+              )}
+              {onClearActivityLogs && activityLogs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsClearingLogsModalOpen(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 hover:border-rose-300 transition-all cursor-pointer shadow-2xs"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>ログ全件クリア</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {activityLogs.length === 0 ? (
@@ -357,40 +488,60 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              {activityLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="p-3.5 rounded-xl bg-white border border-slate-200 flex items-start gap-3 shadow-2xs group hover:border-purple-200 transition-all"
-                >
-                  <div className="w-2 h-2 rounded-full bg-purple-600 mt-1.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="text-xs font-bold text-slate-900">{log.actor}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          {new Date(log.timestamp).toLocaleString('ja-JP')}
-                        </span>
-                        {onDeleteActivityLog && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteActivityLog(log.id)}
-                            title="この履歴を削除"
-                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-slate-700 text-xs leading-relaxed">{log.summary}</p>
-                    {log.details && (
-                      <p className="text-[11px] text-slate-500 mt-1 font-mono bg-slate-50 p-1.5 rounded border border-slate-200">
-                        {log.details}
-                      </p>
+              {activityLogs.map((log) => {
+                const isSelected = selectedLogIds.includes(log.id);
+                return (
+                  <div
+                    key={log.id}
+                    className={`p-3.5 rounded-xl bg-white border flex items-start gap-3 shadow-2xs group transition-all ${
+                      isSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200 hover:border-purple-200'
+                    }`}
+                  >
+                    {(onBatchDeleteActivityLogs || onDeleteActivityLog) && (
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedLogIds((prev) => (prev.includes(log.id) ? prev : [...prev, log.id]));
+                          } else {
+                            setSelectedLogIds((prev) => prev.filter((id) => id !== log.id));
+                          }
+                        }}
+                        aria-label={`選択 ${log.summary}`}
+                        className="mt-1 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                      />
                     )}
+                    <div className="w-2 h-2 rounded-full bg-purple-600 mt-1.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <span className="text-xs font-bold text-slate-900">{log.actor}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {new Date(log.timestamp).toLocaleString('ja-JP')}
+                          </span>
+                          {onDeleteActivityLog && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteActivityLog(log.id)}
+                              title="この履歴を削除"
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-slate-700 text-xs leading-relaxed">{log.summary}</p>
+                      {log.details && (
+                        <p className="text-[11px] text-slate-500 mt-1 font-mono bg-slate-50 p-1.5 rounded border border-slate-200">
+                          {log.details}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -440,6 +591,47 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
         </div>
       )}
 
+      {/* Delete Selected Approvals Modal */}
+      {isDeleteSelectedApprovalsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 p-6 space-y-4 shadow-xl">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">選択した承認項目の削除</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              選択中の承認項目（全{selectedApprovalIds.length}件）を削除します。
+              {selectedApprovalsPendingCount > 0 && (
+                <>
+                  <br />
+                  ※ 確認待ちの項目が{selectedApprovalsPendingCount}件含まれています。削除すると関連するタスクは「進行中」に戻ります。
+                </>
+              )}
+              <br />
+              この操作は取り消せません。実行しますか？
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsDeleteSelectedApprovalsModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSelectedApprovals}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-xs cursor-pointer"
+              >
+                選択した{selectedApprovalIds.length}件を削除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Batch Delete Approvals Modal */}
       {batchDeleteType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
@@ -480,6 +672,41 @@ export const ApprovalsView: React.FC<ApprovalsViewProps> = ({
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-xs cursor-pointer"
               >
                 一括削除を実行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Selected Logs Modal */}
+      {isDeleteSelectedLogsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 p-6 space-y-4 shadow-xl">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">選択した活動ログの削除</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              選択中の活動履歴ログ（全{selectedLogIds.length}件）を削除します。
+              <br />
+              この操作は取り消せません。実行しますか？
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsDeleteSelectedLogsModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteSelectedLogs}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all shadow-xs cursor-pointer"
+              >
+                選択した{selectedLogIds.length}件を削除
               </button>
             </div>
           </div>

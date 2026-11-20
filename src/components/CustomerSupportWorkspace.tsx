@@ -349,6 +349,11 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
     const { error: deleteError } = await supabase.from('customer_service_engagements')
       .delete().eq('id', engagement.id);
     if (deleteError) { setError(supportErrorMessage(deleteError, '支援を削除できませんでした。')); return; }
+    // 紐づく支援タスクも整理
+    const linkedTasks = tasks.filter((t) => t.supportEngagementId === engagement.id);
+    if (onDeleteTask && linkedTasks.length > 0) {
+      await Promise.allSettled(linkedTasks.map((t) => Promise.resolve(onDeleteTask(t.id))));
+    }
     setNotice(`顧客支援「${engagement.title}」を削除しました。`);
     if (selectedId === engagement.id) setSelectedId('');
     await onRefresh();
@@ -1036,7 +1041,7 @@ export const CustomerSupportWorkspace: React.FC<Props> = ({
           </div>
           <div className="text-xs text-slate-700 leading-relaxed space-y-1">
             <p>「<strong className="text-slate-900 font-semibold">{deletingEngagement.title}</strong>」を削除しますか？</p>
-            <p className="text-[11px] text-slate-500">※ この操作は取り消せません。関連する打ち合わせ履歴も削除されます。</p>
+            <p className="text-[11px] text-slate-500">※ この操作は取り消せません。関連する打ち合わせ履歴および支援タスクも整理されます。</p>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <button

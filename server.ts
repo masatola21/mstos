@@ -9792,7 +9792,7 @@ app.post('/api/inbox/email/delete', requireAuth, async (req, res) => {
       .from('email_inbox_messages')
       .delete()
       .in('id', ids)
-      .eq('owner_id', user.id)
+      .or(`owner_id.eq.${user.id},owner_id.is.null`)
       .select('id');
     if (error) throw error;
     const deletedIds = (deleted || []).map((row: any) => String(row.id));
@@ -9800,6 +9800,26 @@ app.post('/api/inbox/email/delete', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Inbox email delete failed:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'メールを削除できませんでした。' });
+  }
+});
+
+// 自分の受信箱のメールを全削除する（件数上限なし、他人の受信メールには触れない）。
+app.post('/api/inbox/email/delete-all', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+
+  try {
+    const { data: deleted, error } = await lineSupabase
+      .from('email_inbox_messages')
+      .delete()
+      .or(`owner_id.eq.${user.id},owner_id.is.null`)
+      .select('id');
+    if (error) throw error;
+    const deletedIds = (deleted || []).map((row: any) => String(row.id));
+    return res.json({ success: true, count: deletedIds.length, deletedIds });
+  } catch (err: any) {
+    console.error('Inbox email delete-all failed:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '受信メールを全削除できませんでした。' });
   }
 });
 
@@ -11005,7 +11025,130 @@ function formatForeignKeyError(tableKey: string, error: any): string {
   return error?.message || '削除制約により削除できませんでした。';
 }
 
-async function unlinkReferencesForRecords(tableKey: string, ids: string[]) {
+async function collectIds(table: string, column: string, values: string[]): Promise<string[]> {
+  if (!lineSupabase || !values.length) return [];
+  try {
+    const { data, error } = await lineSupabase.from(table).select('id').in(column, values);
+    if (error || !data) return [];
+    return data.map((row: any) => String(row.id)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function collectContractAndInvoiceRefsByCompany(companyIds: string[]) {
+  if (!lineSupabase || !companyIds.length) {
+    return { deletedContractIds: [] as string[], deletedInvoiceIds: [] as string[] };
+  }
+  const [contractsRes, invoicesRes] = await Promise.allSettled([
+    lineSupabase.from('customer_contracts').select('id, legacy_id').in('company_id', companyIds),
+    lineSupabase.from('customer_invoices').select('id, legacy_id').in('company_id', companyIds),
+  ]);
+  const deletedContractIds: string[] = [];
+  if (contractsRes.status === 'fulfilled' && Array.isArray(contractsRes.value.data)) {
+    for (const row of contractsRes.value.data) {
+      if (row.id) deletedContractIds.push(String(row.id));
+      if (row.legacy_id) deletedContractIds.push(String(row.legacy_id));
+    }
+  }
+  const deletedInvoiceIds: string[] = [];
+  if (invoicesRes.status === 'fulfilled' && Array.isArray(invoicesRes.value.data)) {
+    for (const row of invoicesRes.value.data) {
+      if (row.id) deletedInvoiceIds.push(String(row.id));
+      if (row.legacy_id) deletedInvoiceIds.push(String(row.legacy_id));
+    }
+  }
+  return { deletedContractIds, deletedInvoiceIds };
+}
+
+async function safeDeleteDocumentsByField(field: 'company_id' | 'deal_id' | 'lead_id' | 'contact_id' | 'id', values: string[]) {
+  if (!lineSupabase || !values.length) return;
+  const docIds = field === 'id' ? values : await collectIds('customer_documents', field, values);
+  if (!docIds.length) return;
+  await Promise.allSettled([
+    lineSupabase.from('communication_outbox').update({ document_id: null }).in('document_id', docIds),
+    lineSupabase.from('customer_contracts').update({ document_id: null }).in('document_id', docIds),
+    lineSupabase.from('customer_invoices').update({ document_id: null }).in('document_id', docIds),
+  ]);
+  await lineSupabase.from('customer_documents').delete().in('id', docIds);
+}
+
+async function cascadeDeleteByCompanyIds(companyIds: string[]): Promise<{
+  deletedContractIds: string[];
+  deletedInvoiceIds: string[];
+}> {
+  if (!lineSupabase || !companyIds.length) {
+    return { deletedContractIds: [], deletedInvoiceIds: [] };
+  }
+  const uniqueCompanyIds = Array.from(new Set(companyIds.map(String).filter(Boolean)));
+  if (!uniqueCompanyIds.length) {
+    return { deletedContractIds: [], deletedInvoiceIds: [] };
+  }
+
+  const { deletedContractIds, deletedInvoiceIds } = await collectContractAndInvoiceRefsByCompany(uniqueCompanyIds);
+  const [engagementIds, diagnosisIds, contactIds, dealIds, docIds, leadIds] = await Promise.all([
+    collectIds('customer_service_engagements', 'company_id', uniqueCompanyIds),
+    collectIds('diagnoses', 'company_id', uniqueCompanyIds),
+    collectIds('contacts', 'company_id', uniqueCompanyIds),
+    collectIds('deals', 'company_id', uniqueCompanyIds),
+    collectIds('customer_documents', 'company_id', uniqueCompanyIds),
+    collectIds('leads', 'company_id', uniqueCompanyIds),
+  ]);
+
+  // 1. 送信履歴自体は残しつつ、外部キー参照を安全に解除（ON DELETE SET NULL / 制約回避）
+  await Promise.allSettled([
+    dealIds.length ? lineSupabase.from('communication_outbox').update({ deal_id: null }).in('deal_id', dealIds) : Promise.resolve(),
+    docIds.length ? lineSupabase.from('communication_outbox').update({ document_id: null }).in('document_id', docIds) : Promise.resolve(),
+    contactIds.length ? lineSupabase.from('communication_outbox').update({ recipient_contact_id: null }).in('recipient_contact_id', contactIds) : Promise.resolve(),
+  ]);
+
+  // 2. 支援打ち合わせ → 顧客支援 → 請求 → 契約 → 重要書類の順に削除
+  if (engagementIds.length) {
+    await Promise.allSettled([
+      lineSupabase.from('customer_service_meetings').delete().in('engagement_id', engagementIds),
+      lineSupabase.from('customer_service_meetings').delete().in('company_id', uniqueCompanyIds),
+    ]);
+  }
+  await Promise.allSettled([
+    lineSupabase.from('customer_service_engagements').delete().in('company_id', uniqueCompanyIds),
+    lineSupabase.from('customer_invoices').delete().in('company_id', uniqueCompanyIds),
+    lineSupabase.from('customer_contracts').delete().in('company_id', uniqueCompanyIds),
+  ]);
+  await safeDeleteDocumentsByField('company_id', uniqueCompanyIds);
+  if (dealIds.length) await safeDeleteDocumentsByField('deal_id', dealIds);
+  if (leadIds.length) await safeDeleteDocumentsByField('lead_id', leadIds);
+  if (contactIds.length) await safeDeleteDocumentsByField('contact_id', contactIds);
+
+  // 3. 診断・フォーム回答・AIレポート
+  if (diagnosisIds.length) {
+    await Promise.allSettled([
+      lineSupabase.from('ai_reports').delete().in('diagnosis_id', diagnosisIds),
+      lineSupabase.from('diagnosis_submissions').delete().in('diagnosis_id', diagnosisIds),
+    ]);
+  }
+  await Promise.allSettled([
+    lineSupabase.from('diagnosis_submissions').delete().in('company_id', uniqueCompanyIds),
+    leadIds.length ? lineSupabase.from('diagnosis_submissions').delete().in('lead_id', leadIds) : Promise.resolve(),
+    lineSupabase.from('diagnoses').delete().in('company_id', uniqueCompanyIds),
+    leadIds.length ? lineSupabase.from('diagnoses').delete().in('lead_id', leadIds) : Promise.resolve(),
+  ]);
+
+  // 4. パイプライン階層（商談 → リード → 見込み企業 → 顧客 → 担当者 → 会社）
+  await Promise.allSettled([lineSupabase.from('deals').delete().in('company_id', uniqueCompanyIds)]);
+  await Promise.allSettled([lineSupabase.from('leads').delete().in('company_id', uniqueCompanyIds)]);
+  await Promise.allSettled([lineSupabase.from('prospects').delete().in('company_id', uniqueCompanyIds)]);
+  await Promise.allSettled([lineSupabase.from('customers').delete().in('company_id', uniqueCompanyIds)]);
+  await Promise.allSettled([lineSupabase.from('contacts').delete().in('company_id', uniqueCompanyIds)]);
+  await Promise.allSettled([lineSupabase.from('companies').delete().in('id', uniqueCompanyIds)]);
+
+  return { deletedContractIds, deletedInvoiceIds };
+}
+
+async function unlinkReferencesForRecords(
+  tableKey: string,
+  ids: string[],
+  resolvedCompanyIds?: string[],
+) {
   if (!lineSupabase || !ids.length) return;
   const stringIds = ids.map(String);
   if (tableKey === 'products') {
@@ -11021,22 +11164,14 @@ async function unlinkReferencesForRecords(tableKey: string, ids: string[]) {
       await lineSupabase.from('mst_managed_products').delete().eq('id', prodId);
     }
   } else if (tableKey === 'companies') {
-    await Promise.allSettled([
-      lineSupabase.from('contacts').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('prospects').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('leads').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('deals').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customers').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('diagnoses').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_contracts').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_invoices').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_documents').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_service_engagements').update({ company_id: null }).in('company_id', stringIds),
-    ]);
+    // NOT NULL制約のある子テーブルを含むため、会社強制削除時は依存関係順に削除
+    await cascadeDeleteByCompanyIds(stringIds);
   } else if (tableKey === 'leads') {
     await Promise.allSettled([
       lineSupabase.from('deals').update({ lead_id: null }).in('lead_id', stringIds),
       lineSupabase.from('diagnoses').update({ lead_id: null }).in('lead_id', stringIds),
+      lineSupabase.from('customer_documents').update({ lead_id: null }).in('lead_id', stringIds),
+      lineSupabase.from('diagnosis_submissions').update({ lead_id: null }).in('lead_id', stringIds),
     ]);
   } else if (tableKey === 'deals') {
     await Promise.allSettled([
@@ -11045,11 +11180,12 @@ async function unlinkReferencesForRecords(tableKey: string, ids: string[]) {
       lineSupabase.from('communication_outbox').update({ deal_id: null }).in('deal_id', stringIds),
     ]);
   } else if (tableKey === 'customers') {
+    const companyIds = resolvedCompanyIds?.length ? resolvedCompanyIds : stringIds;
     await Promise.allSettled([
-      lineSupabase.from('customer_contracts').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_invoices').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_documents').update({ company_id: null }).in('company_id', stringIds),
-      lineSupabase.from('customer_service_engagements').update({ company_id: null }).in('company_id', stringIds),
+      lineSupabase.from('customer_contracts').update({ company_id: null }).in('company_id', companyIds),
+      lineSupabase.from('customer_invoices').update({ company_id: null }).in('company_id', companyIds),
+      lineSupabase.from('customer_documents').update({ company_id: null }).in('company_id', companyIds),
+      lineSupabase.from('customer_service_engagements').update({ company_id: null }).in('company_id', companyIds),
     ]);
   } else if (tableKey === 'customer_contracts') {
     await Promise.allSettled([
@@ -11060,12 +11196,130 @@ async function unlinkReferencesForRecords(tableKey: string, ids: string[]) {
     await Promise.allSettled([
       lineSupabase.from('customer_contracts').update({ document_id: null }).in('document_id', stringIds),
       lineSupabase.from('customer_invoices').update({ document_id: null }).in('document_id', stringIds),
+      lineSupabase.from('communication_outbox').update({ document_id: null }).in('document_id', stringIds),
     ]);
   } else if (tableKey === 'contacts') {
     await Promise.allSettled([
       lineSupabase.from('communication_outbox').update({ recipient_contact_id: null }).in('recipient_contact_id', stringIds),
+      lineSupabase.from('customer_documents').update({ contact_id: null }).in('contact_id', stringIds),
+      lineSupabase.from('leads').update({ contact_id: null }).in('contact_id', stringIds),
     ]);
   }
+}
+
+async function prepareLinkedDeletion(
+  tableKey: string,
+  stringIds: string[],
+  options: { force?: boolean; deleteDocuments?: boolean; deleteLinkedCrm?: boolean },
+): Promise<{
+  deletedContractIds: string[];
+  deletedInvoiceIds: string[];
+  alreadyDeletedRoot?: boolean;
+}> {
+  if (!lineSupabase || !stringIds.length) {
+    return { deletedContractIds: [], deletedInvoiceIds: [] };
+  }
+  const { force = false, deleteDocuments = false, deleteLinkedCrm = false } = options;
+
+  let companyIds: string[] = [];
+  let leadIds: string[] = [];
+  let contactIds: string[] = [];
+
+  if (['deals', 'leads', 'prospects', 'customers'].includes(tableKey)) {
+    const selectCols =
+      tableKey === 'deals'
+        ? 'id, company_id, lead_id'
+        : tableKey === 'leads'
+          ? 'id, company_id, contact_id'
+          : 'id, company_id';
+    const { data: rows } = await lineSupabase.from(tableKey).select(selectCols).in('id', stringIds);
+    for (const row of (rows || []) as any[]) {
+      if (row.company_id) companyIds.push(String(row.company_id));
+      if (row.lead_id) leadIds.push(String(row.lead_id));
+      if (row.contact_id) contactIds.push(String(row.contact_id));
+    }
+    companyIds = Array.from(new Set(companyIds));
+    leadIds = Array.from(new Set(leadIds));
+    contactIds = Array.from(new Set(contactIds));
+  }
+
+  if (tableKey === 'companies' && (force || deleteLinkedCrm || deleteDocuments)) {
+    const opsResult = await cascadeDeleteByCompanyIds(stringIds);
+    return { ...opsResult, alreadyDeletedRoot: true };
+  }
+
+  if (deleteLinkedCrm && ['deals', 'leads', 'prospects', 'customers'].includes(tableKey)) {
+    let deletedContractIds: string[] = [];
+    let deletedInvoiceIds: string[] = [];
+
+    if (companyIds.length) {
+      const opsResult = await cascadeDeleteByCompanyIds(companyIds);
+      deletedContractIds = opsResult.deletedContractIds;
+      deletedInvoiceIds = opsResult.deletedInvoiceIds;
+    }
+
+    // 会社未設定のレコードや、リード/商談単体の紐付きも漏れなく削除
+    if (tableKey === 'deals') {
+      await safeDeleteDocumentsByField('deal_id', stringIds);
+      await Promise.allSettled([
+        lineSupabase.from('communication_outbox').update({ deal_id: null }).in('deal_id', stringIds),
+        lineSupabase.from('customer_contracts').update({ deal_id: null }).in('deal_id', stringIds),
+      ]);
+      await lineSupabase.from('deals').delete().in('id', stringIds);
+      if (leadIds.length) {
+        await safeDeleteDocumentsByField('lead_id', leadIds);
+        await Promise.allSettled([
+          lineSupabase.from('diagnosis_submissions').delete().in('lead_id', leadIds),
+          lineSupabase.from('diagnoses').delete().in('lead_id', leadIds),
+          lineSupabase.from('leads').delete().in('id', leadIds),
+        ]);
+      }
+    } else if (tableKey === 'leads') {
+      await safeDeleteDocumentsByField('lead_id', stringIds);
+      const relatedDealIds = await collectIds('deals', 'lead_id', stringIds);
+      if (relatedDealIds.length) {
+        await safeDeleteDocumentsByField('deal_id', relatedDealIds);
+        await Promise.allSettled([
+          lineSupabase.from('communication_outbox').update({ deal_id: null }).in('deal_id', relatedDealIds),
+          lineSupabase.from('customer_contracts').update({ deal_id: null }).in('deal_id', relatedDealIds),
+          lineSupabase.from('deals').delete().in('id', relatedDealIds),
+        ]);
+      }
+      await Promise.allSettled([
+        lineSupabase.from('diagnosis_submissions').delete().in('lead_id', stringIds),
+        lineSupabase.from('diagnoses').delete().in('lead_id', stringIds),
+        lineSupabase.from('leads').delete().in('id', stringIds),
+      ]);
+      if (contactIds.length) {
+        await Promise.allSettled([
+          lineSupabase.from('communication_outbox').update({ recipient_contact_id: null }).in('recipient_contact_id', contactIds),
+          lineSupabase.from('contacts').delete().in('id', contactIds),
+        ]);
+      }
+    } else {
+      await lineSupabase.from(tableKey).delete().in('id', stringIds);
+    }
+
+    return { deletedContractIds, deletedInvoiceIds, alreadyDeletedRoot: true };
+  }
+
+  if (deleteDocuments) {
+    if (tableKey === 'deals') {
+      await safeDeleteDocumentsByField('deal_id', stringIds);
+    } else if (tableKey === 'leads') {
+      await safeDeleteDocumentsByField('lead_id', stringIds);
+    } else if (tableKey === 'customers' && companyIds.length) {
+      await safeDeleteDocumentsByField('company_id', companyIds);
+    } else if (tableKey === 'contacts') {
+      await safeDeleteDocumentsByField('contact_id', stringIds);
+    }
+  }
+
+  if (force || deleteDocuments) {
+    await unlinkReferencesForRecords(tableKey, stringIds, companyIds);
+  }
+
+  return { deletedContractIds: [], deletedInvoiceIds: [] };
 }
 
 app.delete('/api/admin/tables/:tableKey/records/:id', requireAuth, async (req, res) => {
@@ -11077,15 +11331,29 @@ app.delete('/api/admin/tables/:tableKey/records/:id', requireAuth, async (req, r
 
   const { tableKey, id } = req.params;
   const force = req.query.force === 'true' || (req.body && (req.body as any).force === true);
+  const deleteDocuments = req.query.deleteDocuments === 'true' || (req.body && (req.body as any).deleteDocuments === true);
+  const deleteLinkedCrm = req.query.deleteLinkedCrm === 'true' || (req.body && (req.body as any).deleteLinkedCrm === true);
 
-  const allowedTables = ['products', 'companies', 'prospects', 'leads', 'deals', 'customers', 'customer_contracts', 'customer_invoices', 'customer_documents', 'customer_service_engagements', 'diagnoses', 'communication_outbox', 'diagnosis_forms', 'communication_templates', 'line_auto_reply_templates'];
+  const allowedTables = ['products', 'companies', 'contacts', 'prospects', 'leads', 'deals', 'customers', 'customer_contracts', 'customer_invoices', 'customer_documents', 'customer_service_engagements', 'diagnoses', 'communication_outbox', 'diagnosis_forms', 'communication_templates', 'line_auto_reply_templates'];
   if (!allowedTables.includes(tableKey)) {
     return res.status(400).json({ error: '削除が許可されていないテーブルです。' });
   }
 
   try {
-    if (force) {
-      await unlinkReferencesForRecords(tableKey, [String(id)]);
+    const prep = await prepareLinkedDeletion(tableKey, [String(id)], {
+      force,
+      deleteDocuments,
+      deleteLinkedCrm,
+    });
+
+    if (prep.alreadyDeletedRoot) {
+      return res.json({
+        success: true,
+        count: 1,
+        deletedIds: [String(id)],
+        deletedContractIds: prep.deletedContractIds,
+        deletedInvoiceIds: prep.deletedInvoiceIds,
+      });
     }
 
     const { data, error } = await lineSupabase.from(tableKey).delete().eq('id', id).select('id');
@@ -11095,7 +11363,13 @@ app.delete('/api/admin/tables/:tableKey/records/:id', requireAuth, async (req, r
       return res.status(400).json({ error: friendlyMsg, code: error.code });
     }
     const count = data?.length || 0;
-    return res.json({ success: true, count, deletedIds: count > 0 ? [String(id)] : [] });
+    return res.json({
+      success: true,
+      count,
+      deletedIds: count > 0 ? [String(id)] : [],
+      deletedContractIds: prep.deletedContractIds,
+      deletedInvoiceIds: prep.deletedInvoiceIds,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'レコード削除中にエラーが発生しました。' });
   }
@@ -11110,13 +11384,13 @@ app.post('/api/admin/tables/:tableKey/bulk-delete', requireAuth, async (req, res
   }
 
   const { tableKey } = req.params;
-  const { ids, force } = req.body || {};
+  const { ids, force, deleteDocuments = false, deleteLinkedCrm = false } = req.body || {};
 
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: '削除対象のID配列を指定してください。' });
   }
 
-  const allowedTables = ['products', 'companies', 'prospects', 'leads', 'deals', 'customers', 'customer_contracts', 'customer_invoices', 'customer_documents', 'customer_service_engagements', 'diagnoses', 'communication_outbox'];
+  const allowedTables = ['products', 'companies', 'contacts', 'prospects', 'leads', 'deals', 'customers', 'customer_contracts', 'customer_invoices', 'customer_documents', 'customer_service_engagements', 'diagnoses', 'communication_outbox'];
   if (!allowedTables.includes(tableKey)) {
     return res.status(400).json({ error: '削除が許可されていないテーブルです。' });
   }
@@ -11124,8 +11398,22 @@ app.post('/api/admin/tables/:tableKey/bulk-delete', requireAuth, async (req, res
   const stringIds = ids.map(String);
 
   try {
-    if (force) {
-      await unlinkReferencesForRecords(tableKey, stringIds);
+    const prep = await prepareLinkedDeletion(tableKey, stringIds, {
+      force: Boolean(force),
+      deleteDocuments: Boolean(deleteDocuments),
+      deleteLinkedCrm: Boolean(deleteLinkedCrm),
+    });
+
+    if (prep.alreadyDeletedRoot) {
+      return res.json({
+        success: true,
+        count: stringIds.length,
+        deletedIds: stringIds,
+        failedCount: 0,
+        failedDetails: [],
+        deletedContractIds: prep.deletedContractIds,
+        deletedInvoiceIds: prep.deletedInvoiceIds,
+      });
     }
 
     // First attempt batch delete
@@ -11145,6 +11433,8 @@ app.post('/api/admin/tables/:tableKey/bulk-delete', requireAuth, async (req, res
         deletedIds,
         failedCount: failedDetails.length,
         failedDetails,
+        deletedContractIds: prep.deletedContractIds,
+        deletedInvoiceIds: prep.deletedInvoiceIds,
       });
     }
 
@@ -11170,81 +11460,164 @@ app.post('/api/admin/tables/:tableKey/bulk-delete', requireAuth, async (req, res
       deletedIds,
       failedCount: failedDetails.length,
       failedDetails,
+      deletedContractIds: prep.deletedContractIds,
+      deletedInvoiceIds: prep.deletedInvoiceIds,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || '一括削除中にエラーが発生しました。' });
   }
 });
 
-// ─── ダミー・テストデータ一括リセット API（依存関係の深い順に安全に削除） ───
+// ─── ダミー・テストデータ一括リセット / 全削除 API（依存関係の深い順に安全に削除） ───
 app.post('/api/admin/clean-dummy-data', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
   const user = (req as any).user;
   if (!checkIsAdminUser(user)) {
     return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
   }
-  const { targets = ['prospects', 'leads', 'deals', 'customers', 'companies'] } = req.body || {};
+  const { targets = ['prospects', 'leads', 'deals', 'customers', 'companies', 'customer_documents'] } = req.body || {};
+  const targetList = Array.isArray(targets) ? targets.map(String) : [];
 
   const results: Record<string, number> = {};
+  const deletedContractIds: string[] = [];
+  const deletedInvoiceIds: string[] = [];
+  const NEQ_NIL = '00000000-0000-0000-0000-000000000000';
 
   try {
-    // 1. 顧客契約関連・請求・送付書類・業務支援（最子階層）
-    if (targets.includes('customers') || targets.includes('deals')) {
-      const d1 = await lineSupabase.from('customer_documents').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
-      results['customer_documents'] = d1.data?.length || 0;
-      const d2 = await lineSupabase.from('customer_invoices').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
-      results['customer_invoices'] = d2.data?.length || 0;
-      const d3 = await lineSupabase.from('customer_contracts').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
-      results['customer_contracts'] = d3.data?.length || 0;
-      const d4 = await lineSupabase.from('customer_service_engagements').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
-      results['customer_service_engagements'] = d4.data?.length || 0;
-    }
+    const deletingContractsAndInvoices = targetList.includes('customers') || targetList.includes('companies');
+    const deletingDocuments = targetList.includes('customer_documents') || targetList.includes('customers') || targetList.includes('companies') || targetList.includes('deals');
+    const deletingOutbox = targetList.includes('communication_outbox');
+    const deletingDiagnoses = targetList.includes('diagnoses') || targetList.includes('companies');
 
-    // 2. 診断・アウトボックス
-    if (targets.includes('customers') || targets.includes('leads') || targets.includes('deals')) {
-      const diag = await lineSupabase.from('diagnoses').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
-      results['diagnoses'] = diag.data?.length || 0;
-      const comm = await lineSupabase.from('communication_outbox').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    // 送信履歴を残す場合は、削除対象テーブルへの外部キー参照を先に安全解除
+    if (!deletingOutbox) {
+      await Promise.allSettled([
+        targetList.includes('deals') || targetList.includes('companies')
+          ? lineSupabase.from('communication_outbox').update({ deal_id: null }).not('deal_id', 'is', null)
+          : Promise.resolve(),
+        deletingDocuments
+          ? lineSupabase.from('communication_outbox').update({ document_id: null }).not('document_id', 'is', null)
+          : Promise.resolve(),
+        targetList.includes('companies')
+          ? lineSupabase.from('communication_outbox').update({ recipient_contact_id: null }).not('recipient_contact_id', 'is', null)
+          : Promise.resolve(),
+      ]);
+    } else {
+      const comm = await lineSupabase.from('communication_outbox').delete().neq('id', NEQ_NIL).select('id');
       results['communication_outbox'] = comm.data?.length || 0;
     }
 
+    // 1. 顧客契約関連・請求・業務支援（最子階層）
+    if (deletingContractsAndInvoices) {
+      const [cRows, iRows] = await Promise.allSettled([
+        lineSupabase.from('customer_contracts').select('id, legacy_id'),
+        lineSupabase.from('customer_invoices').select('id, legacy_id'),
+      ]);
+      if (cRows.status === 'fulfilled' && Array.isArray(cRows.value.data)) {
+        for (const r of cRows.value.data) {
+          if (r.id) deletedContractIds.push(String(r.id));
+          if (r.legacy_id) deletedContractIds.push(String(r.legacy_id));
+        }
+      }
+      if (iRows.status === 'fulfilled' && Array.isArray(iRows.value.data)) {
+        for (const r of iRows.value.data) {
+          if (r.id) deletedInvoiceIds.push(String(r.id));
+          if (r.legacy_id) deletedInvoiceIds.push(String(r.legacy_id));
+        }
+      }
+
+      const d0 = await lineSupabase.from('customer_service_meetings').delete().neq('id', NEQ_NIL).select('id');
+      results['customer_service_meetings'] = d0.data?.length || 0;
+      const d4 = await lineSupabase.from('customer_service_engagements').delete().neq('id', NEQ_NIL).select('id');
+      results['customer_service_engagements'] = d4.data?.length || 0;
+      const d2 = await lineSupabase.from('customer_invoices').delete().neq('id', NEQ_NIL).select('id');
+      results['customer_invoices'] = d2.data?.length || 0;
+      const d3 = await lineSupabase.from('customer_contracts').delete().neq('id', NEQ_NIL).select('id');
+      results['customer_contracts'] = d3.data?.length || 0;
+    } else if (deletingDocuments) {
+      await Promise.allSettled([
+        lineSupabase.from('customer_contracts').update({ document_id: null }).not('document_id', 'is', null),
+        lineSupabase.from('customer_invoices').update({ document_id: null }).not('document_id', 'is', null),
+      ]);
+    }
+
+    // 重要書類
+    if (deletingDocuments) {
+      const d1 = await lineSupabase.from('customer_documents').delete().neq('id', NEQ_NIL).select('id');
+      results['customer_documents'] = d1.data?.length || 0;
+    } else if (targetList.includes('deals') || targetList.includes('leads')) {
+      await Promise.allSettled([
+        targetList.includes('deals') ? lineSupabase.from('customer_documents').update({ deal_id: null }).not('deal_id', 'is', null) : Promise.resolve(),
+        targetList.includes('leads') ? lineSupabase.from('customer_documents').update({ lead_id: null }).not('lead_id', 'is', null) : Promise.resolve(),
+      ]);
+    }
+
+    // 2. 診断データ
+    if (deletingDiagnoses) {
+      await Promise.allSettled([
+        lineSupabase.from('ai_reports').delete().neq('id', NEQ_NIL),
+        lineSupabase.from('diagnosis_submissions').delete().neq('id', NEQ_NIL),
+      ]);
+      const diag = await lineSupabase.from('diagnoses').delete().neq('id', NEQ_NIL).select('id');
+      results['diagnoses'] = diag.data?.length || 0;
+    } else if (targetList.includes('leads')) {
+      await Promise.allSettled([
+        lineSupabase.from('diagnoses').update({ lead_id: null }).not('lead_id', 'is', null),
+        lineSupabase.from('diagnosis_submissions').update({ lead_id: null }).not('lead_id', 'is', null),
+      ]);
+    }
+
     // 3. 商談（deals）
-    if (targets.includes('deals')) {
-      const deals = await lineSupabase.from('deals').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    if (targetList.includes('deals') || targetList.includes('companies')) {
+      if (!deletingContractsAndInvoices) {
+        await lineSupabase.from('customer_contracts').update({ deal_id: null }).not('deal_id', 'is', null);
+      }
+      const deals = await lineSupabase.from('deals').delete().neq('id', '').select('id');
       results['deals'] = deals.data?.length || 0;
     }
 
     // 4. リード（leads）
-    if (targets.includes('leads')) {
-      const leads = await lineSupabase.from('leads').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    if (targetList.includes('leads') || targetList.includes('companies')) {
+      if (!targetList.includes('deals') && !targetList.includes('companies')) {
+        await lineSupabase.from('deals').update({ lead_id: null }).not('lead_id', 'is', null);
+      }
+      const leads = await lineSupabase.from('leads').delete().neq('id', NEQ_NIL).select('id');
       results['leads'] = leads.data?.length || 0;
     }
 
     // 5. 見込み企業（prospects）
-    if (targets.includes('prospects')) {
-      const prospects = await lineSupabase.from('prospects').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    if (targetList.includes('prospects') || targetList.includes('companies')) {
+      const prospects = await lineSupabase.from('prospects').delete().neq('id', NEQ_NIL).select('id');
       results['prospects'] = prospects.data?.length || 0;
     }
 
     // 6. 顧客（customers）
-    if (targets.includes('customers')) {
-      const cust = await lineSupabase.from('customers').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    if (targetList.includes('customers') || targetList.includes('companies')) {
+      const cust = await lineSupabase.from('customers').delete().neq('id', NEQ_NIL).select('id');
       results['customers'] = cust.data?.length || 0;
     }
 
     // 7. 担当者・連絡先（contacts）
-    if (targets.includes('companies')) {
-      const contacts = await lineSupabase.from('contacts').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    if (targetList.includes('companies') || targetList.includes('contacts')) {
+      if (!targetList.includes('leads') && !targetList.includes('companies')) {
+        await lineSupabase.from('leads').update({ contact_id: null }).not('contact_id', 'is', null);
+      }
+      const contacts = await lineSupabase.from('contacts').delete().neq('id', NEQ_NIL).select('id');
       results['contacts'] = contacts.data?.length || 0;
     }
 
     // 8. 法人マスタ（companies）
-    if (targets.includes('companies')) {
-      const companies = await lineSupabase.from('companies').delete().neq('id', '00000000-0000-0000-0000-000000000000').select('id');
+    if (targetList.includes('companies')) {
+      const companies = await lineSupabase.from('companies').delete().neq('id', '').select('id');
       results['companies'] = companies.data?.length || 0;
     }
 
-    return res.json({ success: true, deleted: results });
+    return res.json({
+      success: true,
+      deleted: results,
+      deletedContractIds,
+      deletedInvoiceIds,
+    });
   } catch (err: any) {
     console.warn('[cleanDummyData] error:', err);
     return res.status(500).json({ error: err.message || 'ダミーデータ削除中にエラーが発生しました。' });

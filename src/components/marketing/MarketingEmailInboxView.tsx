@@ -16,6 +16,7 @@ import {
   countUnreadEmails,
   isEmailMessageRead,
   loadLocalReadEmailIds,
+  saveLocalReadEmailIds,
   updateLocalEmailReadIds,
 } from '../../utils/inboxReadState';
 
@@ -152,6 +153,8 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [localReadIds, setLocalReadIds] = useState<Set<string>>(() => loadLocalReadEmailIds());
   const [unreadOnlyFilter, setUnreadOnlyFilter] = useState(false);
   // 選択したメールの本文を読み込み中／失敗したときの状態
@@ -655,10 +658,44 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
       setSelected((current) => (current && deleted.has(current.id) ? null : current));
       const failed = ids.length - deleted.size;
       setNotice(deleted.size + '件のメールを削除しました。' + (failed > 0 ? '（' + failed + '件は削除できませんでした）' : ''));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mst_inbox_counts_updated'));
+      }
     } catch (e: any) {
       setError(e?.message || 'メールを削除できませんでした。');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const deleteAllMessages = async () => {
+    setDeletingAll(true);
+    setError('');
+    setNotice('');
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/inbox/email/delete-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || '受信メールの全削除に失敗しました。');
+      const count = typeof result.deletedCount === 'number' ? result.deletedCount : messages.length;
+      setMessages([]);
+      setCheckedIds([]);
+      setSelected(null);
+      setIsBodyExpanded(false);
+      saveLocalReadEmailIds(new Set());
+      setLocalReadIds(new Set());
+      setShowDeleteAllModal(false);
+      setNotice(`受信トレイのメール（${count}件）をすべて削除しました。`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mst_inbox_counts_updated'));
+      }
+    } catch (e: any) {
+      setError(e?.message || '受信メールの全削除に失敗しました。');
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -1246,13 +1283,25 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
               )}
               <button
                 type="button"
-                disabled={checkedIds.length === 0 || deleting}
+                disabled={checkedIds.length === 0 || deleting || deletingAll}
                 onClick={() => void deleteMessages(checkedIds)}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {deleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                 <span>{checkedIds.length > 0 ? '選択した' + checkedIds.length + '件を削除' : '削除'}</span>
               </button>
+              {messages.length > 0 && (
+                <button
+                  type="button"
+                  disabled={deleting || deletingAll}
+                  onClick={() => setShowDeleteAllModal(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 hover:border-rose-300 text-xs font-semibold shadow-2xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                  title="受信トレイ内のメールをすべて削除します"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>全削除</span>
+                </button>
+              )}
             </div>
           </div>
           <div className="max-h-[65vh] overflow-auto divide-y divide-slate-100">
@@ -1748,6 +1797,57 @@ export const MarketingEmailInboxView: React.FC<MarketingEmailInboxViewProps> = (
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                 >
                   閉じる
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+      {/* 受信メール全削除確認モーダル */}
+      {showDeleteAllModal &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="受信メールの全削除確認"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            onClick={(e) => {
+              if (!deletingAll && e.target === e.currentTarget) setShowDeleteAllModal(false);
+            }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-3 text-rose-600">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">受信メールをすべて削除</h3>
+                  <p className="text-xs text-slate-500">受信トレイ内の全 {messages.length} 件を削除します</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-rose-50/70 border border-rose-200 p-3.5 text-xs text-slate-700 space-y-1.5 leading-relaxed">
+                <p className="font-semibold text-rose-900">この操作は取り消せません。</p>
+                <p>受信トレイに表示されているすべてのメール（既読・未読を含む全件）をデータベースから削除します。</p>
+                <p className="text-[11px] text-slate-600">※ Gmail控え自動転送で外部メールボックスに転送済みのコピー自体は削除されません。また、迷惑メール拒否設定は維持されます。</p>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={deletingAll}
+                  onClick={() => setShowDeleteAllModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingAll}
+                  onClick={() => void deleteAllMessages()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {deletingAll ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  <span>{deletingAll ? '削除中...' : `全${messages.length}件を削除する`}</span>
                 </button>
               </div>
             </div>

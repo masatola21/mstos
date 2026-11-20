@@ -186,33 +186,60 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     return getTemplateDefaultValues(activeId, today, 'lump_sum', 'lump_sum');
   });
 
-  useEffect(() => {
+  const loadCrmEntities = React.useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) return;
-    void Promise.all([
+    const [companyResult, contactResult, dealResult, leadResult] = await Promise.all([
       supabase.from('companies').select('id,company_name').order('company_name'),
       supabase.from('contacts').select('id,full_name,company_id,email,phone,role_title').order('full_name'),
-      supabase.from('deals').select('id,proposal_plan_name,company_id,lead_id').order('created_at',{ascending:false}),
-      supabase.from('leads').select('id,source,status,company_id').order('created_at',{ascending:false}),
-    ]).then(([companyResult,contactResult,dealResult,leadResult]) => {
-      const loadedCompanies = companyResult.data || [];
-      const loadedContacts = contactResult.data || [];
-      const loadedDeals = dealResult.data || [];
-      const loadedLeads = leadResult.data || [];
-      if (!companyResult.error) setCompanies(loadedCompanies);
-      if (!contactResult.error) setContacts(loadedContacts);
-      if (!dealResult.error) setDeals(loadedDeals);
-      if (!leadResult.error) setLeads(loadedLeads);
-      if (!initialCompanyId && initialDealId) {
-        const sourceDeal = loadedDeals.find((deal: { id: string; company_id?: string | null; lead_id?: string | null }) => deal.id === initialDealId);
-        if (sourceDeal?.company_id) setCompanyId(sourceDeal.company_id);
-        if (sourceDeal?.lead_id) setLeadId(sourceDeal.lead_id);
-      } else if (!initialCompanyId && initialLeadId) {
-        const sourceLead = loadedLeads.find((lead: { id: string; company_id?: string | null }) => lead.id === initialLeadId);
-        if (sourceLead?.company_id) setCompanyId(sourceLead.company_id);
-      }
-    });
+      supabase.from('deals').select('id,proposal_plan_name,company_id,lead_id').order('created_at', { ascending: false }),
+      supabase.from('leads').select('id,source,status,company_id').order('created_at', { ascending: false }),
+    ]);
+    const loadedCompanies = companyResult.data || [];
+    const loadedContacts = contactResult.data || [];
+    const loadedDeals = dealResult.data || [];
+    const loadedLeads = leadResult.data || [];
+    if (!companyResult.error) {
+      setCompanies(loadedCompanies);
+      setCompanyId((prev) => (prev && !loadedCompanies.some((c: any) => c.id === prev) ? '' : prev));
+    }
+    if (!contactResult.error) {
+      setContacts(loadedContacts);
+      setContactId((prev) => (prev && !loadedContacts.some((c: any) => c.id === prev) ? '' : prev));
+    }
+    if (!dealResult.error) {
+      setDeals(loadedDeals);
+      setDealId((prev) => (prev && !loadedDeals.some((d: any) => d.id === prev) ? '' : prev));
+    }
+    if (!leadResult.error) {
+      setLeads(loadedLeads);
+      setLeadId((prev) => (prev && !loadedLeads.some((l: any) => l.id === prev) ? '' : prev));
+    }
+    if (!initialCompanyId && initialDealId) {
+      const sourceDeal = loadedDeals.find((deal: { id: string; company_id?: string | null; lead_id?: string | null }) => deal.id === initialDealId);
+      if (sourceDeal?.company_id) setCompanyId(sourceDeal.company_id);
+      if (sourceDeal?.lead_id) setLeadId(sourceDeal.lead_id);
+    } else if (!initialCompanyId && initialLeadId) {
+      const sourceLead = loadedLeads.find((lead: { id: string; company_id?: string | null }) => lead.id === initialLeadId);
+      if (sourceLead?.company_id) setCompanyId(sourceLead.company_id);
+    }
   }, [initialCompanyId, initialDealId, initialLeadId]);
+
+  useEffect(() => {
+    void loadCrmEntities();
+  }, [loadCrmEntities]);
+
+  useEffect(() => {
+    const reload = () => {
+      void loadCrmEntities();
+    };
+    window.addEventListener('mst:crm-data-changed', reload);
+    window.addEventListener('mst:documents-changed', reload);
+    return () => {
+      window.removeEventListener('mst:crm-data-changed', reload);
+      window.removeEventListener('mst:documents-changed', reload);
+    };
+  }, [loadCrmEntities]);
 
   // Sync templates on mount
   useEffect(() => {

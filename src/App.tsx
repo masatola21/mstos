@@ -892,6 +892,99 @@ function AppContent() {
       });
   };
 
+  // テーブル管理・パイプラインからの削除（契約・請求の連動削除やダミーデータ整理）をローカルキャッシュ・React状態へ即座に同期する
+  useEffect(() => {
+    const handleCrmDataChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        tableKey?: string;
+        deletedContractIds?: string[];
+        deletedInvoiceIds?: string[];
+        clearedAllOps?: boolean;
+      }>).detail || {};
+
+      const deletedContractSet = new Set((detail.deletedContractIds || []).map(String));
+      const deletedInvoiceSet = new Set((detail.deletedInvoiceIds || []).map(String));
+
+      if (deletedContractSet.size > 0) {
+        const currentContracts = matrixService.loadContracts();
+        currentContracts.forEach((c) => {
+          if (deletedContractSet.has(c.id)) {
+            try {
+              matrixService.deleteContract(c.id);
+            } catch {
+              // ignore if activeMatrixUserId is not yet set
+            }
+          }
+        });
+        const nextContracts = matrixService.loadContracts().filter((c) => !deletedContractSet.has(c.id));
+        matrixService.saveContracts(nextContracts);
+        setContracts(nextContracts);
+      }
+
+      if (deletedInvoiceSet.size > 0) {
+        const currentInvoices = matrixService.loadInvoices();
+        currentInvoices.forEach((inv) => {
+          if (deletedInvoiceSet.has(inv.id)) {
+            try {
+              matrixService.deleteInvoice(inv.id);
+            } catch {
+              // ignore if activeMatrixUserId is not yet set
+            }
+          }
+        });
+        const nextInvoices = matrixService.loadInvoices().filter((inv) => !deletedInvoiceSet.has(inv.id));
+        matrixService.saveInvoices(nextInvoices);
+        setInvoices(nextInvoices);
+      }
+
+      if (detail.clearedAllOps) {
+        const supabase = getSupabase();
+        if (supabase) {
+          void Promise.all([
+            supabase.from('customer_contracts').select('id,legacy_id'),
+            supabase.from('customer_invoices').select('id,legacy_id'),
+          ]).then(([cRes, iRes]) => {
+            if (!cRes.error && Array.isArray(cRes.data)) {
+              const aliveContractIds = new Set<string>();
+              cRes.data.forEach((r: any) => {
+                if (r.id) aliveContractIds.add(String(r.id));
+                if (r.legacy_id) aliveContractIds.add(String(r.legacy_id));
+              });
+              const current = matrixService.loadContracts();
+              current.forEach((c) => {
+                if (!aliveContractIds.has(c.id)) {
+                  try { matrixService.deleteContract(c.id); } catch {}
+                }
+              });
+              const filtered = matrixService.loadContracts().filter((c) => aliveContractIds.has(c.id));
+              matrixService.saveContracts(filtered);
+              setContracts(filtered);
+            }
+            if (!iRes.error && Array.isArray(iRes.data)) {
+              const aliveInvoiceIds = new Set<string>();
+              iRes.data.forEach((r: any) => {
+                if (r.id) aliveInvoiceIds.add(String(r.id));
+                if (r.legacy_id) aliveInvoiceIds.add(String(r.legacy_id));
+              });
+              const current = matrixService.loadInvoices();
+              current.forEach((inv) => {
+                if (!aliveInvoiceIds.has(inv.id)) {
+                  try { matrixService.deleteInvoice(inv.id); } catch {}
+                }
+              });
+              const filtered = matrixService.loadInvoices().filter((inv) => aliveInvoiceIds.has(inv.id));
+              matrixService.saveInvoices(filtered);
+              setInvoices(filtered);
+            }
+          });
+        }
+      }
+    };
+
+    window.addEventListener('mst:crm-data-changed', handleCrmDataChanged);
+    return () => window.removeEventListener('mst:crm-data-changed', handleCrmDataChanged);
+  }, []);
+
   // 保存最適化：タイマーが発火するまで巨大オブジェクト構築・JSON.stringifyを行わない
   useEffect(() => {
     if (!user || !workspaceReady || !workspaceSyncEnabledRef.current) return;
@@ -1827,8 +1920,50 @@ function AppContent() {
     setActivityLogs(loadActivityLogs());
   };
 
+  const handleBatchDeleteApprovals = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const itemsToRemove = approvals.filter((a) => idSet.has(a.id));
+    if (itemsToRemove.length === 0) return;
+
+    const pendingTaskIds = new Set(
+      itemsToRemove
+        .filter((a) => a.status === 'pending' && a.taskId)
+        .map((a) => a.taskId as string)
+    );
+
+    if (pendingTaskIds.size > 0) {
+      const updatedTasks = tasks.map((t) =>
+        pendingTaskIds.has(t.id) && t.status === 'pending_approval'
+          ? { ...t, status: 'in_progress' as const, updatedAt: Date.now() }
+          : t
+      );
+      setTasks(updatedTasks);
+      saveTasks(updatedTasks);
+    }
+
+    const updatedApprovals = approvals.filter((a) => !idSet.has(a.id));
+    setApprovals(updatedApprovals);
+    saveApprovals(updatedApprovals);
+
+    recordActivityLog(
+      'task_updated',
+      `選択した承認項目（${itemsToRemove.length}件）を削除しました`,
+      '人間'
+    );
+    setActivityLogs(loadActivityLogs());
+  };
+
   const handleDeleteActivityLog = (id: string) => {
     const updated = activityLogs.filter((log) => log.id !== id);
+    setActivityLogs(updated);
+    saveActivityLogs(updated);
+  };
+
+  const handleBatchDeleteActivityLogs = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const updated = activityLogs.filter((log) => !idSet.has(log.id));
     setActivityLogs(updated);
     saveActivityLogs(updated);
   };
@@ -2925,6 +3060,7 @@ function AppContent() {
             tasks={tasks}
             onCreateTask={handleCreateTask}
             onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
             onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)}
             onOperationalRecordsChange={(nextContracts, nextInvoices) => {
               setContracts(nextContracts);
@@ -3113,8 +3249,10 @@ function AppContent() {
             activityLogs={activityLogs}
             onResolveApproval={handleResolveApproval}
             onDeleteApproval={handleDeleteApproval}
+            onBatchDeleteApprovals={handleBatchDeleteApprovals}
             onClearApprovals={handleClearApprovals}
             onDeleteActivityLog={handleDeleteActivityLog}
+            onBatchDeleteActivityLogs={handleBatchDeleteActivityLogs}
             onClearActivityLogs={handleClearActivityLogs}
             initialSection={selectedTaskWorkspaceSection}
             onSectionChange={setSelectedTaskWorkspaceSection}

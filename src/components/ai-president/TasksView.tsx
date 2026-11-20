@@ -98,8 +98,10 @@ interface TasksViewProps {
   activityLogs: ActivityLog[];
   onResolveApproval: (id: string, status: 'approved' | 'rejected', note?: string) => void;
   onDeleteApproval?: (id: string) => void;
+  onBatchDeleteApprovals?: (ids: string[]) => void;
   onClearApprovals?: (statusFilter?: 'pending' | 'approved' | 'rejected' | 'all') => void;
   onDeleteActivityLog?: (id: string) => void;
+  onBatchDeleteActivityLogs?: (ids: string[]) => void;
   onClearActivityLogs?: () => void;
   initialSection?: 'tasks' | 'approvals' | 'logs';
   onSectionChange?: (section: 'tasks' | 'approvals' | 'logs') => void;
@@ -127,8 +129,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
   activityLogs,
   onResolveApproval,
   onDeleteApproval,
+  onBatchDeleteApprovals,
   onClearApprovals,
   onDeleteActivityLog,
+  onBatchDeleteActivityLogs,
   onClearActivityLogs,
   initialSection = 'tasks',
   onSectionChange,
@@ -184,13 +188,18 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
 
   // Batch delete tasks state
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [batchDeleteState, setBatchDeleteState] = useState<{
-    target: 'completed' | 'pending_approval' | 'filtered' | 'all';
+    target: 'completed' | 'pending_approval' | 'filtered' | 'selected' | 'all';
     label: string;
     taskIds: string[];
   } | null>(null);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [batchDeleteError, setBatchDeleteError] = useState('');
+
+  useEffect(() => {
+    setSelectedTaskIds((prev) => prev.filter((id) => tasks.some((t) => t.id === id)));
+  }, [tasks]);
 
   // Form Fields
   const [title, setTitle] = useState('');
@@ -228,6 +237,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [completingSystemTaskId, setCompletingSystemTaskId] = useState<string | null>(null);
   const [systemTaskActionError, setSystemTaskActionError] = useState<string | null>(null);
   const [expandedSystemTaskIds, setExpandedSystemTaskIds] = useState<Set<string>>(() => new Set());
+  const [selectedSystemTaskIds, setSelectedSystemTaskIds] = useState<string[]>([]);
+  const [systemDeleteConfirm, setSystemDeleteConfirm] = useState<{
+    mode: 'single' | 'selected' | 'all';
+    ids: string[];
+    title?: string;
+  } | null>(null);
+  const [isBulkDeletingSystemTasks, setIsBulkDeletingSystemTasks] = useState(false);
 
   const loadSystemTasks = async () => {
     setSystemTasksLoading(true);
@@ -287,32 +303,42 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   const [deletingSystemTaskId, setDeletingSystemTaskId] = useState<string | null>(null);
 
-  const handleDeleteSystemTask = async (taskId: string, taskTitle: string) => {
-    if (!window.confirm(`自動起票タスク「${taskTitle}」を削除しますか？`)) return;
-    setDeletingSystemTaskId(taskId);
+  const activeSystemTasks = systemTasks.filter((t) => t.status !== 'done' && t.status !== 'completed');
+
+  useEffect(() => {
+    setSelectedSystemTaskIds((prev) => prev.filter((id) => activeSystemTasks.some((t) => t.id === id)));
+  }, [systemTasks]);
+
+  const confirmDeleteSystemTasks = async () => {
+    if (!systemDeleteConfirm || systemDeleteConfirm.ids.length === 0) return;
+    const ids = systemDeleteConfirm.ids;
+    if (ids.length === 1) setDeletingSystemTaskId(ids[0]);
+    setIsBulkDeletingSystemTasks(true);
     setSystemTaskActionError(null);
     try {
       const supabase = getSupabase();
       if (!supabase) {
         throw new Error('Supabaseクライアントを初期化できませんでした。');
       }
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+      const { error } =
+        ids.length === 1
+          ? await supabase.from('tasks').delete().eq('id', ids[0])
+          : await supabase.from('tasks').delete().in('id', ids);
 
       if (error) {
         throw error;
       }
-      setSystemTasks((prev) => prev.filter((t) => t.id !== taskId));
+      const idSet = new Set(ids);
+      setSystemTasks((prev) => prev.filter((t) => !idSet.has(t.id)));
+      setSelectedSystemTaskIds((prev) => prev.filter((id) => !idSet.has(id)));
+      setSystemDeleteConfirm(null);
     } catch (err: any) {
-      setSystemTaskActionError(`タスクの削除に失敗しました: ${err?.message || '不明なエラー'}`);
+      setSystemTaskActionError(`自動起票タスクの削除に失敗しました: ${err?.message || '不明なエラー'}`);
     } finally {
       setDeletingSystemTaskId(null);
+      setIsBulkDeletingSystemTasks(false);
     }
   };
-
-  const activeSystemTasks = systemTasks.filter((t) => t.status !== 'done' && t.status !== 'completed');
 
   const getSystemPriorityBadge = (p?: string | null) => {
     switch (p) {
@@ -363,6 +389,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
           await onDeleteTask(id);
         }
       }
+      const deletedSet = new Set(batchDeleteState.taskIds);
+      setSelectedTaskIds((prev) => prev.filter((id) => !deletedSet.has(id)));
       setBatchDeleteState(null);
     } catch (e: any) {
       setBatchDeleteError(e?.message || '一括削除に失敗しました。');
@@ -750,6 +778,21 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 <span>完了タスク整理 ({tasks.filter((t) => t.status === 'completed').length})</span>
               </button>
             )}
+            {tasks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBatchDeleteState({
+                  target: 'all',
+                  label: 'すべての通常タスク',
+                  taskIds: tasks.map((t) => t.id),
+                })}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 hover:border-rose-300 text-xs font-semibold transition-all cursor-pointer"
+                title="登録されている通常タスクをすべて削除"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>タスク全削除 (全{tasks.length}件)</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={openCreateModal}
@@ -804,16 +847,47 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void loadSystemTasks()}
-                disabled={systemTasksLoading}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
-                title="自動起票タスクを再読み込み"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${systemTasksLoading ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
-                <span>更新</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedSystemTaskIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSystemDeleteConfirm({
+                      mode: 'selected',
+                      ids: selectedSystemTaskIds,
+                    })}
+                    disabled={isBulkDeletingSystemTasks}
+                    className="flex items-center gap-1 rounded-xl bg-rose-600 hover:bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white transition cursor-pointer shadow-2xs disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>選択削除 ({selectedSystemTaskIds.length}件)</span>
+                  </button>
+                )}
+                {activeSystemTasks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSystemDeleteConfirm({
+                      mode: 'all',
+                      ids: activeSystemTasks.map((t) => t.id),
+                    })}
+                    disabled={isBulkDeletingSystemTasks}
+                    className="flex items-center gap-1 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 transition cursor-pointer shadow-2xs disabled:opacity-50"
+                    title="未完了の自動起票タスクをすべて削除"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>全削除 ({activeSystemTasks.length}件)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void loadSystemTasks()}
+                  disabled={systemTasksLoading}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                  title="自動起票タスクを再読み込み"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${systemTasksLoading ? 'animate-spin text-purple-600' : 'text-slate-500'}`} />
+                  <span>更新</span>
+                </button>
+              </div>
             </div>
 
             {/* 読み込み失敗エラー */}
@@ -856,13 +930,50 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
             ) : (
               <div className="space-y-2.5">
-                {activeSystemTasks.map((st) => (
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-white/90 border border-slate-200/80 text-xs">
+                  <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={activeSystemTasks.length > 0 && activeSystemTasks.every((t) => selectedSystemTaskIds.includes(t.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSystemTaskIds(activeSystemTasks.map((t) => t.id));
+                        } else {
+                          setSelectedSystemTaskIds([]);
+                        }
+                      }}
+                      className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                    />
+                    <span>未完了の自動起票タスク全{activeSystemTasks.length}件を選択</span>
+                  </label>
+                  {selectedSystemTaskIds.length > 0 && (
+                    <span className="text-purple-700 font-bold">{selectedSystemTaskIds.length}件選択中</span>
+                  )}
+                </div>
+                {activeSystemTasks.map((st) => {
+                  const isSysSelected = selectedSystemTaskIds.includes(st.id);
+                  return (
                   <div
                     key={st.id}
-                    className="p-3 sm:p-4 rounded-xl bg-white border border-slate-200/90 shadow-2xs hover:border-purple-300 transition-all space-y-2"
+                    className={`p-3 sm:p-4 rounded-xl bg-white border shadow-2xs transition-all space-y-2 ${
+                      isSysSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200/90 hover:border-purple-300'
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="checkbox"
+                          checked={isSysSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSystemTaskIds((prev) => (prev.includes(st.id) ? prev : [...prev, st.id]));
+                            } else {
+                              setSelectedSystemTaskIds((prev) => prev.filter((id) => id !== st.id));
+                            }
+                          }}
+                          aria-label={`選択 ${st.title}`}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                        />
                         {getSystemPriorityBadge(st.priority)}
                         {st.due_date && (
                           <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200 font-medium">
@@ -880,7 +991,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         <button
                           type="button"
                           onClick={() => void handleCompleteSystemTask(st.id)}
-                          disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id}
+                          disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id || isBulkDeletingSystemTasks}
                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
                           title="このタスクを完了状態に更新します"
                         >
@@ -893,8 +1004,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => void handleDeleteSystemTask(st.id, st.title)}
-                          disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id}
+                          onClick={() => setSystemDeleteConfirm({ mode: 'single', ids: [st.id], title: st.title })}
+                          disabled={completingSystemTaskId === st.id || deletingSystemTaskId === st.id || isBulkDeletingSystemTasks}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
                           title="この自動起票タスクを削除します"
                         >
@@ -939,7 +1050,8 @@ export const TasksView: React.FC<TasksViewProps> = ({
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1052,6 +1164,44 @@ export const TasksView: React.FC<TasksViewProps> = ({
             )}
           </div>
 
+          {/* Selection Toolbar for Regular Tasks */}
+          {filteredTasks.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-2xs">
+              <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filteredTasks.length > 0 && filteredTasks.every((t) => selectedTaskIds.includes(t.id))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedTaskIds(filteredTasks.map((t) => t.id));
+                    } else {
+                      setSelectedTaskIds([]);
+                    }
+                  }}
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <span>表示中の通常タスク全{filteredTasks.length}件を選択</span>
+              </label>
+              {selectedTaskIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-purple-700">{selectedTaskIds.length}件選択中</span>
+                  <button
+                    type="button"
+                    onClick={() => setBatchDeleteState({
+                      target: 'selected',
+                      label: '選択したタスク',
+                      taskIds: selectedTaskIds,
+                    })}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>選択削除 ({selectedTaskIds.length}件)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Tasks List */}
           {filteredTasks.length === 0 ? (
             <div className="p-10 rounded-2xl bg-white border border-slate-200 text-center space-y-3 shadow-xs">
@@ -1073,15 +1223,31 @@ export const TasksView: React.FC<TasksViewProps> = ({
             <div className="space-y-3">
               {filteredTasks.map((task) => {
                 const project = projects.find((p) => p.id === task.projectId);
+                const isTaskSelected = selectedTaskIds.includes(task.id);
 
                 return (
                   <div
                     key={task.id}
-                    className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 hover:border-purple-300 transition-all space-y-3 shadow-xs group"
+                    className={`p-4 sm:p-5 rounded-2xl bg-white border transition-all space-y-3 shadow-xs group ${
+                      isTaskSelected ? 'border-purple-400 bg-purple-50/20' : 'border-slate-200 hover:border-purple-300'
+                    }`}
                   >
                     {/* Header Row */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="checkbox"
+                          checked={isTaskSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+                            } else {
+                              setSelectedTaskIds((prev) => prev.filter((id) => id !== task.id));
+                            }
+                          }}
+                          aria-label={`選択 ${task.title}`}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                        />
                         {getStatusBadge(task.status)}
                         {getAssigneeBadge(task.assignee)}
                         <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200 font-medium">
@@ -1706,6 +1872,50 @@ export const TasksView: React.FC<TasksViewProps> = ({
               </div>
             </div>
           )}
+          {/* System tasks delete confirmation modal */}
+          {systemDeleteConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+              <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                  <span>
+                    {systemDeleteConfirm.mode === 'single'
+                      ? '自動起票タスクの削除'
+                      : systemDeleteConfirm.mode === 'selected'
+                      ? '選択した自動起票タスクの削除'
+                      : '自動起票タスクの全削除'}
+                  </span>
+                </h2>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {systemDeleteConfirm.mode === 'single'
+                    ? `自動起票タスク「${systemDeleteConfirm.title || ''}」を削除します。`
+                    : systemDeleteConfirm.mode === 'selected'
+                    ? `選択中の自動起票タスク（${systemDeleteConfirm.ids.length}件）を一括削除します。`
+                    : `未完了のシステム自動起票タスク（全${systemDeleteConfirm.ids.length}件）をすべて削除します。`}
+                  <br />
+                  この操作は取り消せません。実行しますか？
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={isBulkDeletingSystemTasks}
+                    onClick={() => setSystemDeleteConfirm(null)}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBulkDeletingSystemTasks}
+                    onClick={() => void confirmDeleteSystemTasks()}
+                    className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {isBulkDeletingSystemTasks ? '削除中…' : '削除を実行'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1716,8 +1926,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
           activityLogs={activityLogs}
           onResolveApproval={onResolveApproval}
           onDeleteApproval={onDeleteApproval}
+          onBatchDeleteApprovals={onBatchDeleteApprovals}
           onClearApprovals={onClearApprovals}
           onDeleteActivityLog={onDeleteActivityLog}
+          onBatchDeleteActivityLogs={onBatchDeleteActivityLogs}
           onClearActivityLogs={onClearActivityLogs}
           initialTab={activeSection === 'logs' ? 'logs' : 'approvals'}
           embedded

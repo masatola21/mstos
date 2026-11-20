@@ -10,7 +10,9 @@ import {
   Layers, 
   CheckCircle2, 
   Maximize2,
-  Minimize2 
+  Minimize2,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import { ApiUsageData, CharacterConfig, ChatMessage, UserProfile } from '../../types/ai-president';
 import { AI_WORK_MODES, AIWorkModeId } from '../../data/aiWorkModes';
@@ -59,18 +61,117 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const baseInputRef = useRef<string>('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const SpeechRecognition =
+      typeof window !== 'undefined'
+        ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        : null;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
     }
+
+    setSpeechSupported(true);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'ja-JP';
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result?.[0]?.transcript || '')
+        .join('');
+      const base = baseInputRef.current;
+      setInput(base ? `${base}${transcript}` : transcript);
+      setVoiceError(null);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      const code = String(event?.error || '');
+      if (code === 'aborted') return;
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setVoiceError('マイクの使用が許可されていません。ブラウザの権限設定をご確認ください。');
+      } else if (code === 'no-speech') {
+        setVoiceError('音声を検出できませんでした。マイクに近づいて再度お試しください。');
+      } else if (code === 'audio-capture') {
+        setVoiceError('マイクが見つかりません。機器の接続をご確認ください。');
+      } else if (code === 'network') {
+        setVoiceError('音声認識の通信エラーが発生しました。');
+      } else {
+        setVoiceError('音声認識を完了できませんでした。もう一度お試しください。');
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      try {
+        recognition.abort();
+      } catch {
+        // ignore cleanup error
+      }
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore if already stopped
+      }
+    }
+    setIsListening(false);
+  };
+
+  const toggleListening = () => {
+    setVoiceError(null);
+    if (!recognitionRef.current) {
+      setVoiceError('お使いのブラウザは音声入力に対応していません（Chrome・Edge・Safari等でご利用ください）。');
+      return;
+    }
+    if (isListening) {
+      stopListening();
+      return;
+    }
+    try {
+      baseInputRef.current = input;
+      recognitionRef.current.start();
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+      setVoiceError('音声入力を開始できませんでした。少し待ってから再度お試しください。');
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopListening();
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [isOpen, messages]);
 
   useEffect(() => {
+    stopListening();
     const profile = getPageAssistantProfile(pageId);
     setSelectedWorkModeId(profile.mode);
     setRequestMode('consult');
+    setVoiceError(null);
     setMessages([{
       id: 'page-welcome-' + pageId,
       role: 'assistant',
@@ -82,6 +183,8 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
   if (!isOpen) return null;
 
   const handleSend = async (textToSend?: string) => {
+    stopListening();
+    setVoiceError(null);
     const text = textToSend || input;
     if (!text.trim() || isLoading) return;
 
@@ -93,7 +196,10 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    setInput('');
+    if (!textToSend) {
+      setInput('');
+      baseInputRef.current = '';
+    }
     setIsLoading(true);
 
     try {
@@ -182,6 +288,7 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
 
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => setIsExpanded((expanded) => !expanded)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             title={isExpanded ? "相談パネルを元の大きさに戻す" : "相談パネルを拡大"}
@@ -190,8 +297,13 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
             {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={() => {
+              stopListening();
+              onClose();
+            }}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="クイック相談を閉じる"
           >
             <X className="w-4 h-4" />
           </button>
@@ -260,24 +372,76 @@ export const QuickPresidentDrawer: React.FC<QuickPresidentDrawerProps> = ({
       </div>
 
       {/* Input Box */}
-      <div className="p-3 border-t border-slate-200 bg-white">
+      <div className="p-3 border-t border-slate-200 bg-white space-y-2">
+        {isListening && (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] font-semibold text-rose-700">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              <span>音声入力中… 話しかけてください</span>
+            </div>
+            <button
+              type="button"
+              onClick={stopListening}
+              className="text-[10px] font-bold text-rose-700 hover:text-rose-900 underline cursor-pointer"
+            >
+              停止
+            </button>
+          </div>
+        )}
+        {voiceError && (
+          <div role="alert" className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+            <span>{voiceError}</span>
+            <button
+              type="button"
+              onClick={() => setVoiceError(null)}
+              className="text-amber-600 hover:text-amber-900 p-0.5 cursor-pointer"
+              aria-label="閉じる"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSend();
           }}
-          className="flex items-center gap-2"
+          className="flex items-end gap-1.5"
         >
-          <input
-            type="text"
+          <textarea
+            ref={inputRef}
+            rows={2}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="AI社長に指示・相談を入力..."
-            className="flex-1 bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder={speechSupported ? 'AI社長に指示・相談を入力（マイクで音声入力も可能）...' : 'AI社長に指示・相談を入力...'}
+            disabled={isLoading}
+            className="flex-1 resize-none bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 shadow-2xs leading-relaxed max-h-28 disabled:opacity-50"
           />
+          <button
+            type="button"
+            onClick={toggleListening}
+            disabled={isLoading}
+            title={isListening ? '音声入力を停止' : '音声で入力'}
+            aria-label={isListening ? '音声入力を停止' : '音声で入力'}
+            className={`p-2 rounded-xl border transition-colors shadow-2xs cursor-pointer disabled:opacity-40 ${
+              isListening
+                ? 'bg-rose-50 text-rose-600 border-rose-300 animate-pulse'
+                : 'bg-white text-slate-500 border-slate-200 hover:text-purple-700 hover:bg-purple-50 hover:border-purple-200'
+            }`}
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
+            title="送信"
+            aria-label="送信"
             className="p-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-40 transition-colors shadow-sm cursor-pointer"
           >
             <Send className="w-4 h-4" />

@@ -81,12 +81,15 @@ export const TableManager: React.FC<TableManagerProps> = ({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<any | null>(null);
 
-  // 一括操作・エラーバナー・ダミーデータ整理状態
+  // 一括操作・エラーバナー・全削除整理状態
   const [rowActionError, setRowActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteModalMode, setBulkDeleteModalMode] = useState<'selected' | 'all_current' | null>(null);
+  const [bulkDeleteDocs, setBulkDeleteDocs] = useState(true);
+  const [bulkDeleteLinkedCrm, setBulkDeleteLinkedCrm] = useState(true);
   const [isCleanDummyModalOpen, setIsCleanDummyModalOpen] = useState(false);
-  const [cleanDummyTargets, setCleanDummyTargets] = useState<string[]>(['prospects', 'leads', 'deals', 'customers', 'companies']);
+  const [cleanDummyTargets, setCleanDummyTargets] = useState<string[]>(['prospects', 'leads', 'deals', 'customers', 'companies', 'customer_documents']);
   const [isCleaningDummy, setIsCleaningDummy] = useState(false);
 
   // ステージ移行モーダル状態
@@ -342,19 +345,27 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
   const [forceDeleteConfirmRecord, setForceDeleteConfirmRecord] = useState<{ record: any; blockedBy: string } | null>(null);
 
-  const handleDeleteRecord = async (record: any, force = false) => {
+  const handleDeleteRecord = async (
+    record: any,
+    force = false,
+    cascadeOptions?: { deleteDocuments?: boolean; deleteLinkedCrm?: boolean },
+  ) => {
     const label = record.company_name || record.full_name || record.proposal_plan_name || record.product_name || record.contact_name || String(record.id);
     setDeletingRecordId(String(record.id));
     setRowActionError(null);
     setSuccessBanner(null);
-    const result = await deleteTableRecord(currentTable, { id: record.id, company_id: record.company_id }, { force });
+    const result = await deleteTableRecord(
+      currentTable,
+      { id: record.id, company_id: record.company_id },
+      {
+        force,
+        deleteDocuments: cascadeOptions?.deleteDocuments,
+        deleteLinkedCrm: cascadeOptions?.deleteLinkedCrm,
+      },
+    );
     setDeletingRecordId(null);
     if (result.blockedBy && !force) {
-      if (currentTable === 'products') {
-        setForceDeleteConfirmRecord({ record, blockedBy: result.blockedBy });
-        return;
-      }
-      setRowActionError(`関連する「${result.blockedBy}」データがあるため削除できません。先に関連データを整理してください。`);
+      setForceDeleteConfirmRecord({ record, blockedBy: result.blockedBy });
       return;
     }
     if (result.error) {
@@ -363,20 +374,45 @@ export const TableManager: React.FC<TableManagerProps> = ({
     }
     setData((current) => current.filter((item) => String(item.id) !== String(record.id)));
     setSelectedIds((prev) => prev.filter((id) => id !== String(record.id)));
-    setSuccessBanner(force ? `「${label}」を関連付け解除の上、完全削除しました。` : `「${label}」を削除しました。`);
+    setSuccessBanner(
+      cascadeOptions?.deleteLinkedCrm
+        ? `「${label}」および関連する会社・担当者・リード・商談・重要書類を連動削除しました。`
+        : force
+          ? `「${label}」を関連付け解除の上、完全削除しました。`
+          : `「${label}」を削除しました。`,
+    );
     await loadData();
     window.setTimeout(() => setSuccessBanner(null), 5000);
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    const confirmMsg = `選択した ${selectedIds.length} 件のレコードを一括削除しますか？\n（関連するデータがある場合は安全に解除または除外されます）`;
-    if (!window.confirm(confirmMsg)) return;
+  const openBulkDeleteModal = (mode: 'selected' | 'all_current') => {
+    if (mode === 'selected' && selectedIds.length === 0) return;
+    if (mode === 'all_current' && data.length === 0) return;
+    setBulkDeleteDocs(['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable));
+    setBulkDeleteLinkedCrm(['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable));
+    setBulkDeleteModalMode(mode);
+  };
 
+  const executeBulkDelete = async () => {
+    if (!bulkDeleteModalMode) return;
+    const targetIds = bulkDeleteModalMode === 'all_current'
+      ? data.map((item) => String(item.id))
+      : selectedIds;
+    if (targetIds.length === 0) {
+      setBulkDeleteModalMode(null);
+      return;
+    }
+
+    const isCrmTable = ['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable);
     setIsBulkDeleting(true);
     setRowActionError(null);
-    const result = await bulkDeleteTableRecords(currentTable, selectedIds, { force: true });
+    const result = await bulkDeleteTableRecords(currentTable, targetIds, {
+      force: true,
+      deleteDocuments: isCrmTable ? bulkDeleteDocs : false,
+      deleteLinkedCrm: isCrmTable ? bulkDeleteLinkedCrm : false,
+    });
     setIsBulkDeleting(false);
+    setBulkDeleteModalMode(null);
 
     if (result.error && result.successCount === 0) {
       setRowActionError(result.error.message);
@@ -394,7 +430,13 @@ export const TableManager: React.FC<TableManagerProps> = ({
       const reasonSummary = result.failedDetails?.[0]?.reason ? `（一部: ${result.failedDetails[0].reason}）` : '';
       setSuccessBanner(`${count} 件削除しました。${failed} 件は関連データ存在または制約のため削除できませんでした。${reasonSummary}`);
     } else if (count > 0) {
-      setSuccessBanner(`${count} 件のレコードを一括削除しました。`);
+      setSuccessBanner(
+        isCrmTable && bulkDeleteLinkedCrm
+          ? `${count} 件のレコードおよび連動する会社・担当者・リード・商談・重要書類を削除しました。`
+          : isCrmTable && bulkDeleteDocs
+            ? `${count} 件のレコードと関連する重要書類を削除しました。`
+            : `${count} 件のレコードを削除しました。`,
+      );
     } else if (failed > 0) {
       const reasonSummary = result.failedDetails?.[0]?.reason || '対象が存在しないか制約のため';
       setRowActionError(`${failed} 件の削除に失敗しました（${reasonSummary}）。`);
@@ -414,7 +456,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
     setIsCleaningDummy(false);
 
     if (!result.success) {
-      setRowActionError(result.error || 'ダミーデータ一括整理に失敗しました。');
+      setRowActionError(result.error || '一括削除に失敗しました。');
       return;
     }
 
@@ -424,7 +466,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
       .map(([table, count]) => `${table}: ${count}件`)
       .join('、 ');
 
-    setSuccessBanner(`ダミーデータを安全に一括整理しました（${deletedSummary || '全対象 0件'}）。`);
+    setSelectedIds([]);
+    setSuccessBanner(`選択したデータを一括削除しました（${deletedSummary || '全対象 0件'}）。`);
     window.setTimeout(() => setSuccessBanner(null), 6000);
     await loadData();
   };
@@ -509,19 +552,31 @@ export const TableManager: React.FC<TableManagerProps> = ({
           <div>
             <p className="font-semibold text-sm">【削除の確認】関連データが存在します</p>
             <p className="text-xs text-amber-800 mt-0.5">
-              商品「{forceDeleteConfirmRecord.record.product_name || forceDeleteConfirmRecord.record.id}」は「{forceDeleteConfirmRecord.blockedBy}」等に紐付いています。関連付けを安全に解除（NULL設定）した上で完全削除しますか？
+              「{forceDeleteConfirmRecord.record.company_name || forceDeleteConfirmRecord.record.product_name || forceDeleteConfirmRecord.record.proposal_plan_name || forceDeleteConfirmRecord.record.id}」は「{forceDeleteConfirmRecord.blockedBy}」等に紐付いています。関連付け解除または連動削除を実行しますか？
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable) && (
+              <button
+                onClick={() => {
+                  const rec = forceDeleteConfirmRecord.record;
+                  setForceDeleteConfirmRecord(null);
+                  void handleDeleteRecord(rec, true, { deleteDocuments: true, deleteLinkedCrm: true });
+                }}
+                className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-1.5 transition shadow-xs cursor-pointer"
+              >
+                会社・担当者・リード・商談・書類も連動削除
+              </button>
+            )}
             <button
               onClick={() => {
                 const rec = forceDeleteConfirmRecord.record;
                 setForceDeleteConfirmRecord(null);
-                void handleDeleteRecord(rec, true);
+                void handleDeleteRecord(rec, true, { deleteDocuments: true, deleteLinkedCrm: false });
               }}
-              className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-1.5 transition shadow-xs cursor-pointer"
+              className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 transition shadow-xs cursor-pointer"
             >
-              参照を解除して完全削除
+              {currentTable === 'products' ? '参照を解除して完全削除' : '参照解除・書類削除して削除'}
             </button>
             <button
               onClick={() => setForceDeleteConfirmRecord(null)}
@@ -589,7 +644,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
         {/* Action Button: 新規登録 */}
         {/* Action Button: リスト取り込み (見込み企業) または 新規登録 (その他) */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {currentTable === 'prospects' ? (
             <button
               onClick={() => setIsProspectImportOpen(true)}
@@ -607,13 +662,36 @@ export const TableManager: React.FC<TableManagerProps> = ({
               <span>新規登録</span>
             </button>
           )}
+          {selectedIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => openBulkDeleteModal('selected')}
+              disabled={isBulkDeleting}
+              className="px-3 py-1.5 rounded-md font-semibold text-xs bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>選択削除 ({selectedIds.length}件)</span>
+            </button>
+          )}
+          {data.length > 0 && (
+            <button
+              type="button"
+              onClick={() => openBulkDeleteModal('all_current')}
+              disabled={isBulkDeleting}
+              className="px-3 py-1.5 rounded-md font-medium text-xs bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+              title={`${config.label}の全レコード（${data.length}件）を削除します`}
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>全削除 ({data.length}件)</span>
+            </button>
+          )}
           <button
             onClick={() => setIsCleanDummyModalOpen(true)}
             className="px-3 py-1.5 rounded-md font-medium text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-            title="ダミー・テストデータを安全に一括整理"
+            title="カテゴリ別の全削除・ダミーデータ一括整理"
           >
             <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>ダミーデータ整理</span>
+            <span>一括整理・全削除</span>
           </button>
           <button
             onClick={loadData}
@@ -902,62 +980,113 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
       {/* 5. Data View: Kanban Pipeline View */}
       {!loading && !error && filteredData.length > 0 && viewMode === 'kanban' && ['deals', 'leads', 'prospects', 'customers'].includes(currentTable) && (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex items-start gap-4 min-w-[900px]">
-            {kanbanColumns.map((colStatus) => {
-              const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
-              const columnRecords = filteredData.filter((item) => (item[statusField] || '') === colStatus);
-              const columnTotalAmount = currentTable === 'deals' 
-                ? columnRecords.reduce((acc, cur) => acc + (Number(cur.total_amount) || 0), 0)
-                : 0;
+        <div className="space-y-2.5 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs shadow-2xs">
+            <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={filteredData.length > 0 && filteredData.every((d) => selectedIds.includes(String(d.id)))}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedIds(filteredData.map((d) => String(d.id)));
+                  } else {
+                    setSelectedIds([]);
+                  }
+                }}
+                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              />
+              <span>表示中の全{filteredData.length}件を選択</span>
+            </label>
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-purple-700 font-bold">{selectedIds.length}件選択中</span>
+                <button
+                  type="button"
+                  onClick={() => openBulkDeleteModal('selected')}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer"
+                >
+                  選択削除
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="overflow-x-auto pb-2">
+            <div className="flex items-start gap-4 min-w-[900px]">
+              {kanbanColumns.map((colStatus) => {
+                const statusField = currentTable === 'deals' ? 'proposal_status' : currentTable === 'customers' ? 'contract_status' : 'status';
+                const columnRecords = filteredData.filter((item) => (item[statusField] || '') === colStatus);
+                const columnTotalAmount = currentTable === 'deals'
+                  ? columnRecords.reduce((acc, cur) => acc + (Number(cur.total_amount) || 0), 0)
+                  : 0;
 
-              return (
-                <div key={colStatus} className="flex-1 min-w-[280px] max-w-[340px] bg-slate-50/70 border border-slate-200 rounded-2xl p-3 flex flex-col max-h-[calc(100vh-280px)]">
-                  {/* Column Header */}
-                  <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-200">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadgeClass(colStatus)}`}>
-                        {colStatus}
-                      </span>
-                      <span className="text-xs font-mono font-semibold text-slate-500">
-                        {columnRecords.length}
-                      </span>
+                return (
+                  <div key={colStatus} className="flex-1 min-w-[280px] max-w-[340px] bg-slate-50/70 border border-slate-200 rounded-2xl p-3 flex flex-col max-h-[calc(100vh-280px)]">
+                    {/* Column Header */}
+                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-200">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadgeClass(colStatus)}`}>
+                          {colStatus}
+                        </span>
+                        <span className="text-xs font-mono font-semibold text-slate-500">
+                          {columnRecords.length}
+                        </span>
+                      </div>
+                      {columnTotalAmount > 0 && (
+                        <span className="text-[11px] font-mono font-bold text-purple-700">
+                          ¥{columnTotalAmount.toLocaleString()}
+                        </span>
+                      )}
                     </div>
-                    {columnTotalAmount > 0 && (
-                      <span className="text-[11px] font-mono font-bold text-purple-700">
-                        ¥{columnTotalAmount.toLocaleString()}
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Cards container */}
-                  <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
-                    {columnRecords.map((item) => {
-                      const title = item.proposal_plan_name || item.company_name || item.company?.company_name || `レコード #${item.id}`;
-                      const subTitle = item.company?.company_name || (item.company_id ? `会社ID: ${item.company_id}` : undefined);
-                      const amount = item.total_amount ? Number(item.total_amount) : item.monthly_fee ? Number(item.monthly_fee) : null;
-                      const dateField = item.meeting_date || item.proposal_date || item.last_contacted_at || item.contract_start_date;
+                    {/* Cards container */}
+                    <div className="space-y-2.5 overflow-y-auto flex-1 pr-1">
+                      {columnRecords.map((item) => {
+                        const title = item.proposal_plan_name || item.company_name || item.company?.company_name || `レコード #${item.id}`;
+                        const subTitle = item.company?.company_name || (item.company_id ? `会社ID: ${item.company_id}` : undefined);
+                        const amount = item.total_amount ? Number(item.total_amount) : item.monthly_fee ? Number(item.monthly_fee) : null;
+                        const dateField = item.meeting_date || item.proposal_date || item.last_contacted_at || item.contract_start_date;
+                        const isChecked = selectedIds.includes(String(item.id));
 
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => handleOpenDetail(item)}
-                          className="bg-white border border-slate-200 hover:border-purple-300 rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer space-y-2.5 group"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="text-[10px] font-mono text-slate-400">ID: {item.id}</div>
-                              <h4 className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors line-clamp-1">
-                                {title}
-                              </h4>
-                              {subTitle && (
-                                <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                  <Building2 className="w-3 h-3 text-purple-600 shrink-0" />
-                                  <span className="truncate">{subTitle}</span>
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => handleOpenDetail(item)}
+                            className={`bg-white border rounded-xl p-3.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer space-y-2.5 group ${
+                              isChecked ? 'border-purple-400 bg-purple-50/40' : 'border-slate-200 hover:border-purple-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    const sId = String(item.id);
+                                    if (e.target.checked) {
+                                      setSelectedIds((prev) => (prev.includes(sId) ? prev : [...prev, sId]));
+                                    } else {
+                                      setSelectedIds((prev) => prev.filter((id) => id !== sId));
+                                    }
+                                  }}
+                                  aria-label={`選択 ${title}`}
+                                  className="mt-1 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-mono text-slate-400">ID: {item.id}</div>
+                                  <h4 className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors line-clamp-1">
+                                    {title}
+                                  </h4>
+                                  {subTitle && (
+                                    <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                      <Building2 className="w-3 h-3 text-purple-600 shrink-0" />
+                                      <span className="truncate">{subTitle}</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
-                          </div>
 
                           {/* Amounts & Indicators */}
                           <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
@@ -1060,6 +1189,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}
@@ -1524,6 +1654,32 @@ export const TableManager: React.FC<TableManagerProps> = ({
 
           {/* Mobile Card View */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs">
+              <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filteredData.length > 0 && filteredData.every((d) => selectedIds.includes(String(d.id)))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedIds(filteredData.map((d) => String(d.id)));
+                    } else {
+                      setSelectedIds([]);
+                    }
+                  }}
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <span>すべて選択 ({filteredData.length}件)</span>
+              </label>
+              {selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => openBulkDeleteModal('selected')}
+                  className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-semibold text-xs"
+                >
+                  選択削除 ({selectedIds.length})
+                </button>
+              )}
+            </div>
             {filteredData.map((item) => (
               <div
                 key={item.id}
@@ -1552,14 +1708,32 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   setDragOverProductId(null);
                 } : undefined}
                 onClick={() => handleOpenDetail(item)}
-                className={`bg-white border border-slate-200 rounded-xl p-4 space-y-3 cursor-pointer hover:border-purple-200 hover:shadow-xs transition-all ${
+                className={`bg-white border rounded-xl p-4 space-y-3 cursor-pointer hover:border-purple-200 hover:shadow-xs transition-all ${
+                  selectedIds.includes(String(item.id)) ? 'border-purple-400 bg-purple-50/40' : 'border-slate-200'
+                } ${
                   draggedProductId === String(item.id) ? 'opacity-40 bg-slate-50' : ''
                 } ${
                   dragOverProductId === String(item.id) ? 'border-t-2 border-purple-500 bg-purple-50' : ''
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(String(item.id))}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        const sId = String(item.id);
+                        if (e.target.checked) {
+                          setSelectedIds((prev) => (prev.includes(sId) ? prev : [...prev, sId]));
+                        } else {
+                          setSelectedIds((prev) => prev.filter((id) => id !== sId));
+                        }
+                      }}
+                      aria-label={`選択 ${item.id}`}
+                      className="mt-1 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer shrink-0"
+                    />
                     {currentTable === 'products' && (
                       <div
                         className="cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-purple-600 shrink-0 mt-0.5"
@@ -1569,9 +1743,9 @@ export const TableManager: React.FC<TableManagerProps> = ({
                         <GripVertical className="w-4 h-4" />
                       </div>
                     )}
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-[11px] font-mono text-slate-400">ID: {item.id}</span>
-                      <h3 className="font-bold text-slate-900 text-sm">
+                      <h3 className="font-bold text-slate-900 text-sm truncate">
                         {item.company_name ||
                           item.proposal_plan_name ||
                           item.product_name ||
@@ -1581,11 +1755,11 @@ export const TableManager: React.FC<TableManagerProps> = ({
                     </div>
                   </div>
                   {(item.status || item.proposal_status || item.contract_status) && (
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${getStatusBadgeClass(String(item.status || item.proposal_status || item.contract_status))}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0 ${getStatusBadgeClass(String(item.status || item.proposal_status || item.contract_status))}`}>
                       {item.status || item.proposal_status || item.contract_status}
                     </span>
                   )}
-                  <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)} disabled={deletingRecordId === String(item.id)} className="mt-2 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50" ariaLabel="削除"><Trash2 className="w-4 h-4" /></InlineDeleteButton>
+                  <InlineDeleteButton onConfirm={() => void handleDeleteRecord(item)} disabled={deletingRecordId === String(item.id)} className="mt-1 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50 shrink-0" ariaLabel="削除"><Trash2 className="w-4 h-4" /></InlineDeleteButton>
                 </div>
 
                 {/* Sub details */}
@@ -1765,12 +1939,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
               </button>
             )}
             <button
-              onClick={handleBulkDelete}
+              onClick={() => openBulkDeleteModal('selected')}
               disabled={isBulkDeleting}
               className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>{isBulkDeleting ? '削除中...' : '選択したレコードを一括削除'}</span>
+              <span>{isBulkDeleting ? '削除中...' : '選択削除'}</span>
             </button>
             <button
               onClick={() => setSelectedIds([])}
@@ -1947,7 +2121,95 @@ export const TableManager: React.FC<TableManagerProps> = ({
         </div>
       )}
 
-      {/* Clean Dummy Data Modal */}
+      {/* Bulk / Delete-All Confirmation Modal */}
+      {bulkDeleteModalMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    {bulkDeleteModalMode === 'all_current'
+                      ? `${config.label}を全削除 (${data.length}件)`
+                      : `選択した${config.label}を削除 (${selectedIds.length}件)`}
+                  </h3>
+                  <p className="text-xs text-slate-500">関連する書類やCRMデータの連動削除範囲を確認してください</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteModalMode(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            {['deals', 'leads', 'prospects', 'customers', 'companies'].includes(currentTable) ? (
+              <div className="space-y-2.5 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <label className="flex items-start gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={bulkDeleteDocs}
+                    onChange={(e) => setBulkDeleteDocs(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <div>
+                    <div className="font-semibold text-slate-800">関連する重要書類（提案書・見積書・契約書・請求書等）も連動削除する</div>
+                    <div className="text-[11px] text-slate-500">チェックすると重要書類一覧にも残らず完全に整理されます。</div>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={bulkDeleteLinkedCrm}
+                    onChange={(e) => setBulkDeleteLinkedCrm(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <div>
+                    <div className="font-semibold text-slate-800">紐づく会社・担当者・リード・商談・顧客もまとめて連動削除する</div>
+                    <div className="text-[11px] text-slate-500">重要書類の「会社」選択肢や担当者リストにも不要な会社が残らないように整理します。</div>
+                  </div>
+                </label>
+
+                <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200">
+                  ※ メール・LINEの送信履歴自体は監査保全のため保持されます（削除対象への紐付けのみ安全に解除されます）。送信履歴も消す場合は「一括整理・全削除」から送信履歴を選択してください。
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-600 leading-relaxed">
+                対象の {bulkDeleteModalMode === 'all_current' ? data.length : selectedIds.length} 件を削除します。関連参照がある場合は安全に解除されます。この操作は元に戻せません。
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBulkDeleteModalMode(null)}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => void executeBulkDelete()}
+                disabled={isBulkDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition shadow-xs disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isBulkDeleting ? '削除実行中...' : '削除を実行する'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clean Dummy Data / Category Delete-All Modal */}
       {isCleanDummyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
@@ -1957,8 +2219,8 @@ export const TableManager: React.FC<TableManagerProps> = ({
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">ダミー・テストデータの一括整理</h3>
-                  <p className="text-xs text-slate-500">外部キー制約を考慮し、依存関係の深い順に安全に一括削除します</p>
+                  <h3 className="font-bold text-slate-900 text-base">一括整理・全削除（ダミーデータ削除）</h3>
+                  <p className="text-xs text-slate-500">外部キー制約を考慮し、依存関係の深い順に安全に全削除します</p>
                 </div>
               </div>
               <button
@@ -1969,14 +2231,17 @@ export const TableManager: React.FC<TableManagerProps> = ({
               </button>
             </div>
 
-            <div className="space-y-2 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-              <p className="font-semibold text-slate-800 mb-1">削除する対象カテゴリを選択してください：</p>
+            <div className="space-y-1.5 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 max-h-[60vh] overflow-y-auto">
+              <p className="font-semibold text-slate-800 mb-1">全削除する対象カテゴリを選択してください：</p>
               {[
                 { key: 'prospects', label: '見込み企業リスト (prospects)' },
                 { key: 'leads', label: 'リード・反響一覧 (leads)' },
                 { key: 'deals', label: '商談パイプライン (deals)' },
-                { key: 'customers', label: '顧客・契約・請求書・送付書類 (customers, contracts, invoices)' },
-                { key: 'companies', label: '法人マスタ・連絡先 (companies, contacts)' },
+                { key: 'customer_documents', label: '重要書類（提案書・見積書・契約書・請求書ドラフト）' },
+                { key: 'customers', label: '顧客・契約・請求書・顧問構築支援 (customers, contracts, invoices, support)' },
+                { key: 'companies', label: '法人マスタ・連絡先（会社・担当者）' },
+                { key: 'diagnoses', label: '診断結果・フォーム回答データ (diagnoses)' },
+                { key: 'communication_outbox', label: 'メール・LINE送信履歴（通常は証跡保全のため未選択推奨）' },
               ].map((item) => (
                 <label key={item.key} className="flex items-center gap-2.5 p-1.5 hover:bg-white rounded cursor-pointer transition">
                   <input
@@ -1995,7 +2260,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 </label>
               ))}
               <div className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2">
-                ※ 「商品マスタ」や「LINE設定・テンプレート」は保護され削除されません。
+                ※ 「販売商品マスタ」や「テンプレート」「LINE設定」は保護され削除されません。
               </div>
             </div>
 
@@ -2015,12 +2280,12 @@ export const TableManager: React.FC<TableManagerProps> = ({
                 {isCleaningDummy ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>整理実行中...</span>
+                    <span>削除実行中...</span>
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>選択カテゴリを一括削除</span>
+                    <span>選択カテゴリを全削除</span>
                   </>
                 )}
               </button>

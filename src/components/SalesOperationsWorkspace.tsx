@@ -270,11 +270,15 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
   };
 
   useEffect(() => { void load(); }, [tab, activeOpsTab, companyId, leadId, dealId]);
-  // 送信センターで書類を送ったら、一覧の状態(送信済みなど)を読み直す
+  // 送信センターで書類を送ったり、商談パイプラインやデータ管理でレコード・契約・請求を削除した際に一覧を読み直す
   useEffect(() => {
     const reload = () => { void load(); };
     window.addEventListener('mst:documents-changed', reload);
-    return () => window.removeEventListener('mst:documents-changed', reload);
+    window.addEventListener('mst:crm-data-changed', reload);
+    return () => {
+      window.removeEventListener('mst:documents-changed', reload);
+      window.removeEventListener('mst:crm-data-changed', reload);
+    };
   }, [tab, activeOpsTab, companyId, leadId, dealId]);
 
   const createSegment = async (event: React.FormEvent) => {
