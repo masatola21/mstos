@@ -34,6 +34,8 @@ import {
   toInteractiveRichDom,
   rehydrateLegacyProposalHtml,
   rehydrateLegacyDocumentHtml,
+  extractTemplateDocVarKeys,
+  findMissingDocVarKeys,
 } from '../src/utils/documentHtmlSync';
 import { getProposalReportHtml, PROPOSAL_VARIABLES } from '../src/components/matrix/proposalTemplate';
 import type { ManagedInvoice } from '../src/types/matrix';
@@ -358,6 +360,31 @@ async function runTests() {
     const dupHtml = `<div><p data-doc-var="client_company">\u200B株式会社ファースト</p><p data-doc-var="client_company">古いコピー</p></div>`;
     const dupExtracted = extractDocVarTextFromHtml(dupHtml);
     assert(dupExtracted.client_company === '株式会社ファースト', `Expected primary marker value without \\u200B, got ${dupExtracted.client_company}`);
+
+    // Verify extractTemplateDocVarKeys & findMissingDocVarKeys & patchDocVarHtml().missingKeys
+    const templateHtml = getProposalReportHtml('hybrid');
+    const templateKeys = extractTemplateDocVarKeys(templateHtml);
+    assert(templateKeys.includes('client_company') && templateKeys.includes('proposal_title') && templateKeys.includes('d0_summary') && templateKeys.includes('p4_initial_fee'), 'extractTemplateDocVarKeys should include expected proposal keys');
+    assert(!templateKeys.includes('apply_url') && !templateKeys.includes('p_meeting_notes'), 'extractTemplateDocVarKeys must exclude apply_url and p_meeting_notes');
+
+    const missingWhenHealthy = findMissingDocVarKeys(patchHeaderAndCost.html, templateHtml);
+    assert(missingWhenHealthy.length === 0, `Expected 0 missing keys in populated proposal HTML, got ${missingWhenHealthy.join(',')}`);
+
+    const brokenHtml = patchHeaderAndCost.html.replace(
+      '<span data-doc-var="proposal_title">営業DX自動化プロジェクト</span>',
+      '営業DX自動化プロジェクト',
+    );
+    const detectedMissing = findMissingDocVarKeys(brokenHtml, templateHtml);
+    assert(detectedMissing.includes('proposal_title') && detectedMissing.length === 1, `Expected only proposal_title missing, got ${detectedMissing.join(',')}`);
+
+    const partialPatch = patchDocVarHtml(
+      brokenHtml,
+      { proposal_title: '新しい案件名', client_name: '高橋 次郎' },
+      (_k, v) => v,
+    );
+    assert(partialPatch.updatedCount === 1, 'Present marker should still patch when another marker is missing');
+    assert(partialPatch.missingKeys.includes('proposal_title') && partialPatch.missingKeys.length === 1, 'patchDocVarHtml should report missingKeys accurately');
+    assert(extractDocVarTextFromHtml(partialPatch.html).client_name === '高橋 次郎', 'client_name should be updated even when proposal_title marker is missing');
 
     // SSR fallback safety when DOMParser is undefined
     assert(toInteractiveRichDom(patchHeaderAndCost.html) === patchHeaderAndCost.html, 'SSR fallback for toInteractiveRichDom');

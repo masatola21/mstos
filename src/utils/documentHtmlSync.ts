@@ -96,7 +96,7 @@ export function coalesceSplitDocVarSiblings(root: ParentNode, ownerDoc?: Documen
 const BLOCK_TAGS = new Set(['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE']);
 
 const INLINE_EDIT_STYLE_SUFFIX =
-  'display:inline-block; min-width:2.5em; min-height:1.1em; border-bottom:1px dashed #a78bfa; background:rgba(139,92,246,0.04); border-radius:3px; padding:0 3px; outline:none;';
+  'border-bottom:1px dashed #a78bfa; background:rgba(139,92,246,0.06); border-radius:3px; padding:0 3px; outline:none;';
 const BLOCK_EDIT_STYLE_SUFFIX = 'outline:none; min-height:1.4em; border-radius:4px;';
 
 function applyEditingStyle(el: Element, origStyle: string, isBlock: boolean) {
@@ -192,6 +192,7 @@ export function fromInteractiveRichDom(editorRoot: HTMLElement): string {
 }
 
 export interface PendingRichVarGuard {
+  totalMarkersBefore: number;
   targets: Array<{
     el: Element;
     key: string;
@@ -200,7 +201,9 @@ export interface PendingRichVarGuard {
     isBlock: boolean;
     parent: Node | null;
     prevSibling: Node | null;
+    prevSiblingText: string | null;
     nextSibling: Node | null;
+    nextSiblingText: string | null;
   }>;
 }
 
@@ -286,6 +289,7 @@ export function prepareRichDocVarBeforeInput(
   // Only guard elements where an unwrap/replacement could realistically happen
   if (matched.size === 0 && getSelectedRangeText(activeRange) === '') return null;
 
+  const allMarkersBefore = editorRoot.querySelectorAll('[data-doc-var]').length;
   const targets = Array.from(matched).map((el) => ({
     el,
     key: el.getAttribute('data-doc-var') || '',
@@ -294,26 +298,82 @@ export function prepareRichDocVarBeforeInput(
     isBlock: BLOCK_TAGS.has(el.tagName),
     parent: el.parentNode,
     prevSibling: el.previousSibling,
+    prevSiblingText: el.previousSibling?.nodeType === 3 ? el.previousSibling.nodeValue : null,
     nextSibling: el.nextSibling,
+    nextSiblingText: el.nextSibling?.nodeType === 3 ? el.nextSibling.nodeValue : null,
   })).filter((t) => Boolean(t.key));
 
-  return targets.length > 0 ? { targets } : null;
+  return targets.length > 0 ? { totalMarkersBefore: allMarkersBefore, targets } : null;
+}
+
+/**
+ * Unwraps/splits any nested `[data-doc-var]` element that Chromium merged inside an
+ * outer `[data-doc-var]` block (e.g., pressing Backspace at the start of `ご担当:`).
+ */
+function splitMergedNestedDocVars(editorRoot: HTMLElement, doc: Document): void {
+  const outerMarkers = Array.from(editorRoot.querySelectorAll('[data-doc-var]'));
+  for (const outer of outerMarkers) {
+    if (!editorRoot.contains(outer)) continue;
+    const nested = outer.querySelector('[data-doc-var]');
+    if (!nested || !outer.parentNode) continue;
+
+    // Find the direct child of `outer` that contains `nested`
+    let splitAnchor: Node | null = nested;
+    while (splitAnchor && splitAnchor.parentNode !== outer) {
+      splitAnchor = splitAnchor.parentNode;
+    }
+    if (!splitAnchor) continue;
+
+    // Walk backward across preceding inline siblings up to any <br> or block boundary
+    let moveStart: Node = splitAnchor;
+    if (splitAnchor.nodeType !== 1 || !BLOCK_TAGS.has((splitAnchor as Element).tagName)) {
+      while (moveStart.previousSibling) {
+        const prev = moveStart.previousSibling;
+        if (prev.nodeType === 1 && ((prev as Element).tagName === 'BR' || BLOCK_TAGS.has((prev as Element).tagName))) {
+          break;
+        }
+        // Only pull preceding inline text like "ご担当: " if there was a break or block before it
+        if (!prev.previousSibling && outer.firstChild === prev) {
+          break;
+        }
+        moveStart = prev;
+      }
+    }
+
+    const detachedBlock = doc.createElement(outer.tagName === 'P' ? 'p' : 'div');
+    let cur: Node | null = moveStart;
+    while (cur) {
+      const next: Node | null = cur.nextSibling;
+      detachedBlock.appendChild(cur);
+      cur = next;
+    }
+    if (
+      moveStart.previousSibling &&
+      moveStart.previousSibling.nodeType === 1 &&
+      (moveStart.previousSibling as Element).tagName === 'BR'
+    ) {
+      moveStart.previousSibling.remove();
+    }
+    outer.parentNode.insertBefore(detachedBlock, outer.nextSibling);
+  }
 }
 
 /**
  * Restores any `[data-doc-var]` element that Chromium's contentEditable unwrapped or
  * removed during select-all replacement / backspace-to-empty, and keeps empty inline
- * fields clickable via a `\u200B` anchor.
+ * and block fields clickable.
  */
 export function repairRichDocVarsAfterInput(
   editorRoot: HTMLElement,
   guard: PendingRichVarGuard | null,
 ): void {
   const doc = editorRoot.ownerDocument;
+  splitMergedNestedDocVars(editorRoot, doc);
   coalesceSplitDocVarSiblings(editorRoot, doc);
 
   if (guard) {
-    const isWholeDocWipe = guard.targets.length > 4;
+    const editorEmpty = !(editorRoot.textContent || '').replace(/\u200B/g, '').trim();
+    const isWholeDocWipe = editorEmpty && guard.targets.length > 4 && guard.targets.length >= guard.totalMarkersBefore;
     for (const target of guard.targets) {
       if (target.el && editorRoot.contains(target.el)) continue;
 
@@ -335,6 +395,34 @@ export function repairRichDocVarsAfterInput(
       applyEditingStyle(wrapper, target.origStyle, target.isBlock);
 
       if (target.parent && editorRoot.contains(target.parent)) {
+        // If Chromium deleted an inline span and appended typed characters directly onto
+        // the preceding/following sibling text node, split that text node so the new text
+        // goes back inside `wrapper`.
+        if (
+          target.prevSibling &&
+          target.prevSibling.parentNode === target.parent &&
+          target.prevSibling.nodeType === 3 &&
+          target.prevSiblingText !== null
+        ) {
+          const curVal = target.prevSibling.nodeValue || '';
+          if (curVal.startsWith(target.prevSiblingText) && curVal.length > target.prevSiblingText.length) {
+            (target.prevSibling as Text).splitText(target.prevSiblingText.length);
+          }
+        }
+        if (
+          target.nextSibling &&
+          target.nextSibling.parentNode === target.parent &&
+          target.nextSibling.nodeType === 3 &&
+          target.nextSiblingText !== null
+        ) {
+          const curVal = target.nextSibling.nodeValue || '';
+          if (curVal.endsWith(target.nextSiblingText) && curVal.length > target.nextSiblingText.length) {
+            const prefixLen = curVal.length - target.nextSiblingText.length;
+            const splitTail = (target.nextSibling as Text).splitText(prefixLen);
+            target.nextSibling = splitTail;
+          }
+        }
+
         // Collect any nodes left between prevSibling and nextSibling
         const startNode = target.prevSibling && target.prevSibling.parentNode === target.parent
           ? target.prevSibling.nextSibling
@@ -359,7 +447,11 @@ export function repairRichDocVarsAfterInput(
             wrapper.appendChild(n);
           }
         } else {
-          wrapper.textContent = target.isBlock ? '' : '\u200B';
+          if (target.isBlock) {
+            wrapper.appendChild(doc.createElement('br'));
+          } else {
+            wrapper.textContent = '\u200B';
+          }
           if (stopNode) {
             target.parent.insertBefore(wrapper, stopNode);
           } else {
@@ -372,7 +464,11 @@ export function repairRichDocVarsAfterInput(
         if (sel && sel.rangeCount > 0) {
           const r = sel.getRangeAt(0);
           if (editorRoot.contains(r.startContainer)) {
-            wrapper.textContent = target.isBlock ? '' : '\u200B';
+            if (target.isBlock) {
+              wrapper.appendChild(doc.createElement('br'));
+            } else {
+              wrapper.textContent = '\u200B';
+            }
             r.insertNode(wrapper);
           }
         }
@@ -390,37 +486,44 @@ export function repairRichDocVarsAfterInput(
     }
   }
 
-  // Keep every inline [data-doc-var] non-zero-width so clicking/typing stays inside it
-  const inlineMarkers = Array.from(editorRoot.querySelectorAll('[data-doc-var]'));
-  for (const el of inlineMarkers) {
-    if (!BLOCK_TAGS.has(el.tagName) && !(el.textContent || '').replace(/\u200B/g, '').trim() && !el.textContent?.includes('\u200B')) {
-      const sel = typeof window !== 'undefined' ? window.getSelection() : null;
-      const hadCaret = Boolean(sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer));
-      el.textContent = '\u200B';
-      if (hadCaret && sel) {
-        const r = doc.createRange();
-        r.setStart(el.firstChild!, 1);
-        r.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(r);
+  // Keep every inline [data-doc-var] non-zero-width and every empty block [data-doc-var] clickable
+  const allMarkers = Array.from(editorRoot.querySelectorAll('[data-doc-var]'));
+  for (const el of allMarkers) {
+    if (!BLOCK_TAGS.has(el.tagName)) {
+      if (!(el.textContent || '').replace(/\u200B/g, '').trim() && !el.textContent?.includes('\u200B')) {
+        const sel = typeof window !== 'undefined' ? window.getSelection() : null;
+        const hadCaret = Boolean(sel && sel.rangeCount > 0 && el.contains(sel.getRangeAt(0).startContainer));
+        el.textContent = '\u200B';
+        if (hadCaret && sel) {
+          const r = doc.createRange();
+          r.setStart(el.firstChild!, 1);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
       }
+    } else if (!(el.textContent || '').replace(/\u200B/g, '').trim() && !el.querySelector('br')) {
+      el.appendChild(doc.createElement('br'));
     }
   }
 }
 
 /**
- * Best-effort upgrade for legacy `tpl-proposal-report` HTML saved before `data-doc-var`
- * markers were introduced. Only attaches markers when unambiguous structural headings
- * or labels match and no `data-doc-var` markers are present yet.
+ * Best-effort upgrade for legacy or partially-marked `tpl-proposal-report` HTML.
+ * Attaches `[data-doc-var]` markers where unambiguous structural headings or labels
+ * match and a marker for that key is not already present.
  */
-export function rehydrateLegacyProposalHtml(html: string): string {
-  if (!html || hasDocVarMarkers(html) || typeof DOMParser === 'undefined') return html;
+export function rehydrateMissingProposalMarkers(html: string): string {
+  if (!html || typeof DOMParser === 'undefined') return html;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
   let attached = 0;
 
+  const hasMarker = (key: string) => Boolean(doc.body.querySelector(`[data-doc-var="${key}"]`));
+
   const markBlock = (el: Element | null, key: string) => {
-    if (!el || el.hasAttribute('data-doc-var')) return;
+    if (!el || el.hasAttribute('data-doc-var') || hasMarker(key)) return;
+    if (el.querySelector('[data-doc-var]')) return;
     el.setAttribute('data-doc-var', key);
     attached += 1;
   };
@@ -489,16 +592,53 @@ export function rehydrateLegacyProposalHtml(html: string): string {
   const paragraphs = Array.from(doc.body.querySelectorAll('p'));
   for (const p of paragraphs) {
     const txt = (p.textContent || '').trim();
-    if (txt.startsWith('案件名:') && !p.querySelector('[data-doc-var="proposal_title"]')) {
+    if (txt.startsWith('案件名:') && !hasMarker('proposal_title') && !p.querySelector('[data-doc-var]')) {
       const val = txt.replace(/^案件名:\s*/, '');
-      p.innerHTML = `案件名: <span data-doc-var="proposal_title">${val}</span>`;
+      p.textContent = '案件名: ';
+      const sp = doc.createElement('span');
+      sp.setAttribute('data-doc-var', 'proposal_title');
+      sp.textContent = val;
+      p.appendChild(sp);
       attached += 1;
-    } else if (/^ご担当:.*様$/.test(txt) && !p.querySelector('[data-doc-var="client_name"]')) {
+    } else if (/^ご担当:.*様$/.test(txt) && !hasMarker('client_name') && !p.querySelector('[data-doc-var]')) {
       const val = txt.replace(/^ご担当:\s*/, '').replace(/\s*様$/, '');
-      p.innerHTML = `ご担当: <span data-doc-var="client_name">${val}</span> 様`;
+      p.textContent = 'ご担当: ';
+      const sp = doc.createElement('span');
+      sp.setAttribute('data-doc-var', 'client_name');
+      sp.textContent = val;
+      p.appendChild(sp);
+      p.appendChild(doc.createTextNode(' 様'));
       attached += 1;
-    } else if (p.style?.fontSize === '18px' && p.style?.fontWeight === 'bold' && !p.hasAttribute('data-doc-var')) {
+    } else if (
+      p.style?.fontSize === '18px' &&
+      (p.style?.fontWeight === 'bold' || p.style?.fontWeight === '700') &&
+      !hasMarker('client_company') &&
+      !p.hasAttribute('data-doc-var')
+    ) {
       markBlock(p, 'client_company');
+    } else if (txt.startsWith('代表取締役 ') && !hasMarker('sender_rep') && !p.querySelector('[data-doc-var]')) {
+      const val = txt.replace(/^代表取締役\s*/, '');
+      p.textContent = '代表取締役 ';
+      const sp = doc.createElement('span');
+      sp.setAttribute('data-doc-var', 'sender_rep');
+      sp.textContent = val;
+      p.appendChild(sp);
+      attached += 1;
+    } else if (
+      p.parentElement?.style?.textAlign === 'right' &&
+      (p.style?.fontWeight === 'bold' || p.style?.fontWeight === '700') &&
+      !hasMarker('sender_company') &&
+      !p.hasAttribute('data-doc-var')
+    ) {
+      markBlock(p, 'sender_company');
+    } else if (
+      p.parentElement?.style?.textAlign === 'right' &&
+      p.previousElementSibling?.textContent?.includes('代表取締役') &&
+      !txt.startsWith('代表取締役') &&
+      !hasMarker('sender_address') &&
+      !p.hasAttribute('data-doc-var')
+    ) {
+      markBlock(p, 'sender_address');
     }
   }
 
@@ -506,9 +646,9 @@ export function rehydrateLegacyProposalHtml(html: string): string {
   for (const sp of spans) {
     const firstLabel = sp.firstElementChild?.textContent?.trim();
     const strongEl = sp.querySelector('strong');
-    if (firstLabel === '発行日:' && strongEl && !strongEl.hasAttribute('data-doc-var')) {
+    if (firstLabel === '発行日:' && strongEl && !strongEl.hasAttribute('data-doc-var') && !hasMarker('issue_date')) {
       markBlock(strongEl, 'issue_date');
-    } else if (firstLabel === '有効期限:' && strongEl && !strongEl.hasAttribute('data-doc-var')) {
+    } else if (firstLabel === '有効期限:' && strongEl && !strongEl.hasAttribute('data-doc-var') && !hasMarker('due_date')) {
       markBlock(strongEl, 'due_date');
     }
   }
@@ -527,9 +667,13 @@ export function rehydrateLegacyProposalHtml(html: string): string {
     const cells = tr.querySelectorAll('td');
     if (cells.length !== 2) continue;
     const key = p4LabelToKey[(cells[0].textContent || '').trim()];
-    if (key && !cells[1].querySelector('[data-doc-var]')) {
+    if (key && !hasMarker(key) && !cells[1].querySelector('[data-doc-var]')) {
       const valText = (cells[1].textContent || '').trim().replace(/^¥\s*/, '');
-      cells[1].innerHTML = `¥<span data-doc-var="${key}">${valText}</span>`;
+      cells[1].textContent = '¥';
+      const sp = doc.createElement('span');
+      sp.setAttribute('data-doc-var', key);
+      sp.textContent = valText;
+      cells[1].appendChild(sp);
       attached += 1;
     }
   }
@@ -537,15 +681,21 @@ export function rehydrateLegacyProposalHtml(html: string): string {
   return attached > 0 ? doc.body.innerHTML : html;
 }
 
+export function rehydrateLegacyProposalHtml(html: string): string {
+  if (!html || hasDocVarMarkers(html) || typeof DOMParser === 'undefined') return html;
+  return rehydrateMissingProposalMarkers(html);
+}
+
 /**
  * Best-effort upgrade for any legacy saved document HTML (Proposal, Estimate, Contract,
  * Invoice, or Monthly Report) saved before `data-doc-var` markers existed.
  */
 export function rehydrateLegacyDocumentHtml(html: string, templateId: string): string {
-  if (!html || hasDocVarMarkers(html) || typeof DOMParser === 'undefined') return html;
+  if (!html || typeof DOMParser === 'undefined') return html;
   if (templateId === 'tpl-proposal-report') {
-    return rehydrateLegacyProposalHtml(html);
+    return rehydrateMissingProposalMarkers(html);
   }
+  if (hasDocVarMarkers(html)) return html;
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
@@ -648,6 +798,39 @@ function matchClosingTagEnd(html: string, openTagName: string, searchFrom: numbe
 }
 
 /**
+ * Returns all variable keys referenced in a dynamic template HTML (via `{{key}}`
+ * placeholders or `[data-doc-var="key"]` markers), excluding `apply_url`.
+ */
+export function extractTemplateDocVarKeys(templateHtml: string): string[] {
+  if (!templateHtml) return [];
+  const keys = new Set<string>();
+  for (const m of templateHtml.matchAll(/\{\{(\w+)\}\}/g)) {
+    if (m[1] && m[1] !== 'apply_url') keys.add(m[1]);
+  }
+  for (const m of templateHtml.matchAll(/data-doc-var=["']([a-zA-Z0-9_]+)["']/g)) {
+    if (m[1] && m[1] !== 'apply_url') keys.add(m[1]);
+  }
+  return Array.from(keys);
+}
+
+/**
+ * Finds variable keys from `templateHtml` that no longer have a `[data-doc-var="key"]`
+ * marker (or `{{key}}` placeholder) inside `customHtml`.
+ */
+export function findMissingDocVarKeys(customHtml: string, templateHtml: string): string[] {
+  if (!customHtml || !templateHtml) return [];
+  const expected = extractTemplateDocVarKeys(templateHtml);
+  const present = new Set<string>();
+  for (const m of customHtml.matchAll(/data-doc-var=["']([a-zA-Z0-9_]+)["']/g)) {
+    if (m[1]) present.add(m[1]);
+  }
+  for (const m of customHtml.matchAll(/\{\{(\w+)\}\}/g)) {
+    if (m[1]) present.add(m[1]);
+  }
+  return expected.filter((k) => !present.has(k));
+}
+
+/**
  * Updates only the specified variable keys inside an existing custom HTML string
  * that contains `[data-doc-var="key"]` markers, leaving all other direct
  * text/styling edits intact.
@@ -656,11 +839,11 @@ export function patchDocVarHtml(
   html: string,
   updates: Record<string, string>,
   formatValue: (key: string, rawVal: string) => string,
-): { html: string; updatedCount: number; hasMarkers: boolean } {
+): { html: string; updatedCount: number; hasMarkers: boolean; missingKeys: string[] } {
   const keys = Object.keys(updates);
   const markersPresent = hasDocVarMarkers(html);
   if (!html || !markersPresent || keys.length === 0) {
-    return { html, updatedCount: 0, hasMarkers: markersPresent };
+    return { html, updatedCount: 0, hasMarkers: markersPresent, missingKeys: keys };
   }
 
   if (typeof DOMParser !== 'undefined') {
@@ -669,9 +852,12 @@ export function patchDocVarHtml(
     coalesceSplitDocVarSiblings(doc.body, doc);
     const nodes = doc.body.querySelectorAll('[data-doc-var]');
     let updatedCount = 0;
+    const matchedKeys = new Set<string>();
     nodes.forEach((node) => {
       const key = node.getAttribute('data-doc-var');
-      if (!key || !(key in updates)) return;
+      if (!key) return;
+      matchedKeys.add(key);
+      if (!(key in updates)) return;
       const formatted = formatValue(key, updates[key] ?? '');
       const nextHtml = node.tagName === 'DIV' ? formatBlockDivInnerHtml(formatted) : formatted;
       if (node.innerHTML !== nextHtml) {
@@ -683,6 +869,7 @@ export function patchDocVarHtml(
       html: doc.body.innerHTML,
       updatedCount,
       hasMarkers: nodes.length > 0,
+      missingKeys: keys.filter((k) => !matchedKeys.has(k)),
     };
   }
 
@@ -690,6 +877,7 @@ export function patchDocVarHtml(
   const result = html;
   let updatedCount = 0;
   const keySet = new Set(keys);
+  const matchedKeys = new Set<string>();
   const openRe = /<([a-zA-Z0-9]+)\b[^>]*\bdata-doc-var=["']([a-zA-Z0-9_]+)["'][^>]*>/g;
   let out = '';
   let cursor = 0;
@@ -700,6 +888,7 @@ export function patchDocVarHtml(
     const key = m[2];
     const bounds = matchClosingTagEnd(result, tagName, openEnd);
     if (!bounds) continue;
+    matchedKeys.add(key);
     if (keySet.has(key)) {
       const prevInner = result.slice(openEnd, bounds.innerEnd);
       const formatted = formatValue(key, updates[key] ?? '');
@@ -714,7 +903,12 @@ export function patchDocVarHtml(
     openRe.lastIndex = bounds.closeEnd;
   }
   out += result.slice(cursor);
-  return { html: out, updatedCount, hasMarkers: markersPresent };
+  return {
+    html: out,
+    updatedCount,
+    hasMarkers: markersPresent,
+    missingKeys: keys.filter((k) => !matchedKeys.has(k)),
+  };
 }
 
 function serializeDetachedDomText(node: Node): string {

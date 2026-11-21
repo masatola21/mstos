@@ -44,6 +44,7 @@ import { resolveEffectiveDocumentType, getDocumentStatusLabel, type EffectiveDoc
 import {
   extractDocVarTextFromElement,
   extractDocVarTextFromHtml,
+  findMissingDocVarKeys,
   fromInteractiveRichDom,
   hasDocVarMarkers,
   patchDocVarHtml,
@@ -228,6 +229,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
   const [populateSeq, setPopulateSeq] = useState(0);
   const refreshMeetingMemoRef = useRef(false);
+  const populatedEntityKeyRef = useRef<string>('');
   const [draftRec, setDraftRec] = useState<{ id: string; status: string; version: number } | null>(null);
   const [draftTableMissing, setDraftTableMissing] = useState(false);
   const [draftMsg, setDraftMsg] = useState('');
@@ -442,9 +444,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         setCustomDocumentTitle(doc.title || '');
         if (doc.body_html) {
           const rawBodyHtml = String(doc.body_html);
-          const bodyHtml = !hasDocVarMarkers(rawBodyHtml)
-            ? rehydrateLegacyDocumentHtml(rawBodyHtml, tplId)
-            : rawBodyHtml;
+          const bodyHtml = rehydrateLegacyDocumentHtml(rawBodyHtml, tplId);
           setCustomHtmlOverride(bodyHtml);
           const extracted = extractDocVarTextFromHtml(bodyHtml);
           if (Object.keys(extracted).length > 0) {
@@ -782,8 +782,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       refreshMeetingMemoRef.current = false;
       const savedExtracted = savedDocExtractedVarsRef.current;
       savedDocExtractedVarsRef.current = null;
+      const entityKey = `${companyId}:${leadId}:${dealId}:${contactId}:${selectedTemplateId}`;
+      const isPaymentModeOnlyChange =
+        populatedEntityKeyRef.current === entityKey && !shouldForceRefreshMemo && !savedExtracted;
+      populatedEntityKeyRef.current = entityKey;
       setVariableValues((prev) => {
-        const next = { ...prev, ...values };
+        const next: Record<string, string> = isPaymentModeOnlyChange ? { ...prev } : { ...prev, ...values };
+        if (isPaymentModeOnlyChange) {
+          for (const [k, v] of Object.entries(values)) {
+            if (!String(prev[k] || '').trim() && v) {
+              next[k] = v;
+            }
+          }
+        }
         for (const [k, v] of Object.entries(proposalSeed)) {
           if (!v) continue;
           const isUntouchedP5 =
@@ -1049,21 +1060,31 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   // Switch Payment Mode (for Estimate and Contract)
   const switchPaymentMode = (mode: PaymentMode) => {
+    const prevMode = paymentMode;
     setPaymentMode(mode);
     setHasStartedDocument(true);
-    setCustomHtmlOverride(null); // allow dynamic generator to re-render table/clauses
     if (selectedTemplateId === 'tpl-proposal-report') {
       // 提案書: 型は支払い方式から決まる。金額は商談で決めた値だけを使うので、ここでは書き換えない。
+      const sameProposalKind = kindFromPaymentMode(mode) === kindFromPaymentMode(prevMode);
       const nextP5 = defaultP5For(kindFromPaymentMode(mode));
-      setVariableValues((prev) => ({
-        ...prev,
+      const prevSnapshot = variableValuesRef.current;
+      const nextSnapshot: Record<string, string> = {
+        ...prevSnapshot,
         p6_payment_terms: defaultPaymentTermsFor(mode),
-        p5_requests: isDefaultP5Value('p5_requests', prev.p5_requests || '') ? nextP5.requests : prev.p5_requests,
-        p5_prerequisites: isDefaultP5Value('p5_prerequisites', prev.p5_prerequisites || '') ? nextP5.prerequisites : prev.p5_prerequisites,
-        p5_exclusions: isDefaultP5Value('p5_exclusions', prev.p5_exclusions || '') ? nextP5.exclusions : prev.p5_exclusions,
-      }));
+        p5_requests: isDefaultP5Value('p5_requests', prevSnapshot.p5_requests || '') ? nextP5.requests : prevSnapshot.p5_requests,
+        p5_prerequisites: isDefaultP5Value('p5_prerequisites', prevSnapshot.p5_prerequisites || '') ? nextP5.prerequisites : prevSnapshot.p5_prerequisites,
+        p5_exclusions: isDefaultP5Value('p5_exclusions', prevSnapshot.p5_exclusions || '') ? nextP5.exclusions : prevSnapshot.p5_exclusions,
+      };
+      variableValuesRef.current = nextSnapshot;
+      setVariableValues(nextSnapshot);
+      if (sameProposalKind && customHtmlOverride !== null && hasDocVarMarkers(customHtmlOverride)) {
+        syncCustomHtmlWithChangedVars(prevSnapshot, nextSnapshot);
+      } else {
+        setCustomHtmlOverride(null);
+      }
       return;
     }
+    setCustomHtmlOverride(null); // allow dynamic generator to re-render table/clauses
     const parseNum = (v?: string) => Number((v || '').replace(/[^\d]/g, '')) || 0;
     const rawSubtotal = parseNum(variableValues.subtotal_amount) || parseNum(variableValues.total_project_amount) || 300000;
     const today = todayJst();
@@ -1737,40 +1758,72 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       repairRichDocVarsAfterInput(editorEl, pendingRichVarGuardRef.current);
       pendingRichVarGuardRef.current = null;
     }
+    const isProposal = currentTemplate.id === 'tpl-proposal-report';
+    const proposalKind = kindFromPaymentMode(paymentMode);
+    const extracted = extractDocVarTextFromElement(editorEl);
+    const prevSnapshot = variableValuesRef.current;
+    const nextSnapshot = { ...prevSnapshot };
+    const directlyEditedKeys = new Set<string>();
+    let varsChanged = false;
+
+    for (const [k, textVal] of Object.entries(extracted)) {
+      if (!prevSnapshot[k] && isProposal && textVal === proposalEmptyText(k, proposalKind)) continue;
+      const prevPlain = (prevSnapshot[k] || '').replace(/\*\*([^*\n]+?)\*\*/g, '$1');
+      if (textVal !== prevPlain && textVal !== (prevSnapshot[k] || '')) {
+        nextSnapshot[k] = textVal;
+        directlyEditedKeys.add(k);
+        varsChanged = true;
+      }
+    }
+
+    if (isProposal && varsChanged && !options?.isComposing) {
+      const feeInputEdited = ['p4_initial_fee', 'p4_monthly_fee', 'p4_discount'].some((k) => directlyEditedKeys.has(k));
+      const feeTotalManuallyEdited = ['p4_subtotal', 'p4_tax', 'p4_total'].some((k) => directlyEditedKeys.has(k));
+      if (feeInputEdited && !feeTotalManuallyEdited) {
+        const fees = calcProposalFees({
+          initialFee: parseYen(nextSnapshot.p4_initial_fee),
+          monthlyFee: parseYen(nextSnapshot.p4_monthly_fee),
+          discount: parseYen(nextSnapshot.p4_discount),
+        });
+        const derived: Record<string, string> = {
+          p4_subtotal: fees.subtotal > 0 ? formatYen(fees.subtotal) : '',
+          p4_tax: fees.subtotal > 0 ? formatYen(fees.tax) : '',
+          p4_total: fees.subtotal > 0 ? formatYen(fees.total) : '',
+        };
+        for (const [dk, dv] of Object.entries(derived)) {
+          nextSnapshot[dk] = dv;
+          const marker = editorEl.querySelector(`[data-doc-var="${dk}"]`);
+          if (marker) {
+            marker.textContent = dv || proposalEmptyText(dk, proposalKind);
+          }
+        }
+      }
+    }
+
     const cleanHtml = fromInteractiveRichDom(editorEl);
     lastMountedRichHtmlRef.current = cleanHtml;
-    richDirtyRef.current = false;
+    richDirtyRef.current = Boolean(options?.isComposing);
     skipNextRichSyncRef.current = true;
     setHasStartedDocument(true);
     setCustomHtmlOverride(cleanHtml);
 
-    const extracted = extractDocVarTextFromElement(editorEl);
-    if (Object.keys(extracted).length > 0) {
-      const isProposal = currentTemplate.id === 'tpl-proposal-report';
-      const proposalKind = kindFromPaymentMode(paymentMode);
-      setVariableValues((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const [k, textVal] of Object.entries(extracted)) {
-          if (!prev[k] && isProposal && textVal === proposalEmptyText(k, proposalKind)) continue;
-          const prevPlain = (prev[k] || '').replace(/\*\*([^*\n]+?)\*\*/g, '$1');
-          if (textVal !== prevPlain && textVal !== (prev[k] || '')) {
-            next[k] = textVal;
-            changed = true;
-          }
-        }
-        if (changed) {
-          variableValuesRef.current = next;
-          return next;
-        }
-        return prev;
-      });
+    if (varsChanged) {
+      variableValuesRef.current = nextSnapshot;
+      setVariableValues(nextSnapshot);
     }
   };
 
   const switchEditorMode = (nextMode: 'form' | 'rich' | 'html') => {
-    if (editorMode === 'rich' && nextMode !== 'rich' && richDirtyRef.current && richEditorRef.current && !isProtectedSavedDoc) {
-      syncRichEditorDomToState(richEditorRef.current, { isComposing: false });
+    if (editorMode === 'rich' && nextMode !== 'rich' && richEditorRef.current) {
+      if (richDirtyRef.current && !isProtectedSavedDoc) {
+        syncRichEditorDomToState(richEditorRef.current, { isComposing: false });
+      }
+      richEditorRef.current.innerHTML = '';
+    }
+    if (nextMode === 'form' && selectedTemplateId === 'tpl-proposal-report') {
+      setCustomHtmlOverride((prevHtml) =>
+        prevHtml ? rehydrateLegacyDocumentHtml(prevHtml, 'tpl-proposal-report') : prevHtml,
+      );
     }
     pendingRichVarGuardRef.current = null;
     setEditorMode(nextMode);
@@ -2193,10 +2246,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                     const chosen = existingCompanyDocs.find((d) => d.id === val);
                     if (!chosen) return;
                     const rawBodyHtml = chosen.body_html ? String(chosen.body_html) : '';
-                    const bodyHtml =
-                      rawBodyHtml && !hasDocVarMarkers(rawBodyHtml)
-                        ? rehydrateLegacyDocumentHtml(rawBodyHtml, currentTemplate.id)
-                        : rawBodyHtml;
+                    const bodyHtml = rawBodyHtml
+                      ? rehydrateLegacyDocumentHtml(rawBodyHtml, currentTemplate.id)
+                      : rawBodyHtml;
                     const extracted = bodyHtml ? extractDocVarTextFromHtml(bodyHtml) : {};
                     if (Object.keys(extracted).length > 0) {
                       const sanitized: Record<string, string> = {};
@@ -2381,7 +2433,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             </div>
 
             {editorMode === 'rich' ? (
-              <div className="space-y-3">
+              <div key="editor-mode-rich" className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {!isProtectedSavedDoc && (
@@ -2469,6 +2521,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 </div>
 
                 <div
+                  key="rich-editor-canvas"
                   ref={richEditorRef}
                   aria-label="書類本文の直接編集エリア"
                   contentEditable={!isProtectedSavedDoc}
@@ -2510,7 +2563,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 />
               </div>
             ) : editorMode === 'html' ? (
-              <div className="space-y-3">
+              <div key="editor-mode-html" className="space-y-3">
                 <p className="text-xs text-slate-500">
                   HTMLと変数タグ（例: <code className="text-purple-700 font-semibold">{'{{client_company}}'}</code>）を直接編集できます。
                 </p>
@@ -2536,29 +2589,45 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 )}
               </div>
             ) : (
-              <div className="space-y-3.5 min-h-[640px] max-h-[78vh] overflow-y-auto pr-1">
-                {customHtmlOverride !== null && (
-                  hasDocVarMarkers(customHtmlOverride) ? (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-2">
-                      <span>
-                        「本文を直接編集」の文章修正を保持したまま、下の項目フォームの入力もリアルタイムで反映されます。
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomHtmlOverride(null);
-                          setHasStartedDocument(true);
-                          setSaveMessage('直接編集の文面変更をリセットし、初期テンプレートに戻しました。');
-                        }}
-                        className="px-2.5 py-1 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 font-semibold text-xs cursor-pointer shrink-0"
-                      >
-                        文面変更をリセット
-                      </button>
-                    </div>
-                  ) : (
+              <div key="editor-mode-form" className="space-y-3.5 min-h-[640px] max-h-[78vh] overflow-y-auto pr-1">
+                {(() => {
+                  if (customHtmlOverride === null) return null;
+                  const hasMarkers = hasDocVarMarkers(customHtmlOverride);
+                  const missingKeys = hasMarkers
+                    ? findMissingDocVarKeys(
+                        customHtmlOverride,
+                        getDynamicTemplateHtml(currentTemplate.id, paymentMode, invoiceSubtype),
+                      )
+                    : [];
+                  if (hasMarkers && missingKeys.length === 0) {
+                    return (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          「本文を直接編集」の文章修正を保持したまま、下の項目フォームの入力もリアルタイムで反映されます。
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomHtmlOverride(null);
+                            setHasStartedDocument(true);
+                            setSaveMessage('直接編集の文面変更をリセットし、初期テンプレートに戻しました。');
+                          }}
+                          className="px-2.5 py-1 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 font-semibold text-xs cursor-pointer shrink-0"
+                        >
+                          文面変更をリセット
+                        </button>
+                      </div>
+                    );
+                  }
+                  const missingLabels = missingKeys
+                    .map((k) => currentTemplate.variables.find((v) => v.key === k)?.label || k)
+                    .slice(0, 6);
+                  return (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-2">
                       <span>
-                        この書類は旧形式の保存済み本文を表示中のため、項目フォームの変更が自動反映されません。フォームの内容で本文を作り直す場合は右のボタンを押してください。
+                        {!hasMarkers
+                          ? 'この書類は旧形式の保存済み本文を表示中のため、項目フォームの変更が自動反映されません。フォームの内容で本文を作り直す場合は右のボタンを押してください。'
+                          : `直接編集で一部の差し込み箇所が削除されたため、次の項目は本文へ自動反映されません（${missingLabels.join('、')}${missingKeys.length > 6 ? ' ほか' : ''}）。フォームから再同期する場合は右のボタンを押してください。`}
                       </span>
                       <button
                         type="button"
@@ -2572,8 +2641,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                         フォーム内容で本文を作り直す
                       </button>
                     </div>
-                  )
-                )}
+                  );
+                })()}
 
                 {/* 1. If Proposal/Report: Highlight Unified Nature */}
                 {selectedTemplateId === 'tpl-proposal-report' && (
@@ -2728,13 +2797,23 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 )}
 
                 {/* Form fields for template variables */}
-                {currentTemplate.variables.map((v) => {
+                {(() => {
+                  const detachedKeySet = customHtmlOverride !== null
+                    ? new Set(
+                        findMissingDocVarKeys(
+                          customHtmlOverride,
+                          getDynamicTemplateHtml(currentTemplate.id, paymentMode, invoiceSubtype),
+                        ),
+                      )
+                    : new Set<string>();
+                  return currentTemplate.variables.map((v) => {
                   const isProposal = currentTemplate.id === 'tpl-proposal-report';
                   const isMonthlyReport = currentTemplate.id === 'tpl-monthly-report-01';
                   const multiline =
                     (isProposal && MULTILINE_KEYS.has(v.key)) ||
                     (isMonthlyReport && ['monthly_summary', 'accomplishments', 'next_actions'].includes(v.key));
                   const canDraft = isProposal && Boolean(DRAFTABLE_KEYS[v.key]);
+                  const isDetached = detachedKeySet.has(v.key);
                   const notice = draftNotices[v.key];
                   const fieldClass = 'w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white transition-colors shadow-2xs';
                   const placeholder = v.key === 'end_date' ? '任意（定める場合のみ入力）' : `${v.label}（未登録の場合は入力）`;
@@ -2743,6 +2822,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                       <label className="text-xs font-semibold text-slate-700 flex items-center justify-between gap-2">
                         <span>{v.label}</span>
                         <span className="flex items-center gap-1.5">
+                          {isDetached && (
+                            <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                              本文枠削除済み
+                            </span>
+                          )}
                           {canDraft && (
                             <button
                               type="button"
@@ -2786,7 +2870,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                       ))}
                     </div>
                   );
-                })}
+                });
+                })()}
               </div>
             )}
 
