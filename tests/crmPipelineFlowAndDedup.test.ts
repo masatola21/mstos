@@ -138,7 +138,36 @@ const dupServices = findOpsDuplicateGroups('services', [
 assert.equal(dupServices.length, 1);
 assert.equal(dupServices[0].keeper.id, 's-1');
 assert.deepEqual(dupServices[0].duplicates.map((d) => d.id), ['s-2']);
-console.log('  -> PASSED: Operations deduplication verified.');
+
+// 追加契約: 件名・金額が同じでも、別の書類・別の支援は重複とみなさない
+const addlContracts = findOpsDuplicateGroups('contracts', [
+  { id: 'c-1', company_id: 'comp-1', title: '顧問契約', amount: 100000, document_id: 'doc-1', status: 'signed', created_at: '2026-11-01T00:00:00Z' },
+  { id: 'c-2', company_id: 'comp-1', title: '顧問契約', amount: 100000, document_id: 'doc-2', status: 'draft', created_at: '2026-11-20T00:00:00Z' },
+  { id: 'c-3', company_id: 'comp-1', title: '顧問契約', amount: 100000, status: 'draft', created_at: '2026-11-21T00:00:00Z' },
+  { id: 'c-4', company_id: 'comp-1', title: '顧問契約', amount: 100000, status: 'draft', created_at: '2026-11-21T01:00:00Z' },
+]);
+assert.equal(addlContracts.length, 0, '件名・金額が同じだけの契約は重複扱いにしない');
+
+const addlServices = findOpsDuplicateGroups('services', [
+  { id: 's-a', company_id: 'comp-1', title: '【伴走サポート】A社', notes: '商談ID: deal-1', status: 'active', created_at: '2026-11-01T00:00:00Z' },
+  { id: 's-b', company_id: 'comp-1', title: '【伴走サポート】A社', contract_id: 'c-2', status: 'planned', created_at: '2026-11-20T00:00:00Z' },
+  { id: 's-c', company_id: 'comp-1', title: '【伴走サポート】A社', status: 'planned', created_at: '2026-11-21T00:00:00Z' },
+]);
+assert.equal(addlServices.length, 0, '同じ件名の2件目の支援は重複扱いにしない');
+
+const addlInvoices = findOpsDuplicateGroups('invoices', [
+  { id: 'i-1', company_id: 'comp-1', title: '11月分 顧問料', amount: 100000, issue_date: '2026-11-01', status: 'issued', created_at: '2026-11-01T00:00:00Z' },
+  { id: 'i-2', company_id: 'comp-1', title: '11月分 顧問料', amount: 100000, issue_date: '2026-11-01', status: 'issued', created_at: '2026-11-01T01:00:00Z' },
+]);
+assert.equal(addlInvoices.length, 0, '契約に紐付かない請求は件名・金額・日付が同じでも重複扱いにしない');
+
+// 同じ契約・同じ商談の初回請求の二重作成は引き続き検出する
+const dupInitialInvoices = findOpsDuplicateGroups('invoices', [
+  { id: 'i-a', company_id: 'comp-1', contract_id: 'c-1', title: '初回請求', amount: 50000, status: 'issued', created_at: '2026-11-01T00:00:00Z' },
+  { id: 'i-b', company_id: 'comp-1', contract_id: 'c-1', title: '初回請求', amount: 50000, status: 'draft', created_at: '2026-11-02T00:00:00Z' },
+]);
+assert.equal(dupInitialInvoices.length, 1);
+console.log('  -> PASSED: Operations deduplication verified (additional contracts are kept).');
 
 // Test 8: Slimmed contract and invoice status normalization
 console.log('Test 8: normalizeContractUiStatus & normalizeInvoiceUiStatus');

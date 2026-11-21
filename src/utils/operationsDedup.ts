@@ -94,7 +94,7 @@ export function dedupeRecordsById<T extends Record<string, any>>(rows: T[]): T[]
 }
 
 /**
- * 同じ会社・同じ商談/契約/内容で重複して立ち上がったレコードを検出し、
+ * 同じ会社・同じ商談ID/書類ID/契約IDで重複して立ち上がったレコードを検出し、
  * 最も進捗が進んだレコードを keeper としてグループ化する。
  */
 export function findOpsDuplicateGroups<T extends Record<string, any>>(
@@ -112,10 +112,10 @@ export function findOpsDuplicateGroups<T extends Record<string, any>>(
     if (type === 'contracts') {
       const dealId = String(row.deal_id || extractDealIdFromNotes(row.notes) || '').trim();
       const docId = String(row.document_id || '').trim();
-      const titleKey = normalizeTitle(row.title);
+      // 追加契約は別の書類・別の商談から作られるため、同じ商談ID・同じ書類IDのときだけ重複とみなす
+      // （件名と金額が同じだけでは重複扱いにしない）
       if (dealId) groupKey = `c:${companyId}:deal:${dealId}`;
       else if (docId) groupKey = `c:${companyId}:doc:${docId}`;
-      else if (titleKey) groupKey = `c:${companyId}:title:${titleKey}:${Number(row.amount || 0)}`;
     } else if (type === 'invoices') {
       const contractId = String(row.contract_id || '').trim();
       const dealId = String(row.deal_id || row.payload?.deal_id || extractDealIdFromNotes(row.notes) || '').trim();
@@ -124,18 +124,17 @@ export function findOpsDuplicateGroups<T extends Record<string, any>>(
       const isInitialOrAuto =
         row.payload?.billing_type === 'initial' ||
         /初回|成約|Web申込/.test(`${titleKey} ${String(row.notes || '')}`);
+      // 同じ契約・同じ商談の初回請求が二重に作られた場合だけ重複とみなす
+      // （契約に紐付かない請求は、件名・金額・発行日が同じでも別の請求として扱う）
       if (isInitialOrAuto && (contractId || dealId)) {
         groupKey = `i:${companyId}:init:${contractId || dealId}:${amount}`;
-      } else if (titleKey && row.issue_date) {
-        groupKey = `i:${companyId}:title:${titleKey}:${amount}:${String(row.issue_date).slice(0, 10)}`;
       }
     } else {
       const contractId = String(row.contract_id || '').trim();
       const dealId = extractDealIdFromNotes(row.notes);
-      const titleKey = normalizeTitle(row.title);
+      // 同じ件名の顧問支援を2件目として始めるケースがあるため、件名だけでは重複とみなさない
       if (dealId) groupKey = `s:${companyId}:deal:${dealId}`;
       else if (contractId) groupKey = `s:${companyId}:contract:${contractId}`;
-      else if (titleKey) groupKey = `s:${companyId}:title:${titleKey}`;
     }
 
     if (!groupKey) continue;

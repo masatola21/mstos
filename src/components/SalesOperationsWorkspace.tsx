@@ -639,7 +639,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         removedCount += dupIds.length;
       }
 
-      setNotice(`同じ会社・同内容で重複していた ${mergedGroupCount}件（余剰 ${removedCount}行）を1件に統合し、関連データも引き継ぎました。`);
+      setNotice(`同じ商談・書類・契約に紐付いて重複していた ${mergedGroupCount}件（余剰 ${removedCount}行）を1件に統合し、関連データも引き継ぎました。`);
       await load();
       window.dispatchEvent(new CustomEvent('mst:crm-data-changed'));
     } catch (err: any) {
@@ -1128,7 +1128,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
             <span>
-              <strong>{selectedOps.label}</strong> に同じ会社・同内容の重複が <strong>{opsDuplicateGroups.length}組（余剰 {totalExtraDuplicateRows}件）</strong> 見つかりました。関連データ（請求・打ち合わせ・タスク）を引き継いで1件に統合できます。
+              <strong>{selectedOps.label}</strong> に、同じ商談・書類・契約に紐付く重複が <strong>{opsDuplicateGroups.length}組（余剰 {totalExtraDuplicateRows}件）</strong> 見つかりました。関連データ（請求・打ち合わせ・タスク）を引き継いで1件に統合できます。
             </span>
           </div>
           <button
@@ -1137,7 +1137,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
             disabled={isMergingDuplicates}
             className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
           >
-            {isMergingDuplicates ? '統合中...' : '同じ会社・同内容の重複を1件に統合'}
+            {isMergingDuplicates ? '統合中...' : '同じ商談・書類・契約の重複を1件に統合'}
           </button>
         </div>
       )}
