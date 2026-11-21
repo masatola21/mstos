@@ -5552,7 +5552,15 @@ function buildFlexBubblePayload(title: string, body: string, buttonLabel?: strin
 
 
 
+// 実行中フラグ。サーバーレス（Vercel）では処理が途中で打ち切られると finally が走らず
+// フラグが true のまま残り、そのインスタンスが生きている間ずっと配信が止まってしまうため、
+// 「いつ開始したか」を持たせ、一定時間を過ぎたロックは無効（=古い残骸）として扱う。
+// 二重送信は DB 側の status queued→sending の原子的な claim で防止している。
 let marketingQueueBusy = false;
+let marketingQueueBusySince = 0;
+const MARKETING_QUEUE_LOCK_TTL_MS = 4 * 60 * 1000;
+// 1回の実行で新しいジョブに着手してよい時間の上限（関数の最大実行時間より十分手前で止める）
+const MARKETING_QUEUE_TIME_BUDGET_MS = 40 * 1000;
 let marketingRunnerLastRunAt: string | null = null;
 let lastStaleJobsCheckAt = 0;
 
@@ -5594,7 +5602,14 @@ async function getPersistedRunnerLastRunAt(): Promise<string | null> {
 async function processMarketingAutomationJobs(options: { forceImmediate?: boolean; bypassTimeWindow?: boolean; targetJobId?: string } = {}): Promise<number> {
   const runTimestamp = new Date().toISOString();
   marketingRunnerLastRunAt = runTimestamp;
-  if (!lineSupabase || marketingQueueBusy) return 0;
+  if (!lineSupabase) return 0;
+  if (marketingQueueBusy) {
+    const lockAgeMs = Date.now() - marketingQueueBusySince;
+    if (lockAgeMs < MARKETING_QUEUE_LOCK_TTL_MS) return 0;
+    console.warn(`[Automation] 実行中フラグが ${Math.round(lockAgeMs / 1000)} 秒残っていたため解除して再開します（前回の処理が途中で打ち切られた可能性）`);
+    marketingQueueBusy = false;
+  }
+  const queueStartedAt = Date.now();
 
   // キルスイッチ（緊急停止）確認: 全体または配信停止中の場合はジョブ処理をスキップ
   const killSwitch = await getKillSwitchStatus('send');
@@ -5604,6 +5619,7 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
   }
 
   marketingQueueBusy = true;
+  marketingQueueBusySince = Date.now();
   let processedJobsCount = 0;
   try {
     const now = new Date().toISOString();
@@ -5663,6 +5679,12 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
 
     processedJobsCount = jobs.length;
     for (const job of jobs) {
+      // 時間切れ前に新規着手を止める（残りは queued のまま次回の定期実行で処理）。
+      // 送信の途中で関数が強制終了され、ジョブが「送信中」のまま止まるのを防ぐ。
+      if (Date.now() - queueStartedAt > MARKETING_QUEUE_TIME_BUDGET_MS) {
+        console.info('[Automation] 実行時間の上限に近づいたため、残りのジョブは次回の定期実行に持ち越します。');
+        break;
+      }
       const { data: claimed } = await lineSupabase.from('marketing_automation_jobs')
         .update({ status:'sending', updated_at:new Date().toISOString() }).eq('id',job.id).eq('status','queued').select('*').maybeSingle();
       if (!claimed) continue;
@@ -6086,7 +6108,8 @@ async function processMarketingAutomationJobs(options: { forceImmediate?: boolea
     console.error('Marketing automation queue processing failed:', errMsg);
   } finally {
     marketingQueueBusy = false;
-    void persistRunnerExecution(`完了: ${processedJobsCount}件のジョブ処理`);
+    // サーバーレスでは応答後に処理が打ち切られるため、稼働記録は fire-and-forget にせず完了を待つ
+    await persistRunnerExecution(`完了: ${processedJobsCount}件のジョブ処理`);
   }
   return processedJobsCount;
 }
