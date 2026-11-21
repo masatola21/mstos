@@ -653,6 +653,7 @@ export const TableManager: React.FC<TableManagerProps> = ({
     setIsConsolidatingDuplicates(false);
     if (res.error) {
       setRowActionError(res.error);
+      if (res.removedRows > 0) await loadData(); // 一部だけ統合できた場合も最新の状態を表示する
       return;
     }
     await loadData();

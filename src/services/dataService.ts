@@ -834,6 +834,8 @@ export async function consolidateDuplicateCrmRows(
 
     let mergedCompanies = 0;
     let removedRows = 0;
+    let failedRows = 0;
+    const failureReasons: string[] = [];
 
     for (const [, group] of byCompany.entries()) {
       if (group.length <= 1) continue;
@@ -939,21 +941,36 @@ export async function consolidateDuplicateCrmRows(
         deleteDocuments: false,
         deleteLinkedCrm: false,
       });
-      if (delRes.successCount > 0) {
+      let deletedForGroup = delRes.successCount;
+      if (deletedForGroup > 0) {
         mergedCompanies += 1;
-        removedRows += delRes.successCount;
+        removedRows += deletedForGroup;
       } else {
         // Direct fallback if admin API unavailable
         const { data: directDel } = await supabase.from(tableKey).delete().in('id', dupIds).select('id');
         if (directDel && directDel.length > 0) {
+          deletedForGroup = directDel.length;
           mergedCompanies += 1;
           removedRows += directDel.length;
         }
+      }
+      // 削除できなかった重複行は画面に残り続け、「統合したのに戻った」ように見えるため、成功扱いにせず理由を報告する
+      if (deletedForGroup < dupIds.length) {
+        failedRows += dupIds.length - deletedForGroup;
+        const reason = delRes.failedDetails?.[0]?.reason || delRes.error?.message || '削除権限がないか、他のデータと紐付いています。';
+        if (failureReasons.length < 3 && !failureReasons.includes(reason)) failureReasons.push(reason);
       }
     }
 
     if (removedRows > 0) {
       emitCrmDataChanged({ tableKey });
+    }
+    if (failedRows > 0) {
+      return {
+        mergedCompanies,
+        removedRows,
+        error: `重複${failedRows}行を削除できず、画面に残っています。理由: ${failureReasons.join(' / ')}`,
+      };
     }
     return { mergedCompanies, removedRows };
   } catch (err: any) {
