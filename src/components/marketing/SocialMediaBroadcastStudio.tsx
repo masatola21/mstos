@@ -25,6 +25,12 @@ import { loadKnowledgeItems } from '../../utils/storage';
 import { OFFICIAL_VERCEL_URLS } from '../../utils/marketingStorage';
 import type { KnowledgeItem } from '../../types/ai-president';
 import { SocialDmSalesStudio } from './SocialDmSalesStudio';
+import {
+  buildAutoContentContext,
+  RESEARCH_KIND_LABELS,
+  type ResearchProduct,
+  type ResearchReference,
+} from '../../utils/contentResearchContext';
 
 export interface SocialPlatformConfig {
   id: 'threads' | 'facebook' | 'linkedin' | 'instagram' | 'x';
@@ -133,7 +139,7 @@ export interface GeneratedVideoDraft {
   savedAssetId?: string;
 }
 
-type InputSourceType = 'knowledge' | 'website' | 'article_asset' | 'freeform';
+type InputSourceType = 'auto' | 'knowledge' | 'website' | 'article_asset' | 'freeform';
 
 export const SocialMediaBroadcastStudio: React.FC<{
   onNavigateTab?: (tab: string, options?: any) => void;
@@ -150,8 +156,14 @@ export const SocialMediaBroadcastStudio: React.FC<{
   // 作成タイプ: ① SNSテキスト投稿 / ② 動画構成案・アイデア
   const [creationKind, setCreationKind] = useState<'sns' | 'video'>('sns');
 
-  // 入力元: ① 社内ナレッジ ② ホームページ/URL ③ 記事・登録資料 ④ 自由メモ
-  const [inputSourceType, setInputSourceType] = useState<InputSourceType>('knowledge');
+  // 入力元: ⓪ テーマから自動収集（既定） ① 社内ナレッジ ② ホームページ/URL ③ 記事・登録資料 ④ 自由メモ
+  const [inputSourceType, setInputSourceType] = useState<InputSourceType>('auto');
+
+  // ⓪ テーマ・タイトルを入れるだけで、OS内の情報をAIが自分で集めて使う
+  const [autoTheme, setAutoTheme] = useState<string>('');
+  const [autoAngle, setAutoAngle] = useState<string>('');
+  const [referencedSources, setReferencedSources] = useState<ResearchReference[]>([]);
+  const [referenceNote, setReferenceNote] = useState<string>('');
 
   // ① 社内ナレッジ
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
@@ -186,7 +198,7 @@ export const SocialMediaBroadcastStudio: React.FC<{
   const [targetAudience, setTargetAudience] = useState<string>('');
 
   // マスターデータ
-  const [products, setProducts] = useState<Array<{ id: string; product_name: string }>>([]);
+  const [products, setProducts] = useState<Array<ResearchProduct>>([]);
   const [hpUrls, setHpUrls] = useState<Array<{ label: string; url: string }>>([
     { label: '公式コーポレートHP', url: OFFICIAL_VERCEL_URLS.media_top },
     { label: '介護保険外開業LP', url: OFFICIAL_VERCEL_URLS.care_consult },
@@ -232,7 +244,7 @@ export const SocialMediaBroadcastStudio: React.FC<{
         const userId = auth?.user?.id;
 
         const [prodRes, artRes, stratRes, mediaRes, knowRes, assetsRes] = await Promise.all([
-          db.from('products').select('id, product_name').order('product_name'),
+          db.from('products').select('*').order('product_name'),
           db.from('mst_ai_acquisition_records').select('*').eq('record_type', 'article').order('updated_at', { ascending: false }).limit(50),
           db.from('mst_ai_acquisition_records').select('*').eq('record_type', 'strategy').order('updated_at', { ascending: false }).limit(10),
           db.from('mst_ai_acquisition_records').select('*').eq('record_type', 'media').order('updated_at', { ascending: false }).limit(10),
@@ -399,6 +411,39 @@ export const SocialMediaBroadcastStudio: React.FC<{
     let inputContext = '';
     let campaignSlug = 'sns_post';
     let knowledgeContextStr = '';
+
+    if (inputSourceType === 'auto') {
+      if (!autoTheme.trim()) {
+        throw new Error('テーマ・タイトルを入力してください（例: 人手不足の中小企業が最初にやる仕組み化）。');
+      }
+      const auto = buildAutoContentContext({
+        theme: autoTheme,
+        angle: autoAngle,
+        knowledgeItems,
+        articles: articleRecords,
+        assets: assetRecords,
+        products,
+      });
+      setReferencedSources(auto.references);
+      setReferenceNote(
+        [
+          auto.usedFallback ? 'テーマに近い情報が見つからなかったため、直近のナレッジで補完しました。' : '',
+          auto.excludedKnowledgeCount > 0
+            ? `参照範囲の設定により ${auto.excludedKnowledgeCount}件のナレッジは対象外です（社内ナレッジ保管庫で「全ロール参照可」にすると使えます）。`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+      return {
+        inputContext: auto.inputContext,
+        campaignSlug: 'auto_theme',
+        knowledgeContextStr: auto.knowledgeContext,
+      };
+    }
+
+    setReferencedSources([]);
+    setReferenceNote('');
 
     if (inputSourceType === 'knowledge') {
       if (!selectedKnowledge) {
@@ -1116,9 +1161,10 @@ ${activeVideoDraft.scriptBody}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs">
                   {(
                     [
+                      { id: 'auto', label: '🔎 テーマから自動' },
                       { id: 'knowledge', label: '社内ナレッジ' },
                       { id: 'website', label: 'HP・URL' },
                       { id: 'article_asset', label: '記事・資料' },
@@ -1139,6 +1185,57 @@ ${activeVideoDraft.scriptBody}
                     </button>
                   ))}
                 </div>
+
+                {/* ⓪ テーマから自動収集 */}
+                {inputSourceType === 'auto' && (
+                  <div className="space-y-2.5 pt-1">
+                    <div className="rounded-xl bg-purple-50 border border-purple-200 p-2.5 text-[11px] text-purple-900 leading-relaxed">
+                      テーマやタイトルを入れるだけで、AIが社内ナレッジ・自社記事・資料保管庫・商品情報から
+                      関連する内容を自分で探して使います。元ネタを選ぶ必要はありません。
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        テーマ・タイトル（必須）
+                      </label>
+                      <input
+                        type="text"
+                        value={autoTheme}
+                        onChange={(e) => setAutoTheme(e.target.value)}
+                        placeholder="例: 人手不足の中小企業が最初にやる仕組み化"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        切り口・補足（任意）
+                      </label>
+                      <input
+                        type="text"
+                        value={autoAngle}
+                        onChange={(e) => setAutoAngle(e.target.value)}
+                        placeholder="例: 失敗しがちな点を中心に／導入事例を交えて"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+                    {referencedSources.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 space-y-1.5">
+                        <p className="text-[11px] font-semibold text-slate-700">AIが前回参照した情報</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {referencedSources.map((ref) => (
+                            <span
+                              key={`${ref.kind}:${ref.id}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-700"
+                            >
+                              <span className="font-semibold text-purple-700">{RESEARCH_KIND_LABELS[ref.kind]}</span>
+                              <span className="truncate max-w-[14rem]">{ref.title}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {referenceNote && <p className="text-[11px] text-amber-700 leading-relaxed">{referenceNote}</p>}
+                  </div>
+                )}
 
                 {/* ① 社内ナレッジ */}
                 {inputSourceType === 'knowledge' && (
