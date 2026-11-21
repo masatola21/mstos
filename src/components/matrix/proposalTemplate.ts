@@ -212,7 +212,7 @@ export function defaultPaymentTermsFor(mode: ProposalPaymentMode): string {
 // ─── HTML ───────────────────────────────────────────────────
 
 const text = (key: string) =>
-  `<div style="white-space:pre-wrap; font-size:13px; color:#334155; line-height:1.8;">{{${key}}}</div>`;
+  `<div data-doc-var="${key}" style="white-space:pre-wrap; font-size:13px; color:#334155; line-height:1.8;"><div style="margin:0;">{{${key}}}</div></div>`;
 
 const highlightBox = (key: string, bg: string, border: string) =>
   `<div style="background:${bg}; border:1px solid ${border}; border-radius:8px; padding:12px 14px;">${text(key)}</div>`;
@@ -272,20 +272,20 @@ export function getProposalReportHtml(kind: ProposalKind = 'spot_build'): string
     <h1 style="margin:0; font-size:26px; line-height:1.3; color:#0f172a; font-weight:800; white-space:nowrap;">${PROPOSAL_DOCUMENT_TITLE}</h1>
     <p style="margin:6px 0 0 0; font-size:14px; color:#475569;">案件名: {{proposal_title}}</p>
     <div style="display:flex; flex-wrap:wrap; gap:4px 24px; margin-top:10px; font-size:12px; color:#475569;">
-      <span><span style="color:#64748b;">発行日:</span> <strong style="color:#0f172a;">{{issue_date}}</strong></span>
-      <span><span style="color:#64748b;">有効期限:</span> <strong style="color:#0f172a;">{{due_date}}</strong>(発行日から${PROPOSAL_VALID_DAYS}日間)</span>
+      <span><span style="color:#64748b;">発行日:</span> <strong data-doc-var="issue_date" style="color:#0f172a;">{{issue_date}}</strong></span>
+      <span><span style="color:#64748b;">有効期限:</span> <strong data-doc-var="due_date" style="color:#0f172a;">{{due_date}}</strong>(発行日から${PROPOSAL_VALID_DAYS}日間)</span>
     </div>
   </div>
 
   <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-bottom:8px;">
     <div>
-      <p style="font-size:18px; margin:0; font-weight:bold; color:#0f172a;">{{client_company}}</p>
+      <p data-doc-var="client_company" style="font-size:18px; margin:0; font-weight:bold; color:#0f172a;">{{client_company}}</p>
       <p style="font-size:14px; margin:4px 0 0 0; color:#475569;">ご担当: {{client_name}} 様</p>
     </div>
     <div style="text-align:right; font-size:12px; color:#475569; line-height:1.6;">
-      <p style="margin:0; font-weight:bold; color:#0f172a;">{{sender_company}}</p>
+      <p data-doc-var="sender_company" style="margin:0; font-weight:bold; color:#0f172a;">{{sender_company}}</p>
       <p style="margin:2px 0 0 0;">代表取締役 {{sender_rep}}</p>
-      <p style="margin:2px 0 0 0;">{{sender_address}}</p>
+      <p data-doc-var="sender_address" style="margin:2px 0 0 0;">{{sender_address}}</p>
     </div>
   </div>
 

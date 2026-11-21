@@ -527,17 +527,17 @@ export function getMonthlyReportHtml(): string {
 
   <div style="margin-bottom: 20px;">
     <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #0f172a; font-weight: bold; border-left: 4px solid #0284c7; padding-left: 8px;">1. 今月の総括・成果</h3>
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #1e293b; white-space: pre-wrap;">{{monthly_summary}}</div>
+    <div data-doc-var="monthly_summary" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #1e293b; white-space: pre-wrap;"><div style="margin:0;">{{monthly_summary}}</div></div>
   </div>
 
   <div style="margin-bottom: 20px;">
     <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #0f172a; font-weight: bold; border-left: 4px solid #0284c7; padding-left: 8px;">2. 主な実施内容</h3>
-    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #334155; white-space: pre-wrap;">{{accomplishments}}</div>
+    <div data-doc-var="accomplishments" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #334155; white-space: pre-wrap;"><div style="margin:0;">{{accomplishments}}</div></div>
   </div>
 
   <div style="margin-bottom: 24px;">
     <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #0f172a; font-weight: bold; border-left: 4px solid #0284c7; padding-left: 8px;">3. 来月の予定・お願い事項</h3>
-    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #334155; white-space: pre-wrap;">{{next_actions}}</div>
+    <div data-doc-var="next_actions" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #334155; white-space: pre-wrap;"><div style="margin:0;">{{next_actions}}</div></div>
   </div>
 
   <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #64748b; display: flex; justify-content: space-between; gap: 12px;">

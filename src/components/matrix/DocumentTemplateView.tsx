@@ -42,11 +42,12 @@ import { deleteTableRecord, bulkDeleteTableRecords } from '../../services/dataSe
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import { resolveEffectiveDocumentType, getDocumentStatusLabel, type EffectiveDocumentType } from '../../utils/documentManagement';
 import {
+  coalesceSplitDocVarSiblings,
   extractDocVarTextFromElement,
   extractDocVarTextFromHtml,
   hasDocVarMarkers,
   patchDocVarHtml,
-  wrapDocVarHtml,
+  replacePlaceholderWithDocVar,
 } from '../../utils/documentHtmlSync';
 import {
   getEndOfNextMonthDate,
@@ -1311,17 +1312,25 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         .replace(/\*\*/g, '');
     };
     Object.entries(variableValues).forEach(([key, val]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
       // 提案書: 空の項目は、必須なら「【未入力】」、それ以外は決めた代替文を出す
-      result = result.replace(regex, wrapDocVarHtml(key, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : ''))));
+      result = replacePlaceholderWithDocVar(
+        result,
+        key,
+        formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : '')),
+      );
     });
     const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id] || 'preview';
     const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
 
     if (isProposal) {
-      result = result.replace(/{{(\w+)}}/g, (_whole, key) => (
-        key === 'apply_url' ? applyUrl : wrapDocVarHtml(key, escapeHtml(proposalEmptyText(key, proposalKind)))
-      ));
+      const proposalUnmatchedKeys = Array.from(new Set(Array.from(result.matchAll(/{{(\w+)}}/g)).map((m) => m[1])));
+      for (const key of proposalUnmatchedKeys) {
+        if (key === 'apply_url') {
+          result = result.replace(/{{apply_url}}/g, applyUrl);
+        } else {
+          result = replacePlaceholderWithDocVar(result, key, escapeHtml(proposalEmptyText(key, proposalKind)));
+        }
+      }
     }
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
@@ -1338,7 +1347,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   // Sync rich WYSIWYG editor DOM without causing caret jumps while typing
   useEffect(() => {
-    if (editorMode !== 'rich') return;
+    if (editorMode !== 'rich') {
+      skipNextRichSyncRef.current = false;
+      return;
+    }
     if (skipNextRichSyncRef.current) {
       skipNextRichSyncRef.current = false;
       return;
@@ -2109,6 +2121,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                     }
                     const chosen = existingCompanyDocs.find((d) => d.id === val);
                     if (!chosen) return;
+                    const bodyHtml = chosen.body_html ? String(chosen.body_html) : '';
+                    const extracted = bodyHtml ? extractDocVarTextFromHtml(bodyHtml) : {};
+                    if (Object.keys(extracted).length > 0) {
+                      setVariableValues((prev) => ({ ...prev, ...extracted }));
+                    }
                     if (['sent', 'archived'].includes(String(chosen.status))) {
                       setForceNewDocMode(true);
                       delete autosavedDocumentIds.current[templateKey];
@@ -2119,7 +2136,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                       });
                       setActiveSavedDocMeta(null);
                       setCustomDocumentTitle(`${chosen.title}（再発行）`);
-                      setCustomHtmlOverride(chosen.body_html || null);
+                      setCustomHtmlOverride(bodyHtml || null);
                       setSaveMessage('送付済み・保管済み書類は上書きされないため、新規書類として内容を引き継ぎました。');
                       return;
                     }
@@ -2128,7 +2145,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                     setSavedDocIds((prev) => ({ ...prev, [templateKey]: chosen.id }));
                     setActiveSavedDocMeta({ id: chosen.id, title: chosen.title, status: chosen.status });
                     setCustomDocumentTitle(chosen.title || '');
-                    setCustomHtmlOverride(chosen.body_html || null);
+                    setCustomHtmlOverride(bodyHtml || null);
                     setEditorMode('rich');
                     setSaveMessage(`保存済み書類「${chosen.title}」を上書き編集対象に設定しました。`);
                   }}
@@ -2358,6 +2375,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   suppressContentEditableWarning
                   onInput={(e) => {
                     if (isProtectedSavedDoc) return;
+                    coalesceSplitDocVarSiblings(e.currentTarget);
                     const nextHtml = e.currentTarget.innerHTML;
                     skipNextRichSyncRef.current = true;
                     setHasStartedDocument(true);

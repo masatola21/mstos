@@ -27,10 +27,12 @@ import {
 } from '../src/utils/monthlyRevenue';
 import {
   wrapDocVarHtml,
+  replacePlaceholderWithDocVar,
   hasDocVarMarkers,
   patchDocVarHtml,
   extractDocVarTextFromHtml,
 } from '../src/utils/documentHtmlSync';
+import { getProposalReportHtml, PROPOSAL_VARIABLES } from '../src/components/matrix/proposalTemplate';
 import type { ManagedInvoice } from '../src/types/matrix';
 
 function assert(condition: boolean, message: string) {
@@ -285,6 +287,47 @@ async function runTests() {
     const legacy = patchDocVarHtml('<div>旧形式HTML</div>', { total_amount: '550,000' }, (_k, v) => v);
     assert(legacy.hasMarkers === false && legacy.updatedCount === 0, 'Legacy HTML should report hasMarkers=false');
     console.log('  ✓ documentHtmlSync passed');
+  }
+
+  console.log('Test 9: proposalTemplate (tpl-proposal-report) block/sole-child sync');
+  {
+    let html = getProposalReportHtml('hybrid');
+    const vars: Record<string, string> = Object.fromEntries(
+      PROPOSAL_VARIABLES.map((v) => [v.key, v.defaultValue || '【未入力】']),
+    );
+    vars.client_company = '株式会社オメガ';
+    vars.p1_policy = '業務整理から着手\n自動化へ移行';
+    vars.p4_initial_fee = '300,000';
+    vars.p4_total = '330,000';
+
+    for (const [k, v] of Object.entries(vars)) {
+      html = replacePlaceholderWithDocVar(html, k, v);
+    }
+
+    assert(!html.includes('<div data-doc-var="p1_policy"') || !html.includes('<span data-doc-var="p1_policy">'), 'Block data-doc-var must not nest a duplicate <span data-doc-var>');
+    assert(!html.includes('<p data-doc-var="client_company"') || !html.includes('<span data-doc-var="client_company">'), 'client_company <p data-doc-var> must not nest a duplicate <span>');
+
+    // Simulate direct WYSIWYG heading edit + updating p1_policy and client_company from form after switching back
+    const directEdited = html.replace('診断の結果', '診断サマリー（修正）');
+    const patched = patchDocVarHtml(
+      directEdited,
+      {
+        client_company: '株式会社デルタ',
+        p1_policy: 'フェーズ1: 棚卸し\nフェーズ2: システム構築',
+        p4_total: '550,000',
+      },
+      (_k, v) => v,
+    );
+    assert(patched.hasMarkers === true && patched.updatedCount === 3, `Expected 3 updated markers in proposal, got ${patched.updatedCount}`);
+    assert(patched.html.includes('診断サマリー（修正）'), 'Direct edit to proposal heading must be preserved');
+    assert(patched.html.includes('株式会社デルタ'), 'Updated proposal client_company must appear');
+    assert(patched.html.includes('フェーズ1: 棚卸し\nフェーズ2: システム構築'), 'Updated multiline p1_policy must appear');
+
+    const extracted = extractDocVarTextFromHtml(patched.html);
+    assert(extracted.client_company === '株式会社デルタ', 'Extracted proposal client_company mismatch');
+    assert(extracted.p1_policy === 'フェーズ1: 棚卸し\nフェーズ2: システム構築', 'Extracted multiline p1_policy mismatch');
+    assert(extracted.p4_total === '550,000', 'Extracted proposal p4_total mismatch');
+    console.log('  ✓ proposalTemplate two-way sync passed');
   }
 
   console.log('\n=== All Document & Monthly Revenue Tests Passed! ===');
