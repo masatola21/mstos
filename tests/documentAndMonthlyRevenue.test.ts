@@ -25,6 +25,12 @@ import {
   filterPaidInvoicesByMonth,
   buildPaidInvoicesCsv,
 } from '../src/utils/monthlyRevenue';
+import {
+  wrapDocVarHtml,
+  hasDocVarMarkers,
+  patchDocVarHtml,
+  extractDocVarTextFromHtml,
+} from '../src/utils/documentHtmlSync';
 import type { ManagedInvoice } from '../src/types/matrix';
 
 function assert(condition: boolean, message: string) {
@@ -251,6 +257,34 @@ async function runTests() {
     assert(csv.includes('2026-11-18,INV-202611-01,株式会社アルファ'), 'CSV row values mismatch');
     assert(csv.includes('200000,20000,220000'), 'CSV amounts mismatch');
     console.log('  ✓ buildPaidInvoicesCsv passed');
+  }
+
+  console.log('Test 8: documentHtmlSync (two-way form <-> WYSIWYG sync)');
+  {
+    const initial = `<div><p>宛先: ${wrapDocVarHtml('client_company', '株式会社アルファ')} 御中</p><p>追加の自由記述テキスト</p><p>合計: ¥${wrapDocVarHtml('total_amount', '330,000')}</p></div>`;
+    assert(hasDocVarMarkers(initial) === true, 'Expected data-doc-var markers to be detected');
+    assert(hasDocVarMarkers('<div><p>旧形式HTML</p></div>') === false, 'Legacy HTML without markers should return false');
+
+    // Simulate user editing free text in WYSIWYG ("追加の自由記述テキスト" -> "カスタム修正済み文言")
+    const afterDirectEdit = initial.replace('追加の自由記述テキスト', 'カスタム修正済み文言');
+
+    // Now simulate user switching back to 項目フォーム and updating total_amount
+    const patched = patchDocVarHtml(
+      afterDirectEdit,
+      { total_amount: '550,000' },
+      (_k, v) => v,
+    );
+    assert(patched.hasMarkers === true && patched.updatedCount === 1, 'Expected total_amount marker to be patched');
+    assert(patched.html.includes('カスタム修正済み文言'), 'Direct WYSIWYG edit must be preserved');
+    assert(patched.html.includes('¥<span data-doc-var="total_amount">550,000</span>'), 'Updated form variable must reflect in HTML');
+
+    const extracted = extractDocVarTextFromHtml(patched.html);
+    assert(extracted.client_company === '株式会社アルファ', 'Extracted client_company mismatch');
+    assert(extracted.total_amount === '550,000', 'Extracted total_amount mismatch');
+
+    const legacy = patchDocVarHtml('<div>旧形式HTML</div>', { total_amount: '550,000' }, (_k, v) => v);
+    assert(legacy.hasMarkers === false && legacy.updatedCount === 0, 'Legacy HTML should report hasMarkers=false');
+    console.log('  ✓ documentHtmlSync passed');
   }
 
   console.log('\n=== All Document & Monthly Revenue Tests Passed! ===');

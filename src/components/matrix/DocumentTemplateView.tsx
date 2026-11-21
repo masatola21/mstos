@@ -42,6 +42,13 @@ import { deleteTableRecord, bulkDeleteTableRecords } from '../../services/dataSe
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import { resolveEffectiveDocumentType, getDocumentStatusLabel, type EffectiveDocumentType } from '../../utils/documentManagement';
 import {
+  extractDocVarTextFromElement,
+  extractDocVarTextFromHtml,
+  hasDocVarMarkers,
+  patchDocVarHtml,
+  wrapDocVarHtml,
+} from '../../utils/documentHtmlSync';
+import {
   getEndOfNextMonthDate,
   getOneMonthLaterDate,
   calculateMilestoneAmounts,
@@ -194,6 +201,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const richEditorRef = useRef<HTMLDivElement>(null);
   const skipNextRichSyncRef = useRef(false);
   const loadedInitialDocIdRef = useRef<string | null>(null);
+  const savedDocExtractedVarsRef = useRef<Record<string, string> | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedApplyUrl, setCopiedApplyUrl] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
@@ -422,7 +430,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         setActiveSavedDocMeta({ id: doc.id, title: doc.title || '書類', status: doc.status || 'draft' });
         setCustomDocumentTitle(doc.title || '');
         if (doc.body_html) {
-          setCustomHtmlOverride(String(doc.body_html));
+          const bodyHtml = String(doc.body_html);
+          setCustomHtmlOverride(bodyHtml);
+          const extracted = extractDocVarTextFromHtml(bodyHtml);
+          if (Object.keys(extracted).length > 0) {
+            savedDocExtractedVarsRef.current = extracted;
+            setVariableValues((prev) => ({ ...prev, ...extracted }));
+          } else {
+            savedDocExtractedVarsRef.current = null;
+          }
         }
         setEditorMode('rich');
         setRelationshipExpanded(false);
@@ -746,6 +762,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       if (selectedTemplateId === 'tpl-proposal-report' && savedDraft?.chapters && typeof savedDraft.chapters === 'object') Object.assign(proposalSeed, savedDraft.chapters);
       const shouldForceRefreshMemo = refreshMeetingMemoRef.current;
       refreshMeetingMemoRef.current = false;
+      const savedExtracted = savedDocExtractedVarsRef.current;
+      savedDocExtractedVarsRef.current = null;
       setVariableValues((prev) => {
         const next = { ...prev, ...values };
         for (const [k, v] of Object.entries(proposalSeed)) {
@@ -755,6 +773,13 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             isDefaultP5Value(k, prev[k] || '');
           if ((k === 'p_meeting_notes' && shouldForceRefreshMemo) || isUntouchedP5 || !String(prev[k] || '').trim()) {
             next[k] = v;
+          }
+        }
+        if (savedExtracted) {
+          for (const [k, v] of Object.entries(savedExtracted)) {
+            if (v !== undefined && v !== '') {
+              next[k] = v;
+            }
           }
         }
         return next;
@@ -878,91 +903,127 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     }
   };
 
+  const formatTemplateVarHtml = (key: string, rawVal: string): string => {
+    const isProposal = currentTemplate.id === 'tpl-proposal-report';
+    const proposalKind = kindFromPaymentMode(paymentMode);
+    const effective = rawVal || (isProposal ? proposalEmptyText(key, proposalKind) : '');
+    const escaped = escapeHtml(effective);
+    if (!isProposal || !MULTILINE_KEYS.has(key)) return escaped;
+    return escaped
+      .replace(
+        /\*\*([^*\n]+?)\*\*/g,
+        '<strong style="color:#1e3a8a; font-weight:700; background:#fef9c3; padding:0 3px; border-radius:3px;">$1</strong>',
+      )
+      .replace(/\*\*/g, '');
+  };
+
+  const syncCustomHtmlWithChangedVars = (prev: Record<string, string>, next: Record<string, string>) => {
+    const changedUpdates: Record<string, string> = {};
+    for (const k of Object.keys(next)) {
+      if (next[k] !== prev[k]) {
+        changedUpdates[k] = next[k] ?? '';
+      }
+    }
+    if (Object.keys(changedUpdates).length === 0) return;
+    setCustomHtmlOverride((prevHtml) => {
+      if (!prevHtml) return prevHtml;
+      const patched = patchDocVarHtml(prevHtml, changedUpdates, formatTemplateVarHtml);
+      return patched.hasMarkers ? patched.html : prevHtml;
+    });
+  };
+
   const handleApplyHearingHintsToProposal = () => {
     if (!hearingCoreAnswers || selectedTemplateId !== 'tpl-proposal-report') return;
     const hinted = buildInitialProposalFromHearing(kindFromPaymentMode(paymentMode), hearingCoreAnswers);
     setHasStartedDocument(true);
-    setVariableValues((prev) => ({
-      ...prev,
-      p3_metrics: hinted.p3_metrics || prev.p3_metrics || '',
+    const prevSnapshot = variableValues;
+    const nextSnapshot = {
+      ...prevSnapshot,
+      p3_metrics: hinted.p3_metrics || prevSnapshot.p3_metrics || '',
       p5_requests: hinted.p5_requests,
       p5_prerequisites: hinted.p5_prerequisites,
       p5_exclusions: hinted.p5_exclusions,
-    }));
+    };
+    setVariableValues(nextSnapshot);
+    syncCustomHtmlWithChangedVars(prevSnapshot, nextSnapshot);
     setSaveMessage('商談シートの回答を P3 確認指標・P5（お願い事項／前提条件／対象外）へ反映しました。');
+  };
+
+  const computeNextVariableValues = (prev: Record<string, string>, key: string, value: string): Record<string, string> => {
+    const next = { ...prev, [key]: value };
+    if (selectedTemplateId === 'tpl-proposal-report') {
+      // 費用: 初期費用・月額・値引きから、小計・消費税(切り捨て)・合計を自動計算する
+      if (['p4_initial_fee', 'p4_monthly_fee', 'p4_discount'].includes(key)) {
+        const fees = calcProposalFees({
+          initialFee: parseYen(next.p4_initial_fee), monthlyFee: parseYen(next.p4_monthly_fee), discount: parseYen(next.p4_discount),
+        });
+        next.p4_subtotal = fees.subtotal > 0 ? formatYen(fees.subtotal) : '';
+        next.p4_tax = fees.subtotal > 0 ? formatYen(fees.tax) : '';
+        next.p4_total = fees.subtotal > 0 ? formatYen(fees.total) : '';
+      }
+      // 有効期限: 発行日から自動計算する
+      if (key === 'issue_date') {
+        const m = /(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(value);
+        if (m) {
+          const iso = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+          next.due_date = formatDocumentDate(addDaysToIsoDate(iso, PROPOSAL_VALID_DAYS));
+        }
+      }
+    } else if (selectedTemplateId !== 'tpl-monthly-report-01') {
+      // 見積書・契約書・請求書: 税抜金額変更時に消費税・税込金額・分割/手付残金を連動再計算
+      if (key === 'initial_fee' || key === 'monthly_fee') {
+        const initial = parseYen(next.initial_fee);
+        const monthly = parseYen(next.monthly_fee);
+        const initialTax = Math.floor(initial * 0.1);
+        const monthlyTax = Math.floor(monthly * 0.1);
+        next.initial_fee_tax = formatYen(initialTax);
+        next.initial_fee_tax_included = formatYen(initial + initialTax);
+        next.monthly_fee_tax = formatYen(monthlyTax);
+        next.monthly_fee_tax_included = formatYen(monthly + monthlyTax);
+
+        const isSubFromInitMonthly =
+          paymentMode === 'hybrid_setup_retainer' ||
+          paymentMode === 'retainer' ||
+          (selectedTemplateId === 'tpl-unified-invoice' && (invoiceSubtype === 'hybrid_setup_retainer' || invoiceSubtype === 'retainer'));
+        if (isSubFromInitMonthly) {
+          const sub =
+            selectedTemplateId === 'tpl-unified-invoice' && invoiceSubtype === 'retainer'
+              ? monthly
+              : initial + monthly;
+          const tax = Math.floor(sub * 0.1);
+          next.subtotal_amount = formatYen(sub);
+          next.tax_amount = formatYen(tax);
+          next.total_amount = formatYen(sub + tax);
+          next.total_project_amount = formatYen(sub);
+        }
+      } else if (key === 'subtotal_amount') {
+        const sub = parseYen(next.subtotal_amount);
+        const tax = Math.floor(sub * 0.1);
+        const mb = calculateMilestoneAmounts(sub, 0.5);
+        const instCount = paymentMode === 'installments_6' ? 6 : 3;
+        const inst = calculateInstallmentAmounts(sub, instCount);
+        next.tax_amount = formatYen(tax);
+        next.total_amount = formatYen(sub + tax);
+        next.total_project_amount = formatYen(sub);
+        next.deposit_subtotal = formatYen(mb.depositSubtotal);
+        next.deposit_tax = formatYen(mb.depositTax);
+        next.deposit_total = formatYen(mb.depositTotalWithTax);
+        next.completion_subtotal = formatYen(mb.completionSubtotal);
+        next.completion_tax = formatYen(mb.completionTax);
+        next.completion_total = formatYen(mb.completionTotalWithTax);
+        next.installment_subtotal = formatYen(inst.installments[0]?.subtotal ?? 0);
+        next.installment_tax = formatYen(inst.installments[0]?.tax ?? 0);
+        next.installment_amount = formatYen(inst.installments[0]?.totalWithTax ?? 0);
+      }
+    }
+    return next;
   };
 
   const handleVariableChange = (key: string, value: string) => {
     setHasStartedDocument(true);
-    setVariableValues((prev) => {
-      const next = { ...prev, [key]: value };
-      if (selectedTemplateId === 'tpl-proposal-report') {
-        // 費用: 初期費用・月額・値引きから、小計・消費税(切り捨て)・合計を自動計算する
-        if (['p4_initial_fee', 'p4_monthly_fee', 'p4_discount'].includes(key)) {
-          const fees = calcProposalFees({
-            initialFee: parseYen(next.p4_initial_fee), monthlyFee: parseYen(next.p4_monthly_fee), discount: parseYen(next.p4_discount),
-          });
-          next.p4_subtotal = fees.subtotal > 0 ? formatYen(fees.subtotal) : '';
-          next.p4_tax = fees.subtotal > 0 ? formatYen(fees.tax) : '';
-          next.p4_total = fees.subtotal > 0 ? formatYen(fees.total) : '';
-        }
-        // 有効期限: 発行日から自動計算する
-        if (key === 'issue_date') {
-          const m = /(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(value);
-          if (m) {
-            const iso = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-            next.due_date = formatDocumentDate(addDaysToIsoDate(iso, PROPOSAL_VALID_DAYS));
-          }
-        }
-      } else if (selectedTemplateId !== 'tpl-monthly-report-01') {
-        // 見積書・契約書・請求書: 税抜金額変更時に消費税・税込金額・分割/手付残金を連動再計算
-        if (key === 'initial_fee' || key === 'monthly_fee') {
-          const initial = parseYen(next.initial_fee);
-          const monthly = parseYen(next.monthly_fee);
-          const initialTax = Math.floor(initial * 0.1);
-          const monthlyTax = Math.floor(monthly * 0.1);
-          next.initial_fee_tax = formatYen(initialTax);
-          next.initial_fee_tax_included = formatYen(initial + initialTax);
-          next.monthly_fee_tax = formatYen(monthlyTax);
-          next.monthly_fee_tax_included = formatYen(monthly + monthlyTax);
-
-          const isSubFromInitMonthly =
-            paymentMode === 'hybrid_setup_retainer' ||
-            paymentMode === 'retainer' ||
-            (selectedTemplateId === 'tpl-unified-invoice' && (invoiceSubtype === 'hybrid_setup_retainer' || invoiceSubtype === 'retainer'));
-          if (isSubFromInitMonthly) {
-            const sub =
-              selectedTemplateId === 'tpl-unified-invoice' && invoiceSubtype === 'retainer'
-                ? monthly
-                : initial + monthly;
-            const tax = Math.floor(sub * 0.1);
-            next.subtotal_amount = formatYen(sub);
-            next.tax_amount = formatYen(tax);
-            next.total_amount = formatYen(sub + tax);
-            next.total_project_amount = formatYen(sub);
-          }
-        } else if (key === 'subtotal_amount') {
-          const sub = parseYen(next.subtotal_amount);
-          const tax = Math.floor(sub * 0.1);
-          const mb = calculateMilestoneAmounts(sub, 0.5);
-          const instCount = paymentMode === 'installments_6' ? 6 : 3;
-          const inst = calculateInstallmentAmounts(sub, instCount);
-          next.tax_amount = formatYen(tax);
-          next.total_amount = formatYen(sub + tax);
-          next.total_project_amount = formatYen(sub);
-          next.deposit_subtotal = formatYen(mb.depositSubtotal);
-          next.deposit_tax = formatYen(mb.depositTax);
-          next.deposit_total = formatYen(mb.depositTotalWithTax);
-          next.completion_subtotal = formatYen(mb.completionSubtotal);
-          next.completion_tax = formatYen(mb.completionTax);
-          next.completion_total = formatYen(mb.completionTotalWithTax);
-          next.installment_subtotal = formatYen(inst.installments[0]?.subtotal ?? 0);
-          next.installment_tax = formatYen(inst.installments[0]?.tax ?? 0);
-          next.installment_amount = formatYen(inst.installments[0]?.totalWithTax ?? 0);
-        }
-      }
-      return next;
-    });
+    const nextSnapshot = computeNextVariableValues(variableValues, key, value);
+    setVariableValues((prev) => computeNextVariableValues(prev, key, value));
+    syncCustomHtmlWithChangedVars(variableValues, nextSnapshot);
   };
 
   // Switch Payment Mode (for Estimate and Contract)
@@ -1252,13 +1313,15 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     Object.entries(variableValues).forEach(([key, val]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
       // 提案書: 空の項目は、必須なら「【未入力】」、それ以外は決めた代替文を出す
-      result = result.replace(regex, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : '')));
+      result = result.replace(regex, wrapDocVarHtml(key, formatProposalVal(key, val || (isProposal ? proposalEmptyText(key, proposalKind) : ''))));
     });
     const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id] || 'preview';
     const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
 
     if (isProposal) {
-      result = result.replace(/{{(\w+)}}/g, (_whole, key) => (key === 'apply_url' ? applyUrl : escapeHtml(proposalEmptyText(key, proposalKind))));
+      result = result.replace(/{{(\w+)}}/g, (_whole, key) => (
+        key === 'apply_url' ? applyUrl : wrapDocVarHtml(key, escapeHtml(proposalEmptyText(key, proposalKind)))
+      ));
     }
     result = result.replace(/{{apply_url}}/g, applyUrl);
 
@@ -2299,6 +2362,25 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                     skipNextRichSyncRef.current = true;
                     setHasStartedDocument(true);
                     setCustomHtmlOverride(nextHtml);
+
+                    const extracted = extractDocVarTextFromElement(e.currentTarget);
+                    if (Object.keys(extracted).length > 0) {
+                      const isProposal = currentTemplate.id === 'tpl-proposal-report';
+                      const proposalKind = kindFromPaymentMode(paymentMode);
+                      setVariableValues((prev) => {
+                        let changed = false;
+                        const next = { ...prev };
+                        for (const [k, textVal] of Object.entries(extracted)) {
+                          if (!prev[k] && isProposal && textVal === proposalEmptyText(k, proposalKind)) continue;
+                          const prevPlain = (prev[k] || '').replace(/\*\*([^*\n]+?)\*\*/g, '$1');
+                          if (textVal !== prevPlain && textVal !== (prev[k] || '')) {
+                            next[k] = textVal;
+                            changed = true;
+                          }
+                        }
+                        return changed ? next : prev;
+                      });
+                    }
                   }}
                   className="w-full min-h-[640px] max-h-[78vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner focus:outline-none focus:border-purple-600"
                 />
@@ -2332,22 +2414,41 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             ) : (
               <div className="space-y-3.5 min-h-[640px] max-h-[78vh] overflow-y-auto pr-1">
                 {customHtmlOverride !== null && (
-                  <div className="rounded-xl border border-purple-200 bg-purple-50/70 px-3.5 py-2.5 text-xs text-purple-900 flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      現在、保存済みまたは「本文を直接編集」で調整した本文が優先表示されています。フォームの入力内容を本文へ反映し直す場合は右のボタンを押してください。
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomHtmlOverride(null);
-                        setHasStartedDocument(true);
-                        setSaveMessage('項目フォームの入力内容を本文に再反映しました。');
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs cursor-pointer shrink-0"
-                    >
-                      フォーム内容を本文に反映
-                    </button>
-                  </div>
+                  hasDocVarMarkers(customHtmlOverride) ? (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2 text-xs text-emerald-900 flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        「本文を直接編集」の文章修正を保持したまま、下の項目フォームの入力もリアルタイムで反映されます。
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomHtmlOverride(null);
+                          setHasStartedDocument(true);
+                          setSaveMessage('直接編集の文面変更をリセットし、初期テンプレートに戻しました。');
+                        }}
+                        className="px-2.5 py-1 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 font-semibold text-xs cursor-pointer shrink-0"
+                      >
+                        文面変更をリセット
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        この書類は旧形式の保存済み本文を表示中のため、項目フォームの変更が自動反映されません。フォームの内容で本文を作り直す場合は右のボタンを押してください。
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomHtmlOverride(null);
+                          setHasStartedDocument(true);
+                          setSaveMessage('項目フォームの入力内容を本文に再反映しました。');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs cursor-pointer shrink-0"
+                      >
+                        フォーム内容で本文を作り直す
+                      </button>
+                    </div>
+                  )
                 )}
 
                 {/* 1. If Proposal/Report: Highlight Unified Nature */}
