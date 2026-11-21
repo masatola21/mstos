@@ -42,12 +42,17 @@ import { deleteTableRecord, bulkDeleteTableRecords } from '../../services/dataSe
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
 import { resolveEffectiveDocumentType, getDocumentStatusLabel, type EffectiveDocumentType } from '../../utils/documentManagement';
 import {
-  coalesceSplitDocVarSiblings,
   extractDocVarTextFromElement,
   extractDocVarTextFromHtml,
+  fromInteractiveRichDom,
   hasDocVarMarkers,
   patchDocVarHtml,
+  prepareRichDocVarBeforeInput,
+  rehydrateLegacyDocumentHtml,
+  repairRichDocVarsAfterInput,
   replacePlaceholderWithDocVar,
+  toInteractiveRichDom,
+  type PendingRichVarGuard,
 } from '../../utils/documentHtmlSync';
 import {
   getEndOfNextMonthDate,
@@ -201,6 +206,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   );
   const richEditorRef = useRef<HTMLDivElement>(null);
   const skipNextRichSyncRef = useRef(false);
+  const lastMountedRichHtmlRef = useRef<string>('');
+  const richDirtyRef = useRef(false);
+  const pendingRichVarGuardRef = useRef<PendingRichVarGuard | null>(null);
   const loadedInitialDocIdRef = useRef<string | null>(null);
   const savedDocExtractedVarsRef = useRef<Record<string, string> | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
@@ -275,6 +283,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   : 'tpl-proposal-report';
     return getTemplateDefaultValues(activeId, today, 'lump_sum', 'lump_sum');
   });
+  const variableValuesRef = useRef(variableValues);
+  variableValuesRef.current = variableValues;
 
   const loadCrmEntities = React.useCallback(async () => {
     const supabase = getSupabase();
@@ -431,12 +441,19 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         setActiveSavedDocMeta({ id: doc.id, title: doc.title || '書類', status: doc.status || 'draft' });
         setCustomDocumentTitle(doc.title || '');
         if (doc.body_html) {
-          const bodyHtml = String(doc.body_html);
+          const rawBodyHtml = String(doc.body_html);
+          const bodyHtml = !hasDocVarMarkers(rawBodyHtml)
+            ? rehydrateLegacyDocumentHtml(rawBodyHtml, tplId)
+            : rawBodyHtml;
           setCustomHtmlOverride(bodyHtml);
           const extracted = extractDocVarTextFromHtml(bodyHtml);
           if (Object.keys(extracted).length > 0) {
-            savedDocExtractedVarsRef.current = extracted;
-            setVariableValues((prev) => ({ ...prev, ...extracted }));
+            const sanitized: Record<string, string> = {};
+            for (const [k, v] of Object.entries(extracted)) {
+              sanitized[k] = tplId === 'tpl-proposal-report' && v === '【未入力】' ? '' : v;
+            }
+            savedDocExtractedVarsRef.current = sanitized;
+            setVariableValues((prev) => ({ ...prev, ...sanitized }));
           } else {
             savedDocExtractedVarsRef.current = null;
           }
@@ -937,7 +954,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     if (!hearingCoreAnswers || selectedTemplateId !== 'tpl-proposal-report') return;
     const hinted = buildInitialProposalFromHearing(kindFromPaymentMode(paymentMode), hearingCoreAnswers);
     setHasStartedDocument(true);
-    const prevSnapshot = variableValues;
+    const prevSnapshot = variableValuesRef.current;
     const nextSnapshot = {
       ...prevSnapshot,
       p3_metrics: hinted.p3_metrics || prevSnapshot.p3_metrics || '',
@@ -945,6 +962,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       p5_prerequisites: hinted.p5_prerequisites,
       p5_exclusions: hinted.p5_exclusions,
     };
+    variableValuesRef.current = nextSnapshot;
     setVariableValues(nextSnapshot);
     syncCustomHtmlWithChangedVars(prevSnapshot, nextSnapshot);
     setSaveMessage('商談シートの回答を P3 確認指標・P5（お願い事項／前提条件／対象外）へ反映しました。');
@@ -1022,9 +1040,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   const handleVariableChange = (key: string, value: string) => {
     setHasStartedDocument(true);
-    const nextSnapshot = computeNextVariableValues(variableValues, key, value);
-    setVariableValues((prev) => computeNextVariableValues(prev, key, value));
-    syncCustomHtmlWithChangedVars(variableValues, nextSnapshot);
+    const prevSnapshot = variableValuesRef.current;
+    const nextSnapshot = computeNextVariableValues(prevSnapshot, key, value);
+    variableValuesRef.current = nextSnapshot;
+    setVariableValues(nextSnapshot);
+    syncCustomHtmlWithChangedVars(prevSnapshot, nextSnapshot);
   };
 
   // Switch Payment Mode (for Estimate and Contract)
@@ -1347,16 +1367,22 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   // Sync rich WYSIWYG editor DOM without causing caret jumps while typing
   useEffect(() => {
-    if (editorMode !== 'rich') {
+    if (editorMode !== 'rich' || layoutMode === 'preview_wide') {
       skipNextRichSyncRef.current = false;
+      lastMountedRichHtmlRef.current = '';
       return;
     }
     if (skipNextRichSyncRef.current) {
       skipNextRichSyncRef.current = false;
       return;
     }
-    if (richEditorRef.current && richEditorRef.current.innerHTML !== populatedHtml) {
-      richEditorRef.current.innerHTML = populatedHtml;
+    if (
+      richEditorRef.current &&
+      (!richEditorRef.current.hasChildNodes() || lastMountedRichHtmlRef.current !== populatedHtml)
+    ) {
+      richEditorRef.current.innerHTML = toInteractiveRichDom(populatedHtml);
+      lastMountedRichHtmlRef.current = populatedHtml;
+      richDirtyRef.current = false;
     }
   }, [editorMode, layoutMode, populatedHtml, selectedTemplateId, activeSavedDocMeta?.id]);
 
@@ -1703,6 +1729,51 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     setCustomHtmlOverride(preservedHtml);
     setHasStartedDocument(true);
     setSaveMessage('送付済み・保管済み書類を複製し、新規書類として編集できる状態にしました。');
+  };
+
+  const syncRichEditorDomToState = (editorEl: HTMLDivElement, options?: { isComposing?: boolean }) => {
+    if (isProtectedSavedDoc) return;
+    if (!options?.isComposing) {
+      repairRichDocVarsAfterInput(editorEl, pendingRichVarGuardRef.current);
+      pendingRichVarGuardRef.current = null;
+    }
+    const cleanHtml = fromInteractiveRichDom(editorEl);
+    lastMountedRichHtmlRef.current = cleanHtml;
+    richDirtyRef.current = false;
+    skipNextRichSyncRef.current = true;
+    setHasStartedDocument(true);
+    setCustomHtmlOverride(cleanHtml);
+
+    const extracted = extractDocVarTextFromElement(editorEl);
+    if (Object.keys(extracted).length > 0) {
+      const isProposal = currentTemplate.id === 'tpl-proposal-report';
+      const proposalKind = kindFromPaymentMode(paymentMode);
+      setVariableValues((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [k, textVal] of Object.entries(extracted)) {
+          if (!prev[k] && isProposal && textVal === proposalEmptyText(k, proposalKind)) continue;
+          const prevPlain = (prev[k] || '').replace(/\*\*([^*\n]+?)\*\*/g, '$1');
+          if (textVal !== prevPlain && textVal !== (prev[k] || '')) {
+            next[k] = textVal;
+            changed = true;
+          }
+        }
+        if (changed) {
+          variableValuesRef.current = next;
+          return next;
+        }
+        return prev;
+      });
+    }
+  };
+
+  const switchEditorMode = (nextMode: 'form' | 'rich' | 'html') => {
+    if (editorMode === 'rich' && nextMode !== 'rich' && richDirtyRef.current && richEditorRef.current && !isProtectedSavedDoc) {
+      syncRichEditorDomToState(richEditorRef.current, { isComposing: false });
+    }
+    pendingRichVarGuardRef.current = null;
+    setEditorMode(nextMode);
   };
 
   return (
@@ -2121,10 +2192,18 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                     }
                     const chosen = existingCompanyDocs.find((d) => d.id === val);
                     if (!chosen) return;
-                    const bodyHtml = chosen.body_html ? String(chosen.body_html) : '';
+                    const rawBodyHtml = chosen.body_html ? String(chosen.body_html) : '';
+                    const bodyHtml =
+                      rawBodyHtml && !hasDocVarMarkers(rawBodyHtml)
+                        ? rehydrateLegacyDocumentHtml(rawBodyHtml, currentTemplate.id)
+                        : rawBodyHtml;
                     const extracted = bodyHtml ? extractDocVarTextFromHtml(bodyHtml) : {};
                     if (Object.keys(extracted).length > 0) {
-                      setVariableValues((prev) => ({ ...prev, ...extracted }));
+                      const sanitized: Record<string, string> = {};
+                      for (const [k, v] of Object.entries(extracted)) {
+                        sanitized[k] = currentTemplate.id === 'tpl-proposal-report' && v === '【未入力】' ? '' : v;
+                      }
+                      setVariableValues((prev) => ({ ...prev, ...sanitized }));
                     }
                     if (['sent', 'archived'].includes(String(chosen.status))) {
                       setForceNewDocMode(true);
@@ -2270,7 +2349,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
                 <button
                   type="button"
-                  onClick={() => setEditorMode('form')}
+                  onClick={() => switchEditorMode('form')}
                   className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                     editorMode === 'form' ? 'bg-white text-purple-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -2280,7 +2359,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEditorMode('rich')}
+                  onClick={() => switchEditorMode('rich')}
                   className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                     editorMode === 'rich' ? 'bg-white text-purple-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -2290,7 +2369,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEditorMode('html')}
+                  onClick={() => switchEditorMode('html')}
                   className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                     editorMode === 'html' ? 'bg-white text-purple-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -2311,7 +2390,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault();
+                            if (richEditorRef.current) {
+                              pendingRichVarGuardRef.current = prepareRichDocVarBeforeInput(richEditorRef.current);
+                            }
                             document.execCommand('bold');
+                            if (richEditorRef.current) {
+                              richDirtyRef.current = true;
+                              syncRichEditorDomToState(richEditorRef.current);
+                            }
                           }}
                           className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
                           title="選択文字を太字にする"
@@ -2323,7 +2409,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault();
+                            if (richEditorRef.current) {
+                              pendingRichVarGuardRef.current = prepareRichDocVarBeforeInput(richEditorRef.current);
+                            }
                             document.execCommand('underline');
+                            if (richEditorRef.current) {
+                              richDirtyRef.current = true;
+                              syncRichEditorDomToState(richEditorRef.current);
+                            }
                           }}
                           className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
                           title="選択文字に下線を引く"
@@ -2335,7 +2428,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                           type="button"
                           onMouseDown={(e) => {
                             e.preventDefault();
+                            if (richEditorRef.current) {
+                              pendingRichVarGuardRef.current = prepareRichDocVarBeforeInput(richEditorRef.current);
+                            }
                             document.execCommand('undo');
+                            if (richEditorRef.current) {
+                              richDirtyRef.current = true;
+                              syncRichEditorDomToState(richEditorRef.current);
+                            }
                           }}
                           className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
                           title="直前の操作を取り消す"
@@ -2373,32 +2473,38 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   aria-label="書類本文の直接編集エリア"
                   contentEditable={!isProtectedSavedDoc}
                   suppressContentEditableWarning
+                  onBeforeInput={(e) => {
+                    if (isProtectedSavedDoc) return;
+                    const inputEvent = e.nativeEvent as InputEvent | undefined;
+                    if (inputEvent?.isComposing) return;
+                    pendingRichVarGuardRef.current = prepareRichDocVarBeforeInput(
+                      e.currentTarget,
+                      inputEvent?.inputType,
+                    );
+                  }}
+                  onKeyDown={(e) => {
+                    if (isProtectedSavedDoc || (e.nativeEvent as KeyboardEvent)?.isComposing) return;
+                    if (e.key === 'Backspace' || e.key === 'Delete') {
+                      pendingRichVarGuardRef.current = prepareRichDocVarBeforeInput(
+                        e.currentTarget,
+                        e.key === 'Backspace' ? 'deleteContentBackward' : 'deleteContentForward',
+                      );
+                    }
+                  }}
+                  onCompositionStart={(e) => {
+                    if (isProtectedSavedDoc) return;
+                    pendingRichVarGuardRef.current = prepareRichDocVarBeforeInput(e.currentTarget);
+                  }}
                   onInput={(e) => {
                     if (isProtectedSavedDoc) return;
-                    coalesceSplitDocVarSiblings(e.currentTarget);
-                    const nextHtml = e.currentTarget.innerHTML;
-                    skipNextRichSyncRef.current = true;
-                    setHasStartedDocument(true);
-                    setCustomHtmlOverride(nextHtml);
-
-                    const extracted = extractDocVarTextFromElement(e.currentTarget);
-                    if (Object.keys(extracted).length > 0) {
-                      const isProposal = currentTemplate.id === 'tpl-proposal-report';
-                      const proposalKind = kindFromPaymentMode(paymentMode);
-                      setVariableValues((prev) => {
-                        let changed = false;
-                        const next = { ...prev };
-                        for (const [k, textVal] of Object.entries(extracted)) {
-                          if (!prev[k] && isProposal && textVal === proposalEmptyText(k, proposalKind)) continue;
-                          const prevPlain = (prev[k] || '').replace(/\*\*([^*\n]+?)\*\*/g, '$1');
-                          if (textVal !== prevPlain && textVal !== (prev[k] || '')) {
-                            next[k] = textVal;
-                            changed = true;
-                          }
-                        }
-                        return changed ? next : prev;
-                      });
-                    }
+                    richDirtyRef.current = true;
+                    const isComposing = Boolean((e.nativeEvent as InputEvent)?.isComposing);
+                    syncRichEditorDomToState(e.currentTarget, { isComposing });
+                  }}
+                  onCompositionEnd={(e) => {
+                    if (isProtectedSavedDoc) return;
+                    richDirtyRef.current = true;
+                    syncRichEditorDomToState(e.currentTarget, { isComposing: false });
                   }}
                   className="w-full min-h-[640px] max-h-[78vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner focus:outline-none focus:border-purple-600"
                 />

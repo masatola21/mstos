@@ -31,6 +31,9 @@ import {
   hasDocVarMarkers,
   patchDocVarHtml,
   extractDocVarTextFromHtml,
+  toInteractiveRichDom,
+  rehydrateLegacyProposalHtml,
+  rehydrateLegacyDocumentHtml,
 } from '../src/utils/documentHtmlSync';
 import { getProposalReportHtml, PROPOSAL_VARIABLES } from '../src/components/matrix/proposalTemplate';
 import type { ManagedInvoice } from '../src/types/matrix';
@@ -327,6 +330,39 @@ async function runTests() {
     assert(extracted.client_company === '株式会社デルタ', 'Extracted proposal client_company mismatch');
     assert(extracted.p1_policy === 'フェーズ1: 棚卸し\nフェーズ2: システム構築', 'Extracted multiline p1_policy mismatch');
     assert(extracted.p4_total === '550,000', 'Extracted proposal p4_total mismatch');
+
+    // Verify inline header, strong date, P4 row, and D0 summary all patch cleanly
+    const patchHeaderAndCost = patchDocVarHtml(
+      patched.html,
+      {
+        proposal_title: '営業DX自動化プロジェクト',
+        client_name: '鈴木 一郎',
+        issue_date: '2026年12月01日',
+        p4_initial_fee: '450,000',
+        d0_summary: '新しい結論サマリー\n2行目の補足',
+      },
+      (_k, v) => v,
+    );
+    assert(
+      patchHeaderAndCost.updatedCount === 5,
+      `Expected 5 updated proposal fields across inline/strong/block, got ${patchHeaderAndCost.updatedCount}`,
+    );
+    const extracted2 = extractDocVarTextFromHtml(patchHeaderAndCost.html);
+    assert(extracted2.proposal_title === '営業DX自動化プロジェクト', 'proposal_title mismatch');
+    assert(extracted2.client_name === '鈴木 一郎', 'client_name mismatch');
+    assert(extracted2.issue_date === '2026年12月01日', 'issue_date mismatch');
+    assert(extracted2.p4_initial_fee === '450,000', 'p4_initial_fee mismatch');
+    assert(extracted2.d0_summary === '新しい結論サマリー\n2行目の補足', 'd0_summary mismatch');
+
+    // Verify primary occurrence takes precedence and zero-width anchors are stripped cleanly
+    const dupHtml = `<div><p data-doc-var="client_company">\u200B株式会社ファースト</p><p data-doc-var="client_company">古いコピー</p></div>`;
+    const dupExtracted = extractDocVarTextFromHtml(dupHtml);
+    assert(dupExtracted.client_company === '株式会社ファースト', `Expected primary marker value without \\u200B, got ${dupExtracted.client_company}`);
+
+    // SSR fallback safety when DOMParser is undefined
+    assert(toInteractiveRichDom(patchHeaderAndCost.html) === patchHeaderAndCost.html, 'SSR fallback for toInteractiveRichDom');
+    assert(rehydrateLegacyProposalHtml('<div><p>legacy</p></div>') === '<div><p>legacy</p></div>', 'SSR fallback for rehydrateLegacyProposalHtml');
+    assert(rehydrateLegacyDocumentHtml('<div><p>legacy</p></div>', 'tpl-unified-estimate') === '<div><p>legacy</p></div>', 'SSR fallback for rehydrateLegacyDocumentHtml');
     console.log('  ✓ proposalTemplate two-way sync passed');
   }
 
