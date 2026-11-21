@@ -13,11 +13,9 @@ import {
   Calculator,
   BarChart3,
   Send,
-  Inbox,
   Coins,
   RefreshCw,
   Save,
-  CheckCircle2,
   Sparkles,
   ClipboardList,
   ExternalLink,
@@ -27,7 +25,6 @@ import {
   Search,
   FilePlus2,
   FolderOpen,
-  ArrowLeft,
   Columns2,
   Maximize2,
   Eye,
@@ -1831,154 +1828,44 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Compact Sticky-style Top Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-2.5 min-w-0">
-          {onBackToList && (
-            <button
-              type="button"
-              onClick={onBackToList}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>顧客別一覧に戻る</span>
-            </button>
-          )}
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-bold text-slate-900 truncate">
-                {customDocumentTitle.trim() || activeSavedDocMeta?.title || currentTemplate.title}
-              </span>
-              <span className="text-xs text-slate-400">·</span>
-              {activeSavedDocMeta ? (
-                <span className={`text-xs font-semibold ${
-                  isProtectedSavedDoc ? 'text-emerald-700' : 'text-purple-700'
-                }`}>
-                  {getDocumentStatusLabel(activeSavedDocMeta.status)}
-                </span>
-              ) : (
-                <span className="text-xs font-semibold text-amber-700">新規作成中</span>
-              )}
-            </div>
-            {saveMessage && <p role="status" className="text-[11px] text-purple-700 font-medium mt-0.5 truncate">{saveMessage}</p>}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (() => {
-            const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
-            const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
-            return (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(applyUrl);
-                    setCopiedApplyUrl(true);
-                    setTimeout(() => setCopiedApplyUrl(false), 2000);
-                  }}
-                  className="px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer"
-                  title="顧客に送るWeb申込・書類確認ページのURLをコピー"
-                >
-                  {copiedApplyUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5 text-emerald-600" />}
-                  <span>{copiedApplyUrl ? 'URLコピー完了' : 'Web申込URL'}</span>
-                </button>
-                <a
-                  href={applyUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1 transition-all"
-                  title="顧客が見るWeb申込・書類確認ページを開く"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-                  <span>申込画面</span>
-                </a>
-              </>
-            );
-          })()}
-
-          {isProtectedSavedDoc ? (
-            <button
-              type="button"
-              onClick={duplicateProtectedAsNew}
-              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <FilePlus2 className="w-3.5 h-3.5" />
-              <span>複製して新規編集</span>
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => void handleManualSave({ status: 'draft' })}
-                disabled={isSavingDocument || draftBusy}
-                className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5 text-slate-500" />
-                <span>下書き保存</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => (isProposalDoc && draftCtx && !draftTableMissing ? void saveProposalDraft('approved') : void handleManualSave({ status: 'approved' }))}
-                disabled={isSavingDocument || draftBusy}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存（確定）' : '確定保存'}</span>
-              </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={handleSendViaSendCenter}
-            disabled={isSavingDocument}
-            className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>送信ドロワーで送る</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrintPdf}
-            className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>PDF</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Compact Control Strip: Collapsible Relationship Summary + Single-Row 5-Step Template Switcher */}
-      <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-2xs space-y-2.5">
+      {/* Unified Slim Top Control Bar */}
+      <section className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-2xs space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs min-w-0">
-            <span className="font-bold text-slate-700">紐付け対象:</span>
-            <span className={`font-semibold ${selectedCompanyName ? 'text-slate-900' : 'text-amber-700'}`}>
+          <div className="flex flex-wrap items-center gap-2 min-w-0 text-xs">
+            <span className="text-sm font-bold text-slate-900 truncate">
+              {customDocumentTitle.trim() || activeSavedDocMeta?.title || currentTemplate.title}
+            </span>
+            <span className="text-slate-300">·</span>
+            {activeSavedDocMeta ? (
+              <span className={`font-semibold whitespace-nowrap ${
+                isProtectedSavedDoc ? 'text-emerald-700' : 'text-purple-700'
+              }`}>
+                {getDocumentStatusLabel(activeSavedDocMeta.status)}
+              </span>
+            ) : (
+              <span className="font-semibold text-amber-700 whitespace-nowrap">新規作成中</span>
+            )}
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-500 whitespace-nowrap">紐付け:</span>
+            <span className={`font-semibold truncate max-w-[180px] ${selectedCompanyName ? 'text-slate-800' : 'text-amber-700'}`}>
               {selectedCompanyName || '会社未選択'}
             </span>
             {selectedContactName && (
-              <>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-700">担当: {selectedContactName}</span>
-              </>
-            )}
-            {selectedDealName && (
-              <>
-                <span className="text-slate-300">/</span>
-                <span className="text-slate-600">商談: {selectedDealName}</span>
-              </>
+              <span className="text-slate-600 truncate max-w-[120px]">/ {selectedContactName}</span>
             )}
             {existingCompanyDocs.length > 0 && !relationshipExpanded && (
-              <>
-                <span className="text-slate-300">·</span>
-                <span className="text-purple-700 font-medium">同社の保存済み書類 {existingCompanyDocs.length}件</span>
-              </>
+              <span className="text-[11px] text-purple-700 font-medium whitespace-nowrap">
+                (保存済み {existingCompanyDocs.length}件)
+              </span>
             )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRelationshipExpanded((prev) => !prev)}
+              className="px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+            >
+              {relationshipExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              <span>{relationshipExpanded ? '閉じる' : '対象・書類名変更'}</span>
+            </button>
             {activeSavedDocMeta && !isProtectedSavedDoc && (
               <button
                 type="button"
@@ -1997,22 +1884,105 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   setEditorMode('form');
                   setSaveMessage('追加発注・別版用の新規書類作成に切り替えました。');
                 }}
-                className="px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 font-semibold text-xs flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                className="px-2 py-0.5 rounded-md border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 font-semibold text-[11px] inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
               >
-                <FilePlus2 className="w-3.5 h-3.5" />
+                <FilePlus2 className="w-3 h-3" />
                 <span>新規追加発注として作る</span>
               </button>
             )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (() => {
+              const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
+              const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(applyUrl);
+                      setCopiedApplyUrl(true);
+                      setTimeout(() => setCopiedApplyUrl(false), 2000);
+                    }}
+                    className="px-2 py-1 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                    title="顧客に送るWeb申込・書類確認ページのURLをコピー"
+                  >
+                    {copiedApplyUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    <span>{copiedApplyUrl ? 'コピー完了' : 'Web申込URL'}</span>
+                  </button>
+                  <a
+                    href={applyUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1 transition-all whitespace-nowrap"
+                    title="顧客が見るWeb申込・書類確認ページを開く"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                    <span>申込画面</span>
+                  </a>
+                </>
+              );
+            })()}
+
+            {isProtectedSavedDoc ? (
+              <button
+                type="button"
+                onClick={duplicateProtectedAsNew}
+                className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+              >
+                <FilePlus2 className="w-3.5 h-3.5" />
+                <span>複製して新規編集</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleManualSave({ status: 'draft' })}
+                  disabled={isSavingDocument || draftBusy}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Save className="w-3.5 h-3.5 text-slate-500" />
+                  <span>下書き保存</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (isProposalDoc && draftCtx && !draftTableMissing ? void saveProposalDraft('approved') : void handleManualSave({ status: 'approved' }))}
+                  disabled={isSavingDocument || draftBusy}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き確定' : '確定保存'}</span>
+                </button>
+              </>
+            )}
+
             <button
               type="button"
-              onClick={() => setRelationshipExpanded((prev) => !prev)}
-              className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+              onClick={handleSendViaSendCenter}
+              disabled={isSavingDocument}
+              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-2xs whitespace-nowrap"
             >
-              {relationshipExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              <span>{relationshipExpanded ? '紐付け・書類名設定を閉じる' : '会社・担当者・書類名を変更'}</span>
+              <Send className="w-3.5 h-3.5" />
+              <span>送信ドロワーで送る</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrintPdf}
+              className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>PDF</span>
             </button>
           </div>
         </div>
+
+        {saveMessage && (
+          <p role="status" className="text-[11px] text-purple-700 font-medium truncate">
+            {saveMessage}
+          </p>
+        )}
 
         {relationshipExpanded && (
           <div className="pt-2.5 border-t border-slate-100 space-y-3">
@@ -2312,7 +2282,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   key={tpl.id}
                   type="button"
                   onClick={() => handleSelectTemplate(tpl.id)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg border text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-purple-600 border-purple-600 text-white font-bold shadow-2xs'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white hover:border-purple-300 font-medium'
@@ -2335,7 +2305,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             <button
               type="button"
               onClick={() => setLayoutMode('split')}
-              className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`px-2 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                 layoutMode === 'split' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
               title="左で編集・右でA4プレビューを同時表示"
@@ -2346,24 +2316,24 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             <button
               type="button"
               onClick={() => setLayoutMode('editor_wide')}
-              className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`px-2 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                 layoutMode === 'editor_wide' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
               title="編集エリアを横幅100%に拡大"
             >
               <Maximize2 className="w-3.5 h-3.5" />
-              <span>編集を全幅拡大</span>
+              <span>編集拡大</span>
             </button>
             <button
               type="button"
               onClick={() => setLayoutMode('preview_wide')}
-              className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`px-2 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
                 layoutMode === 'preview_wide' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
               title="A4プレビューを横幅100%に拡大"
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>プレビュー拡大</span>
+              <span>プレビュー</span>
             </button>
           </div>
         </div>
@@ -2644,39 +2614,34 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                   );
                 })()}
 
-                {/* 1. If Proposal/Report: Highlight Unified Nature */}
+                {/* 1. If Proposal/Report: Compact Diagnosis + Hearing Actions */}
                 {selectedTemplateId === 'tpl-proposal-report' && (
-                  <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 space-y-2 shadow-2xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                        <Sparkles className="w-4 h-4 text-blue-600" />
-                        <span>診断の結果（D0〜D5）＋ ご提案（P1〜P7）</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <button
-                          type="button"
-                          disabled={!hearingCoreAnswers}
-                          onClick={handleApplyHearingHintsToProposal}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-blue-300 bg-white hover:bg-blue-50 text-blue-800 text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
-                          title={hearingCoreAnswers ? '商談シートのゴール・ツール・条件・対象外範囲を P3確認指標 と P5 に反映します' : '保存済みの商談シートがあると反映できます'}
-                        >
-                          <span>指標・P5へ反映</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!meetingCtx}
-                          onClick={() => setMeetingModalOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
-                          title={meetingCtx ? 'ヒアリング回答・商談要約・合意事項を確認・編集して提案書へ反映します' : '紐付く診断レコードがある企業・リードを選択すると商談シートを開けます'}
-                        >
-                          <ClipboardList className="w-3.5 h-3.5" />
-                          <span>商談シートを開く</span>
-                        </button>
-                      </div>
+                  <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      <span>診断（D0〜D5）＋ 提案（{PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）</span>
                     </div>
-                    <p className="text-[11px] text-blue-800 leading-relaxed">
-                      下の「お支払い方式」を選ぶと、提案の型（現在: {PROPOSAL_KIND_LABELS[kindFromPaymentMode(paymentMode)]}）に合わせて項目とP5標準文が切り替わります。P1・P3（ロードマップ／確認指標）・P5（お願い／前提／対象外）は「AIで下書き」も使えます。
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!hearingCoreAnswers}
+                        onClick={handleApplyHearingHintsToProposal}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-blue-300 bg-white hover:bg-blue-50 text-blue-800 text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
+                        title={hearingCoreAnswers ? '商談シートのゴール・ツール・条件・対象外範囲を P3確認指標 と P5 に反映します' : '保存済みの商談シートがあると反映できます'}
+                      >
+                        <span>指標・P5へ反映</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!meetingCtx}
+                        onClick={() => setMeetingModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer transition whitespace-nowrap"
+                        title={meetingCtx ? 'ヒアリング回答・商談要約・合意事項を確認・編集して提案書へ反映します' : '紐付く診断レコードがある企業・リードを選択すると商談シートを開けます'}
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        <span>商談シートを開く</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -2906,27 +2871,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleSendViaSendCenter}
-                  className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>送信ドロワーで送る</span>
-                </button>
-                <button
-                  type="button"
                   onClick={handleCopyHtml}
-                  className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copied ? 'コピー完了!' : 'HTMLコピー'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePrintPdf}
-                  className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                >
-                  <Printer className="w-3.5 h-3.5 text-slate-500" />
-                  <span>印刷 / PDF</span>
                 </button>
               </div>
             </div>

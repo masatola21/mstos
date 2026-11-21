@@ -1280,17 +1280,6 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                     時系列一覧
                   </button>
                 </div>
-                {onNavigateTab && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigateTab('communication_send')}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 cursor-pointer whitespace-nowrap"
-                    title="メール・LINE送信履歴の全体画面を開く"
-                  >
-                    <Send className="h-3 w-3 text-purple-600" />
-                    <span>送信管理全体</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -1365,19 +1354,9 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
               <div className="py-10 text-center space-y-2.5">
                 <p className="text-xs font-semibold text-slate-600">
                   {documents.length === 0
-                    ? 'まだ生成済みの書類はありません。「新規書類を作成」から作成・保存するとここに表示されます。'
+                    ? 'まだ生成済みの書類はありません。右上の「新規書類を作成」から作成・保存するとここに表示されます。'
                     : '条件に一致する書類が見つかりませんでした。'}
                 </p>
-                {documents.length === 0 && onCreateNewDocument && (
-                  <button
-                    type="button"
-                    onClick={onCreateNewDocument}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-semibold text-white cursor-pointer shadow-2xs"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>新規書類を作成</span>
-                  </button>
-                )}
                 {(docSearchQuery || docStatusFilter !== 'all' || docTypeFilter !== 'all') && (
                   <button
                     type="button"
