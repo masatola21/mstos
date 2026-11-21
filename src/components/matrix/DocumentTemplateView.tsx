@@ -23,10 +23,24 @@ import {
   ExternalLink,
   Link2,
   Trash2,
-  X
+  X,
+  Search,
+  FilePlus2,
+  FolderOpen,
+  ArrowLeft,
+  Columns2,
+  Maximize2,
+  Eye,
+  Type,
+  Undo2,
+  Bold,
+  Underline,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { deleteTableRecord, bulkDeleteTableRecords } from '../../services/dataService';
 import { MeetingSessionView } from '../meeting/MeetingSessionView';
+import { resolveEffectiveDocumentType, getDocumentStatusLabel, type EffectiveDocumentType } from '../../utils/documentManagement';
 import {
   getEndOfNextMonthDate,
   getOneMonthLaterDate,
@@ -115,11 +129,30 @@ function isDocumentTypeCheckViolation(err: any): boolean {
 
 const DEFAULT_TEMPLATES: DocTemplate[] = CORE_TEMPLATES;
 
+function templateIdForEffectiveType(effType: EffectiveDocumentType): string {
+  switch (effType) {
+    case 'estimate':
+      return 'tpl-unified-estimate';
+    case 'contract':
+      return 'tpl-unified-contract';
+    case 'invoice':
+      return 'tpl-unified-invoice';
+    case 'monthly_report':
+      return 'tpl-monthly-report-01';
+    case 'diagnosis_report':
+    case 'proposal':
+    default:
+      return 'tpl-proposal-report';
+  }
+}
+
 interface DocumentTemplateViewProps { 
   initialCompanyId?: string; 
   initialLeadId?: string; 
   initialDealId?: string; 
   initialDocumentType?: DocTemplateType; 
+  initialDocumentId?: string;
+  onBackToList?: () => void;
   onOpenSendCenter?: (params: { companyId?: string; documentId?: string; dealId?: string; contactId?: string }) => void;
   onNavigateTab?: (tab: string) => void;
 }
@@ -129,6 +162,8 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   initialLeadId, 
   initialDealId, 
   initialDocumentType,
+  initialDocumentId,
+  onBackToList,
   onOpenSendCenter,
   onNavigateTab
 }) => {
@@ -151,7 +186,14 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [invoiceSubtype, setInvoiceSubtype] = useState<InvoiceSubtype>('lump_sum');
   const [customHtmlOverride, setCustomHtmlOverride] = useState<string | null>(null);
 
-  const [isEditingTemplate, setIsEditingTemplate] = useState<boolean>(false);
+  const [editorMode, setEditorMode] = useState<'form' | 'rich' | 'html'>('form');
+  const [layoutMode, setLayoutMode] = useState<'split' | 'editor_wide' | 'preview_wide'>('split');
+  const [relationshipExpanded, setRelationshipExpanded] = useState<boolean>(
+    () => !initialCompanyId && !initialLeadId && !initialDealId && !initialDocumentId
+  );
+  const richEditorRef = useRef<HTMLDivElement>(null);
+  const skipNextRichSyncRef = useRef(false);
+  const loadedInitialDocIdRef = useRef<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [copiedApplyUrl, setCopiedApplyUrl] = useState<boolean>(false);
   const [companies, setCompanies] = useState<Array<{id:string;company_name:string}>>([]);
@@ -186,6 +228,21 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
   const [confirmDeleteSingleCompany, setConfirmDeleteSingleCompany] = useState<{ id: string; company_name: string } | null>(null);
   const [isDeletingCompanies, setIsDeletingCompanies] = useState(false);
   const [companyCleanupError, setCompanyCleanupError] = useState('');
+  const [entitySearchQuery, setEntitySearchQuery] = useState('');
+  const [existingCompanyDocs, setExistingCompanyDocs] = useState<Array<{
+    id: string;
+    title: string;
+    document_type: string;
+    status: string;
+    body_html: string;
+    deal_id?: string | null;
+    contact_id?: string | null;
+    updated_at?: string | null;
+    created_at?: string | null;
+  }>>([]);
+  const [activeSavedDocMeta, setActiveSavedDocMeta] = useState<{ id: string; title: string; status: string } | null>(null);
+  const [customDocumentTitle, setCustomDocumentTitle] = useState('');
+  const [forceNewDocMode, setForceNewDocMode] = useState(false);
 
   // Active template resolution
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
@@ -275,10 +332,111 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       setMeetingCtx(null);
       setDraftRec(null);
       setSavedDocIds({});
+      setActiveSavedDocMeta(null);
+      setExistingCompanyDocs([]);
+      setCustomDocumentTitle('');
       autosavedDocumentIds.current = {};
       setVariableValues(getTemplateDefaultValues(selectedTemplateId, todayJst(), paymentMode, invoiceSubtype));
     }
   };
+
+  // Load existing saved documents for the selected company/deal & template type to avoid accidental duplicates
+  const loadExistingDocsForContext = React.useCallback(async () => {
+    const supabase = getSupabase();
+    const targetType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+    if (!supabase || (!companyId && !dealId)) {
+      setExistingCompanyDocs([]);
+      return;
+    }
+    let query = supabase
+      .from('customer_documents')
+      .select('id,title,document_type,status,body_html,deal_id,contact_id,updated_at,created_at')
+      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (companyId) query = query.eq('company_id', companyId);
+    else if (dealId) query = query.eq('deal_id', dealId);
+
+    const { data, error } = await query;
+    if (error || !data) return;
+
+    const matching = data.filter((doc: any) => {
+      const eff = resolveEffectiveDocumentType(doc);
+      if (targetType === 'diagnosis_report') return eff === 'diagnosis_report' || eff === 'monthly_report';
+      return eff === targetType;
+    });
+    setExistingCompanyDocs(matching);
+
+    const templateKey = currentTemplate.id;
+    const currentLinkedId = autosavedDocumentIds.current[templateKey] || savedDocIds[templateKey];
+    const currentDoc = currentLinkedId ? matching.find((d: any) => d.id === currentLinkedId) : undefined;
+    if (currentDoc) {
+      setActiveSavedDocMeta({ id: currentDoc.id, title: currentDoc.title, status: currentDoc.status });
+      return;
+    }
+
+    if (!forceNewDocMode && !currentLinkedId && !initialDocumentId) {
+      const editable = matching.find((d: any) => ['draft', 'awaiting_approval', 'approved'].includes(String(d.status || '')));
+      if (editable) {
+        autosavedDocumentIds.current[templateKey] = editable.id;
+        setSavedDocIds((prev) => ({ ...prev, [templateKey]: editable.id }));
+        setActiveSavedDocMeta({ id: editable.id, title: editable.title, status: editable.status });
+        setCustomDocumentTitle(editable.title || '');
+      } else {
+        setActiveSavedDocMeta(null);
+      }
+    }
+  }, [companyId, dealId, currentTemplate.id, currentTemplate.type, forceNewDocMode, savedDocIds, initialDocumentId]);
+
+  useEffect(() => {
+    void loadExistingDocsForContext();
+  }, [loadExistingDocsForContext]);
+
+  // Load explicit document when opened via "編集する" from Customer Document List
+  useEffect(() => {
+    if (!initialDocumentId || loadedInitialDocIdRef.current === initialDocumentId) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let cancelled = false;
+    loadedInitialDocIdRef.current = initialDocumentId;
+
+    void supabase
+      .from('customer_documents')
+      .select('*')
+      .eq('id', initialDocumentId)
+      .maybeSingle()
+      .then(({ data: doc, error }) => {
+        if (cancelled || error || !doc) return;
+        const effType = resolveEffectiveDocumentType(doc);
+        const tplId = templateIdForEffectiveType(effType);
+        setSelectedTemplateId(tplId);
+        if (doc.company_id) setCompanyId(String(doc.company_id));
+        if (doc.contact_id) setContactId(String(doc.contact_id));
+        if (doc.lead_id) setLeadId(String(doc.lead_id));
+        if (doc.deal_id) setDealId(String(doc.deal_id));
+
+        const isProtected = ['sent', 'archived'].includes(String(doc.status || ''));
+        setForceNewDocMode(false);
+        autosavedDocumentIds.current[tplId] = doc.id;
+        setSavedDocIds((prev) => ({ ...prev, [tplId]: doc.id }));
+        setActiveSavedDocMeta({ id: doc.id, title: doc.title || '書類', status: doc.status || 'draft' });
+        setCustomDocumentTitle(doc.title || '');
+        if (doc.body_html) {
+          setCustomHtmlOverride(String(doc.body_html));
+        }
+        setEditorMode('rich');
+        setRelationshipExpanded(false);
+        setSaveMessage(
+          isProtected
+            ? `「${doc.title}」は${getDocumentStatusLabel(doc.status)}のため閲覧モードで開きました（複製して新規作成できます）。`
+            : `保存済み書類「${doc.title}」を編集画面に読み込みました。`
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialDocumentId]);
 
   const handleConfirmSingleCompanyDelete = async () => {
     if (!confirmDeleteSingleCompany) return;
@@ -611,6 +769,9 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     const id = normalizeTemplateId(rawId);
     setSelectedTemplateId(id);
     setCustomHtmlOverride(null);
+    setCustomDocumentTitle('');
+    setForceNewDocMode(false);
+    setActiveSavedDocMeta(null);
     const today = todayJst();
     const defaults = getTemplateDefaultValues(id, today, paymentMode, invoiceSubtype);
 
@@ -673,7 +834,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       return next;
     });
 
-    setIsEditingTemplate(false);
+    setEditorMode('form');
   };
 
   // 提案書: P1(方針)・P3(ロードマップ)のAI下書き
@@ -1112,18 +1273,32 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
 
   const populatedHtml = getPopulatedHtml();
 
-  // Auto-save changes to Supabase when user has started editing
+  // Sync rich WYSIWYG editor DOM without causing caret jumps while typing
+  useEffect(() => {
+    if (editorMode !== 'rich') return;
+    if (skipNextRichSyncRef.current) {
+      skipNextRichSyncRef.current = false;
+      return;
+    }
+    if (richEditorRef.current && richEditorRef.current.innerHTML !== populatedHtml) {
+      richEditorRef.current.innerHTML = populatedHtml;
+    }
+  }, [editorMode, layoutMode, populatedHtml, selectedTemplateId, activeSavedDocMeta?.id]);
+
+  // Auto-save changes to Supabase when user has started editing (never overwrite sent/archived)
   useEffect(() => {
     const templateId = currentTemplate.id;
     const existingId = autosavedDocumentIds.current[templateId];
     if (!hasStartedDocument || !existingId) return;
+    if (activeSavedDocMeta && ['sent', 'archived'].includes(String(activeSavedDocMeta.status))) return;
 
     setSaveMessage('変更内容を更新中…');
     const timer = window.setTimeout(() => {
       const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+      const effectiveTitle = customDocumentTitle.trim() || currentTemplate.title;
       const payload = {
         document_type: documentType,
-        title: currentTemplate.title,
+        title: effectiveTitle,
         body_html: populatedHtml,
         company_id: companyId || null,
         contact_id: contactId || null,
@@ -1142,7 +1317,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
             .select('id')
             .maybeSingle();
           if (!error) {
-            if (data) setSaveMessage('保存済み書類の内容を自動更新しました。');
+            if (data) {
+              setSaveMessage('保存済み書類の内容を自動更新しました。');
+              window.dispatchEvent(new CustomEvent('mst:documents-changed'));
+            }
             break;
           }
           if (!isDocumentTypeCheckViolation(error)) break;
@@ -1151,7 +1329,7 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       autosaveQueues.current[templateId] = save;
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [hasStartedDocument, currentTemplate.id, currentTemplate.title, currentTemplate.type, populatedHtml, companyId, contactId, leadId, dealId]);
+  }, [hasStartedDocument, currentTemplate.id, currentTemplate.title, currentTemplate.type, customDocumentTitle, populatedHtml, companyId, contactId, leadId, dealId, activeSavedDocMeta]);
 
   const handlePrintPdf = () => {
     const printWindow = window.open('', '_blank');
@@ -1262,9 +1440,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
     }
     const templateId = currentTemplate.id;
     const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+    const effectiveTitle = customDocumentTitle.trim() || currentTemplate.title;
     const payload = {
       document_type: documentType,
-      title: currentTemplate.title,
+      title: effectiveTitle,
       body_html: populatedHtml,
       company_id: companyId || null,
       contact_id: contactId || null,
@@ -1278,12 +1457,16 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       const saved = await persistCustomerDocument(supabase, existingId, payload, opts?.status);
       autosavedDocumentIds.current[templateId] = saved.id;
       setSavedDocIds((prev) => ({ ...prev, [templateId]: saved.id }));
+      setForceNewDocMode(false);
+      setActiveSavedDocMeta({ id: saved.id, title: effectiveTitle, status: opts?.status ?? 'approved' });
       if (saved.inserted) {
         setHasStartedDocument(true);
         setSaveMessage(opts?.status === 'draft' ? '作成中の書類として保存しました。' : '確定書類（送付可能）として保存しました。');
       } else {
         setSaveMessage('書類を更新しました。');
       }
+      window.dispatchEvent(new CustomEvent('mst:documents-changed'));
+      void loadExistingDocsForContext();
       return saved.id;
     } catch (e: any) {
       setSaveMessage(`保存エラー: ${e.message}`);
@@ -1322,9 +1505,10 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
         setIsSavingDocument(true);
         try {
           const documentType = currentTemplate.type === 'report' ? 'diagnosis_report' : currentTemplate.type;
+          const effectiveTitle = customDocumentTitle.trim() || currentTemplate.title;
           const payload = {
             document_type: documentType,
-            title: currentTemplate.title,
+            title: effectiveTitle,
             body_html: populatedHtml,
             company_id: companyId || null,
             contact_id: contactId || null,
@@ -1335,7 +1519,11 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
           docIdToUse = saved.id;
           autosavedDocumentIds.current[templateId] = saved.id;
           setSavedDocIds((prev) => ({ ...prev, [templateId]: saved.id }));
+          setActiveSavedDocMeta({ id: saved.id, title: effectiveTitle, status: 'approved' });
+          setForceNewDocMode(false);
           setHasStartedDocument(true);
+          window.dispatchEvent(new CustomEvent('mst:documents-changed'));
+          void loadExistingDocsForContext();
         } catch (e: any) {
           console.error('Error auto-saving before send center:', e);
           setSaveMessage(`保存エラー: ${e?.message || '書類保存に失敗しました'}`);
@@ -1417,45 +1605,67 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
       ? proposalRequired.includes(v.key) && !(variableValues[v.key] || '').trim()
       : v.key !== 'end_date' && !(variableValues[v.key] || '').trim());
 
+  const isProtectedSavedDoc = Boolean(
+    activeSavedDocMeta && ['sent', 'archived'].includes(String(activeSavedDocMeta.status))
+  );
+  const selectedCompanyName = companies.find((c) => c.id === companyId)?.company_name || '';
+  const selectedContactName = contacts.find((c) => c.id === contactId)?.full_name || '';
+  const selectedDealName = deals.find((d) => d.id === dealId)?.proposal_plan_name || '';
+
+  const duplicateProtectedAsNew = () => {
+    const templateKey = currentTemplate.id;
+    const preservedHtml = populatedHtml;
+    const baseTitle = activeSavedDocMeta?.title || customDocumentTitle || currentTemplate.title;
+    setForceNewDocMode(true);
+    delete autosavedDocumentIds.current[templateKey];
+    setSavedDocIds((prev) => {
+      const next = { ...prev };
+      delete next[templateKey];
+      return next;
+    });
+    setActiveSavedDocMeta(null);
+    setCustomDocumentTitle(`${baseTitle}（再発行）`);
+    setCustomHtmlOverride(preservedHtml);
+    setHasStartedDocument(true);
+    setSaveMessage('送付済み・保管済み書類を複製し、新規書類として編集できる状態にしました。');
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">重要書類・見積・契約</h1>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700">
-              5大統合ワークフロー
-            </span>
+    <div className="space-y-3">
+      {/* Compact Sticky-style Top Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+          {onBackToList && (
+            <button
+              type="button"
+              onClick={onBackToList}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>顧客別一覧に戻る</span>
+            </button>
+          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-slate-900 truncate">
+                {customDocumentTitle.trim() || activeSavedDocMeta?.title || currentTemplate.title}
+              </span>
+              <span className="text-xs text-slate-400">·</span>
+              {activeSavedDocMeta ? (
+                <span className={`text-xs font-semibold ${
+                  isProtectedSavedDoc ? 'text-emerald-700' : 'text-purple-700'
+                }`}>
+                  {getDocumentStatusLabel(activeSavedDocMeta.status)}
+                </span>
+              ) : (
+                <span className="text-xs font-semibold text-amber-700">新規作成中</span>
+              )}
+            </div>
+            {saveMessage && <p role="status" className="text-[11px] text-purple-700 font-medium mt-0.5 truncate">{saveMessage}</p>}
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            1つの書類内で支払条件（一括・月額・手付残金・分割）を即時切り替えできます。
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {onNavigateTab && (
-            <button
-              type="button"
-              onClick={() => onNavigateTab('inbox_hub')}
-              className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Inbox className="w-3.5 h-3.5 text-purple-600" />
-              <span>受信トレイ</span>
-            </button>
-          )}
-
-          {onNavigateTab && (
-            <button
-              type="button"
-              onClick={() => onNavigateTab('communication_send')}
-              className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5 text-purple-600" />
-              <span>送信履歴</span>
-            </button>
-          )}
-
+        <div className="flex flex-wrap items-center gap-1.5">
           {(savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) && (() => {
             const activeDocId = savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id];
             const applyUrl = `${window.location.origin}/docs/${encodeURIComponent(activeDocId)}`;
@@ -1468,304 +1678,678 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                     setCopiedApplyUrl(true);
                     setTimeout(() => setCopiedApplyUrl(false), 2000);
                   }}
-                  className="px-3 py-1.5 rounded-md border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer"
                   title="顧客に送るWeb申込・書類確認ページのURLをコピー"
                 >
                   {copiedApplyUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5 text-emerald-600" />}
-                  <span>{copiedApplyUrl ? '申込URLをコピーしました' : 'Web申込URL'}</span>
+                  <span>{copiedApplyUrl ? 'URLコピー完了' : 'Web申込URL'}</span>
                 </button>
                 <a
                   href={applyUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1.5 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs flex items-center gap-1 transition-all"
                   title="顧客が見るWeb申込・書類確認ページを開く"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
-                  <span>申込プレビュー</span>
+                  <span>申込画面</span>
                 </a>
               </>
             );
           })()}
 
-          <button
-            type="button"
-            onClick={() => (isProposalDoc && draftCtx && !draftTableMissing ? void saveProposalDraft('approved') : void handleManualSave())}
-            disabled={isSavingDocument || draftBusy}
-            className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存' : '確定保存'}</span>
-          </button>
+          {isProtectedSavedDoc ? (
+            <button
+              type="button"
+              onClick={duplicateProtectedAsNew}
+              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <FilePlus2 className="w-3.5 h-3.5" />
+              <span>複製して新規編集</span>
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleManualSave({ status: 'draft' })}
+                disabled={isSavingDocument || draftBusy}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-700 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5 text-slate-500" />
+                <span>下書き保存</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => (isProposalDoc && draftCtx && !draftTableMissing ? void saveProposalDraft('approved') : void handleManualSave({ status: 'approved' }))}
+                disabled={isSavingDocument || draftBusy}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingDocument ? '保存中…' : (savedDocIds[currentTemplate.id] || autosavedDocumentIds.current[currentTemplate.id]) ? '上書き保存（確定）' : '確定保存'}</span>
+              </button>
+            </>
+          )}
 
           <button
             type="button"
             onClick={handleSendViaSendCenter}
             disabled={isSavingDocument}
-            className="px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
           >
             <Send className="w-3.5 h-3.5" />
             <span>送信ドロワーで送る</span>
           </button>
 
           <button
+            type="button"
             onClick={handlePrintPdf}
-            className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs flex items-center gap-1 transition-all cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>PDF出力</span>
+            <span>PDF</span>
           </button>
         </div>
       </div>
 
-      {/* Customer / Deal Relationship Bar */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-          <h2 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-purple-600"></span>
-            書類の紐付け（会社・担当者・商談を選ぶと自動流し込み）
-          </h2>
+      {/* Compact Control Strip: Collapsible Relationship Summary + Single-Row 5-Step Template Switcher */}
+      <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-2xs space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs min-w-0">
+            <span className="font-bold text-slate-700">紐付け対象:</span>
+            <span className={`font-semibold ${selectedCompanyName ? 'text-slate-900' : 'text-amber-700'}`}>
+              {selectedCompanyName || '会社未選択'}
+            </span>
+            {selectedContactName && (
+              <>
+                <span className="text-slate-300">/</span>
+                <span className="text-slate-700">担当: {selectedContactName}</span>
+              </>
+            )}
+            {selectedDealName && (
+              <>
+                <span className="text-slate-300">/</span>
+                <span className="text-slate-600">商談: {selectedDealName}</span>
+              </>
+            )}
+            {existingCompanyDocs.length > 0 && !relationshipExpanded && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="text-purple-700 font-medium">同社の保存済み書類 {existingCompanyDocs.length}件</span>
+              </>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
-            {saveMessage && <p role="status" className="text-xs text-purple-700 font-medium">{saveMessage}</p>}
-            {!initialCompanyId && !initialLeadId && !initialDealId && companies.length > 0 && (
+            {activeSavedDocMeta && !isProtectedSavedDoc && (
               <button
                 type="button"
                 onClick={() => {
-                  setCompanyCleanupError('');
-                  setSelectedCleanupCompanyIds([]);
-                  setCompanyCleanupOpen(true);
+                  const templateKey = currentTemplate.id;
+                  setForceNewDocMode(true);
+                  delete autosavedDocumentIds.current[templateKey];
+                  setSavedDocIds((prev) => {
+                    const next = { ...prev };
+                    delete next[templateKey];
+                    return next;
+                  });
+                  setActiveSavedDocMeta(null);
+                  setCustomHtmlOverride(null);
+                  setCustomDocumentTitle('');
+                  setEditorMode('form');
+                  setSaveMessage('追加発注・別版用の新規書類作成に切り替えました。');
                 }}
-                className="px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                title="会社リストに残っている不要な会社データを選択削除・全削除します"
+                className="px-2.5 py-1 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 font-semibold text-xs flex items-center gap-1 cursor-pointer whitespace-nowrap"
               >
-                <Trash2 className="w-3 h-3" />
-                <span>残っている会社を整理・削除 ({companies.length}社)</span>
+                <FilePlus2 className="w-3.5 h-3.5" />
+                <span>新規追加発注として作る</span>
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setRelationshipExpanded((prev) => !prev)}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+            >
+              {relationshipExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <span>{relationshipExpanded ? '紐付け・書類名設定を閉じる' : '会社・担当者・書類名を変更'}</span>
+            </button>
           </div>
         </div>
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
-          <label className="text-xs font-semibold text-slate-700">
-            会社（顧客企業）
-            <div className="mt-1 flex items-center gap-1.5">
-              <select
-                value={companyId}
-                disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)}
-                onChange={(e) => {
-                  const nextId = e.target.value;
-                  if (nextId) setHasStartedDocument(true);
-                  setCompanyId(nextId);
-                  setContactId('');
-                  setLeadId('');
-                  setDealId('');
-                }}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
-              >
-                <option value="">未選択</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.company_name}</option>
-                ))}
-              </select>
-              {companyId && !initialCompanyId && !initialLeadId && !initialDealId && (
+
+        {relationshipExpanded && (
+          <div className="pt-2.5 border-t border-slate-100 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {!initialCompanyId && !initialLeadId && !initialDealId && (
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={entitySearchQuery}
+                    onChange={(e) => setEntitySearchQuery(e.target.value)}
+                    placeholder="会社名・担当者名で絞り込み..."
+                    className="pl-8 pr-7 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-purple-600 focus:outline-none w-56 sm:w-64"
+                  />
+                  {entitySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setEntitySearchQuery('')}
+                      aria-label="検索をクリア"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!initialCompanyId && !initialLeadId && !initialDealId && companies.length > 0 && (
                 <button
                   type="button"
                   onClick={() => {
-                    const target = companies.find((c) => c.id === companyId);
-                    if (target) {
-                      setCompanyCleanupError('');
-                      setConfirmDeleteSingleCompany(target);
-                    }
+                    setCompanyCleanupError('');
+                    setSelectedCleanupCompanyIds([]);
+                    setCompanyCleanupOpen(true);
                   }}
-                  title="選択中の会社と関連データを削除"
-                  aria-label="選択中の会社と関連データを削除"
-                  className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 shrink-0 transition-colors cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
+                  title="会社リストに残っている不要な会社データを選択削除・全削除します"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3 h-3" />
+                  <span>残っている会社を整理・削除 ({companies.length}社)</span>
                 </button>
               )}
             </div>
-          </label>
-          <label className="text-xs font-semibold text-slate-700">
-            担当者
-            <select
-              value={contactId}
-              onChange={(e) => {
-                const id = e.target.value;
-                const c = contacts.find((item) => item.id === id);
-                if (id) setHasStartedDocument(true);
-                setContactId(id);
-                if (c?.company_id && c.company_id !== companyId) {
-                  setCompanyId(c.company_id);
-                  setLeadId('');
-                  setDealId('');
-                }
-              }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none"
+
+            {(() => {
+              const q = entitySearchQuery.trim().toLowerCase();
+              const filteredCompanies = !q
+                ? companies
+                : companies.filter((c) => {
+                    if (c.id === companyId) return true;
+                    if (c.company_name.toLowerCase().includes(q)) return true;
+                    return contacts.some((ct) => ct.company_id === c.id && ct.full_name.toLowerCase().includes(q));
+                  });
+              const filteredContacts = contacts.filter((c) => {
+                if (c.id === contactId) return true;
+                if (companyId && c.company_id !== companyId && c.company_id) return false;
+                if (!q) return true;
+                const compName = c.company_id ? (companies.find((comp) => comp.id === c.company_id)?.company_name || '') : '';
+                return c.full_name.toLowerCase().includes(q) || compName.toLowerCase().includes(q);
+              });
+
+              return (
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-xs font-semibold text-slate-700">
+                    会社（顧客企業）{q && <span className="text-[11px] font-normal text-purple-700 ml-1">({filteredCompanies.length}件)</span>}
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <select
+                        value={companyId}
+                        disabled={Boolean(initialCompanyId || initialLeadId || initialDealId)}
+                        onChange={(e) => {
+                          const nextId = e.target.value;
+                          if (nextId) setHasStartedDocument(true);
+                          setCompanyId(nextId);
+                          setContactId('');
+                          setLeadId('');
+                          setDealId('');
+                          setForceNewDocMode(false);
+                          setActiveSavedDocMeta(null);
+                          setCustomHtmlOverride(null);
+                          autosavedDocumentIds.current = {};
+                          setSavedDocIds({});
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+                      >
+                        <option value="">未選択</option>
+                        {filteredCompanies.map((c) => (
+                          <option key={c.id} value={c.id}>{c.company_name}</option>
+                        ))}
+                      </select>
+                      {companyId && !initialCompanyId && !initialLeadId && !initialDealId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = companies.find((c) => c.id === companyId);
+                            if (target) {
+                              setCompanyCleanupError('');
+                              setConfirmDeleteSingleCompany(target);
+                            }
+                          }}
+                          title="選択中の会社と関連データを削除"
+                          aria-label="選択中の会社と関連データを削除"
+                          className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 shrink-0 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-700">
+                    担当者{q && <span className="text-[11px] font-normal text-purple-700 ml-1">({filteredContacts.length}名)</span>}
+                    <select
+                      value={contactId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const c = contacts.find((item) => item.id === id);
+                        if (id) setHasStartedDocument(true);
+                        setContactId(id);
+                        if (c?.company_id && c.company_id !== companyId) {
+                          setCompanyId(c.company_id);
+                          setLeadId('');
+                          setDealId('');
+                          setForceNewDocMode(false);
+                          setActiveSavedDocMeta(null);
+                          setCustomHtmlOverride(null);
+                          autosavedDocumentIds.current = {};
+                          setSavedDocIds({});
+                        }
+                      }}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none"
+                    >
+                      <option value="">未選択</option>
+                      {filteredContacts.map((c) => {
+                        const compName = !companyId && c.company_id ? companies.find((comp) => comp.id === c.company_id)?.company_name : '';
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {c.full_name}{compName ? `（${compName}）` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    商談案件（任意）
+                    <select
+                      value={dealId}
+                      disabled={Boolean(initialDealId)}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const deal = deals.find((item) => item.id === id);
+                        if (id) setHasStartedDocument(true);
+                        setDealId(id);
+                        if (deal?.lead_id && deal.lead_id !== leadId) setLeadId(deal.lead_id);
+                        if (deal?.company_id && deal.company_id !== companyId) {
+                          setCompanyId(deal.company_id);
+                        }
+                      }}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+                    >
+                      <option value="">未選択</option>
+                      {deals.filter((d) => (!companyId || d.company_id === companyId || !d.company_id) && (!leadId || d.lead_id === leadId)).map((d) => (
+                        <option key={d.id} value={d.id}>{d.proposal_plan_name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    反響リード（任意）
+                    <select
+                      value={leadId}
+                      disabled={Boolean(initialLeadId || initialDealId)}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const lead = leads.find((item) => item.id === id);
+                        if (id) setHasStartedDocument(true);
+                        setLeadId(id);
+                        if (lead?.company_id && lead.company_id !== companyId) {
+                          setCompanyId(lead.company_id);
+                          setContactId((cur) => contacts.find((item) => item.id === cur)?.company_id === lead.company_id ? cur : '');
+                        }
+                      }}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+                    >
+                      <option value="">未選択</option>
+                      {leads.filter((lead) => !companyId || lead.company_id === companyId || !lead.company_id).map((lead) => (
+                        <option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0, 8)}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              );
+            })()}
+
+            {/* Title & Existing saved document selector */}
+            <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <FolderOpen className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="font-semibold text-slate-700">書類名・対象書類:</span>
+                <input
+                  type="text"
+                  value={customDocumentTitle}
+                  onChange={(e) => {
+                    setHasStartedDocument(true);
+                    setCustomDocumentTitle(e.target.value);
+                  }}
+                  placeholder={`書類名（空欄なら「${currentTemplate.title}」）`}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-purple-600 focus:outline-none w-56"
+                />
+              </div>
+
+              {existingCompanyDocs.length > 0 && (
+                <select
+                  aria-label="保存済み書類の切替"
+                  value={activeSavedDocMeta?.id || '__new__'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const templateKey = currentTemplate.id;
+                    if (val === '__new__') {
+                      setForceNewDocMode(true);
+                      delete autosavedDocumentIds.current[templateKey];
+                      setSavedDocIds((prev) => {
+                        const next = { ...prev };
+                        delete next[templateKey];
+                        return next;
+                      });
+                      setActiveSavedDocMeta(null);
+                      setCustomHtmlOverride(null);
+                      setCustomDocumentTitle('');
+                      setEditorMode('form');
+                      setSaveMessage('追加発注・再見積用の新規書類モードに切り替えました。');
+                      return;
+                    }
+                    const chosen = existingCompanyDocs.find((d) => d.id === val);
+                    if (!chosen) return;
+                    if (['sent', 'archived'].includes(String(chosen.status))) {
+                      setForceNewDocMode(true);
+                      delete autosavedDocumentIds.current[templateKey];
+                      setSavedDocIds((prev) => {
+                        const next = { ...prev };
+                        delete next[templateKey];
+                        return next;
+                      });
+                      setActiveSavedDocMeta(null);
+                      setCustomDocumentTitle(`${chosen.title}（再発行）`);
+                      setCustomHtmlOverride(chosen.body_html || null);
+                      setSaveMessage('送付済み・保管済み書類は上書きされないため、新規書類として内容を引き継ぎました。');
+                      return;
+                    }
+                    setForceNewDocMode(false);
+                    autosavedDocumentIds.current[templateKey] = chosen.id;
+                    setSavedDocIds((prev) => ({ ...prev, [templateKey]: chosen.id }));
+                    setActiveSavedDocMeta({ id: chosen.id, title: chosen.title, status: chosen.status });
+                    setCustomDocumentTitle(chosen.title || '');
+                    setCustomHtmlOverride(chosen.body_html || null);
+                    setEditorMode('rich');
+                    setSaveMessage(`保存済み書類「${chosen.title}」を上書き編集対象に設定しました。`);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:border-purple-600 focus:outline-none max-w-[280px]"
+                >
+                  <option value="__new__">＋ 新規書類として作成（追加発注・別版）</option>
+                  {existingCompanyDocs.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      [{getDocumentStatusLabel(d.status)}] {d.title} ({new Date(d.updated_at || d.created_at || '').toLocaleDateString('ja-JP')})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Compact Single-Row 5-Step Core Template Switcher + Layout Mode Bar */}
+        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {CORE_TEMPLATES.map((tpl) => {
+              const isSelected = tpl.id === selectedTemplateId;
+              const icons: Record<DocTemplateType, React.ReactNode> = {
+                proposal: <Sparkles className="w-3.5 h-3.5 text-blue-600" />,
+                estimate: <Calculator className="w-3.5 h-3.5 text-emerald-600" />,
+                contract: <FileCheck2 className="w-3.5 h-3.5 text-purple-600" />,
+                invoice: <Receipt className="w-3.5 h-3.5 text-amber-600" />,
+                monthly_report: <BarChart3 className="w-3.5 h-3.5 text-cyan-600" />,
+                report: <FileText className="w-3.5 h-3.5 text-indigo-600" />,
+              };
+              return (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => handleSelectTemplate(tpl.id)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-purple-600 border-purple-600 text-white font-bold shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white hover:border-purple-300 font-medium'
+                  }`}
+                >
+                  <span className={`font-mono text-[10px] ${isSelected ? 'text-purple-200' : 'text-slate-400'}`}>
+                    {tpl.stepNum}
+                  </span>
+                  <span className={isSelected ? 'text-white [&>svg]:text-white' : ''}>
+                    {icons[tpl.type]}
+                  </span>
+                  <span>{tpl.title}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Layout Expansion Switcher */}
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setLayoutMode('split')}
+              className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                layoutMode === 'split' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="左で編集・右でA4プレビューを同時表示"
             >
-              <option value="">未選択</option>
-              {contacts.filter((c) => !companyId || c.company_id === companyId || !c.company_id).map((c) => (
-                <option key={c.id} value={c.id}>{c.full_name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-semibold text-slate-700">
-            反響リード
-            <select
-              value={leadId}
-              disabled={Boolean(initialLeadId || initialDealId)}
-              onChange={(e) => {
-                const id = e.target.value;
-                const lead = leads.find((item) => item.id === id);
-                if (id) setHasStartedDocument(true);
-                setLeadId(id);
-                if (lead?.company_id && lead.company_id !== companyId) {
-                  setCompanyId(lead.company_id);
-                  setContactId((cur) => contacts.find((item) => item.id === cur)?.company_id === lead.company_id ? cur : '');
-                }
-              }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+              <Columns2 className="w-3.5 h-3.5" />
+              <span>分割表示</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayoutMode('editor_wide')}
+              className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                layoutMode === 'editor_wide' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="編集エリアを横幅100%に拡大"
             >
-              <option value="">未選択</option>
-              {leads.filter((lead) => !companyId || lead.company_id === companyId || !lead.company_id).map((lead) => (
-                <option key={lead.id} value={lead.id}>{lead.source || 'リード'} · {lead.status || lead.id.slice(0, 8)}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-semibold text-slate-700">
-            商談案件
-            <select
-              value={dealId}
-              disabled={Boolean(initialDealId)}
-              onChange={(e) => {
-                const id = e.target.value;
-                const deal = deals.find((item) => item.id === id);
-                if (id) setHasStartedDocument(true);
-                setDealId(id);
-                if (deal?.lead_id && deal.lead_id !== leadId) setLeadId(deal.lead_id);
-                if (deal?.company_id && deal.company_id !== companyId) {
-                  setCompanyId(deal.company_id);
-                }
-              }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs text-slate-900 focus:bg-white focus:border-purple-600 focus:outline-none disabled:opacity-60"
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>編集を全幅拡大</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayoutMode('preview_wide')}
+              className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                layoutMode === 'preview_wide' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="A4プレビューを横幅100%に拡大"
             >
-              <option value="">未選択</option>
-              {deals.filter((d) => (!companyId || d.company_id === companyId || !d.company_id) && (!leadId || d.lead_id === leadId)).map((d) => (
-                <option key={d.id} value={d.id}>{d.proposal_plan_name}</option>
-              ))}
-            </select>
-          </label>
+              <Eye className="w-3.5 h-3.5" />
+              <span>プレビュー拡大</span>
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* 5 Core Unified Document Cards (1 Single Row) */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            営業〜契約・請求 5大コア書類（1クリック切替）
+      {isProtectedSavedDoc && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900">
+          <span>
+            この書類は「{getDocumentStatusLabel(activeSavedDocMeta?.status)}」のため保護されており、直接上書きされません。内容を直して再発行する場合は「複製して新規編集」を押してください。
           </span>
-          <span className="text-[11px] text-slate-600">
-            書類種別を選び、内部で条件（一括／月額／手付／分割）を切り替えます
-          </span>
+          <button
+            type="button"
+            onClick={duplicateProtectedAsNew}
+            className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs cursor-pointer shrink-0"
+          >
+            複製して新規編集する
+          </button>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {CORE_TEMPLATES.map((tpl) => {
-            const isSelected = tpl.id === selectedTemplateId;
-            const icons: Record<DocTemplateType, React.ReactNode> = {
-              proposal: <Sparkles className="w-4 h-4 text-blue-600" />,
-              estimate: <Calculator className="w-4 h-4 text-emerald-600" />,
-              contract: <FileCheck2 className="w-4 h-4 text-purple-600" />,
-              invoice: <Receipt className="w-4 h-4 text-amber-600" />,
-              monthly_report: <BarChart3 className="w-4 h-4 text-cyan-600" />,
-              report: <FileText className="w-4 h-4 text-indigo-600" />,
-            };
-
-            return (
-              <button
-                key={tpl.id}
-                onClick={() => handleSelectTemplate(tpl.id)}
-                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? 'bg-purple-50/90 border-purple-600 shadow-sm ring-2 ring-purple-600'
-                    : 'bg-white border-slate-200 hover:border-purple-300 text-slate-600 hover:text-slate-900 shadow-2xs hover:shadow-xs'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded font-mono">
-                      {tpl.stepNum}
-                    </span>
-                    <span className={`p-1.5 rounded-lg ${isSelected ? 'bg-purple-200/60' : 'bg-slate-100'}`}>
-                      {icons[tpl.type]}
-                    </span>
-                  </div>
-                  <h3 className={`font-bold text-xs sm:text-sm line-clamp-1 ${isSelected ? 'text-purple-950 font-extrabold' : 'text-slate-800'}`}>
-                    {tpl.title}
-                  </h3>
-                  <p className="text-[11px] font-semibold text-purple-700/80 mt-0.5">{tpl.subtitle}</p>
-                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-1 leading-snug">{tpl.description}</p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
-                    {tpl.badge}
-                  </span>
-                  <span className={isSelected ? 'text-purple-700 font-bold flex items-center gap-1' : 'text-slate-600'}>
-                    {isSelected ? <>選択中 <CheckCircle2 className="w-3 h-3 inline" /></> : '選択'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Workspace Split: Left Form Inputs / Right Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Form / Variable Panel (5 Cols) */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      {/* Spacious Main Workspace Split / Wide View */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Editor Panel */}
+        {layoutMode !== 'preview_wide' && (
+          <div className={`${layoutMode === 'editor_wide' ? 'lg:col-span-12' : 'lg:col-span-6'} bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col`}>
+            {/* Editor Mode Tabs (Unified Form + WYSIWYG Direct Edit + HTML Source) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">
               <div className="flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-purple-600" />
                 <h2 className="font-bold text-sm text-slate-900">
-                  {currentTemplate.title} の設定・入力
+                  {currentTemplate.title} の編集
                 </h2>
               </div>
-              <button
-                onClick={() => setIsEditingTemplate(!isEditingTemplate)}
-                className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
-                  isEditingTemplate
-                    ? 'bg-purple-50 border-purple-300 text-purple-700 font-semibold'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span>{isEditingTemplate ? 'フォームに戻る' : 'HTML直接編集'}</span>
-              </button>
+
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setEditorMode('form')}
+                  className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                    editorMode === 'form' ? 'bg-white text-purple-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>項目フォーム</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditorMode('rich')}
+                  className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                    editorMode === 'rich' ? 'bg-white text-purple-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Type className="w-3.5 h-3.5" />
+                  <span>本文を直接編集</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditorMode('html')}
+                  className={`px-2.5 py-1 rounded-md font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+                    editorMode === 'html' ? 'bg-white text-purple-700 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileCode className="w-3.5 h-3.5" />
+                  <span>HTML編集</span>
+                </button>
+              </div>
             </div>
 
-            {isEditingTemplate ? (
+            {editorMode === 'rich' ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {!isProtectedSavedDoc && (
+                      <>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            document.execCommand('bold');
+                          }}
+                          className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
+                          title="選択文字を太字にする"
+                        >
+                          <Bold className="w-3.5 h-3.5" />
+                          <span>太字</span>
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            document.execCommand('underline');
+                          }}
+                          className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
+                          title="選択文字に下線を引く"
+                        >
+                          <Underline className="w-3.5 h-3.5" />
+                          <span>下線</span>
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            document.execCommand('undo');
+                          }}
+                          className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
+                          title="直前の操作を取り消す"
+                        >
+                          <Undo2 className="w-3.5 h-3.5" />
+                          <span>元に戻す</span>
+                        </button>
+                      </>
+                    )}
+                    <span className="text-[11px] text-slate-500 ml-1">
+                      {isProtectedSavedDoc
+                        ? '送付済み・保管済み書類の閲覧ビューです。'
+                        : '書類内の文字を直接クリックして自由に文言を修正できます。'}
+                    </span>
+                  </div>
+
+                  {customHtmlOverride !== null && !isProtectedSavedDoc && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomHtmlOverride(null);
+                        setHasStartedDocument(true);
+                        setSaveMessage('項目フォームの内容から本文を再生成しました。');
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>フォーム値で再生成</span>
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  ref={richEditorRef}
+                  aria-label="書類本文の直接編集エリア"
+                  contentEditable={!isProtectedSavedDoc}
+                  suppressContentEditableWarning
+                  onInput={(e) => {
+                    if (isProtectedSavedDoc) return;
+                    const nextHtml = e.currentTarget.innerHTML;
+                    skipNextRichSyncRef.current = true;
+                    setHasStartedDocument(true);
+                    setCustomHtmlOverride(nextHtml);
+                  }}
+                  className="w-full min-h-[640px] max-h-[78vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner focus:outline-none focus:border-purple-600"
+                />
+              </div>
+            ) : editorMode === 'html' ? (
               <div className="space-y-3">
                 <p className="text-xs text-slate-500">
                   HTMLと変数タグ（例: <code className="text-purple-700 font-semibold">{'{{client_company}}'}</code>）を直接編集できます。
                 </p>
                 <textarea
                   value={customHtmlOverride || getDynamicTemplateHtml(currentTemplate.id, paymentMode, invoiceSubtype)}
-                  onChange={(e) => setCustomHtmlOverride(e.target.value)}
-                  rows={20}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white"
+                  onChange={(e) => {
+                    setHasStartedDocument(true);
+                    setCustomHtmlOverride(e.target.value);
+                  }}
+                  disabled={isProtectedSavedDoc}
+                  rows={26}
+                  className="w-full min-h-[600px] bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white disabled:opacity-60"
                 />
-                <button
-                  type="button"
-                  onClick={() => setCustomHtmlOverride(null)}
-                  className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>自動生成HTMLに戻す</span>
-                </button>
+                {!isProtectedSavedDoc && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomHtmlOverride(null)}
+                    className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>自動生成HTMLに戻す</span>
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="space-y-3.5 max-h-[560px] overflow-y-auto pr-1">
+              <div className="space-y-3.5 min-h-[640px] max-h-[78vh] overflow-y-auto pr-1">
+                {customHtmlOverride !== null && (
+                  <div className="rounded-xl border border-purple-200 bg-purple-50/70 px-3.5 py-2.5 text-xs text-purple-900 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      現在、保存済みまたは「本文を直接編集」で調整した本文が優先表示されています。フォームの入力内容を本文へ反映し直す場合は右のボタンを押してください。
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomHtmlOverride(null);
+                        setHasStartedDocument(true);
+                        setSaveMessage('項目フォームの入力内容を本文に再反映しました。');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs cursor-pointer shrink-0"
+                    >
+                      フォーム内容を本文に反映
+                    </button>
+                  </div>
+                )}
+
                 {/* 1. If Proposal/Report: Highlight Unified Nature */}
                 {selectedTemplateId === 'tpl-proposal-report' && (
                   <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/60 p-3.5 space-y-2 shadow-2xs">
@@ -1980,64 +2564,69 @@ export const DocumentTemplateView: React.FC<DocumentTemplateViewProps> = ({
                 })}
               </div>
             )}
-          </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span className="font-medium text-emerald-700 flex items-center gap-1">
-              <Check className="w-3.5 h-3.5" />
-              変数・計算式 反映中
-            </span>
-            <button
-              onClick={() => handleSelectTemplate(currentTemplate.id)}
-              className="text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>初期値に戻す</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Right Live Preview Panel (7 Cols) */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-            <div className="flex items-center gap-2">
-              <FileCheck2 className="w-4 h-4 text-purple-600" />
-              <h2 className="font-bold text-sm text-slate-900">リアルタイムプレビュー</h2>
-              <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded">
-                A4縦レイアウト
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span className="font-medium text-emerald-700 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" />
+                {customHtmlOverride !== null ? '直接編集の内容を反映中' : '変数・計算式 反映中'}
               </span>
-            </div>
-            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleSendViaSendCenter}
-                className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                onClick={() => handleSelectTemplate(currentTemplate.id)}
+                className="text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1 cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>送信ドロワーで送る</span>
-              </button>
-              <button
-                onClick={handleCopyHtml}
-                className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'コピー完了!' : 'HTMLコピー'}</span>
-              </button>
-              <button
-                onClick={handlePrintPdf}
-                className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-              >
-                <Printer className="w-3.5 h-3.5 text-slate-500" />
-                <span>印刷 / PDF</span>
+                <RefreshCw className="w-3 h-3" />
+                <span>初期値に戻す</span>
               </button>
             </div>
           </div>
+        )}
 
-          {/* Rendered HTML Container */}
-          <div className="flex-1 bg-white rounded-xl shadow-xs overflow-hidden min-h-[620px] max-h-[750px] overflow-y-auto border border-slate-200">
-            <div dangerouslySetInnerHTML={{ __html: populatedHtml }} />
+        {/* Right Live Preview Panel */}
+        {layoutMode !== 'editor_wide' && (
+          <div className={`${layoutMode === 'preview_wide' ? 'lg:col-span-12' : 'lg:col-span-6'} bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2">
+                <FileCheck2 className="w-4 h-4 text-purple-600" />
+                <h2 className="font-bold text-sm text-slate-900">リアルタイムプレビュー</h2>
+                <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded">
+                  A4縦レイアウト
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSendViaSendCenter}
+                  className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>送信ドロワーで送る</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyHtml}
+                  className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'コピー完了!' : 'HTMLコピー'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintPdf}
+                  className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-500" />
+                  <span>印刷 / PDF</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Rendered HTML Container */}
+            <div className="flex-1 bg-white rounded-xl shadow-xs overflow-hidden min-h-[680px] max-h-[78vh] overflow-y-auto border border-slate-200">
+              <div dangerouslySetInnerHTML={{ __html: populatedHtml }} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {meetingModalOpen && meetingCtx && (

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../lib/supabaseClient';
 import { InlineDeleteButton } from './InlineDeleteButton';
 import { ManagedContract, ManagedInvoice } from '../types/matrix';
-import { FileText, Plus, RefreshCw, Receipt, Wrench, Trash2, Calendar, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight, Send } from 'lucide-react';
+import { FileText, Plus, RefreshCw, Receipt, Wrench, Trash2, Calendar, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight, ChevronDown, Send, Search, Download, History, Mail, MessageSquare, Building2, User, ExternalLink, Eye, Pencil } from 'lucide-react';
 import { CustomerSupportWorkspace } from './CustomerSupportWorkspace';
 import type { TaskItem } from '../types';
 import {
@@ -18,6 +18,30 @@ import { formatJapaneseDate } from '../utils/date';
 import { ensureCustomerRegisteredFromPaidInvoice } from '../services/paidInvoiceCustomerSync';
 import { executeDealWonAutomation, reconcilePendingWonDeals } from '../services/dealWonAutomationService';
 import { dedupeRecordsById, findOpsDuplicateGroups, normalizeContractUiStatus, normalizeInvoiceUiStatus } from '../utils/operationsDedup';
+import {
+  DOCUMENT_TYPE_LABELS,
+  filterDocuments,
+  getDocumentStatusLabel,
+  groupDocumentsByCustomer,
+  normalizeDocumentStatus,
+  resolveDocumentContactName,
+  resolveEffectiveDocumentType,
+  summarizeOutboxByDocument,
+  type DocumentCompanyRef,
+  type DocumentContactRef,
+  type DocumentOutboxLog,
+  type DocumentRecordLike,
+  type DocumentStatusFilter,
+  type EffectiveDocumentType,
+} from '../utils/documentManagement';
+import {
+  buildPaidInvoicesCsv,
+  filterPaidInvoicesByMonth,
+  formatYearMonthLabel,
+  getInvoiceAmounts,
+  getPaidMonthKey,
+  getUnpaidMonthKey,
+} from '../utils/monthlyRevenue';
 
 type WorkspaceTab = 'segments' | 'documents' | 'operations';
 type Segment = { id: string; name: string; entity_type: string; conditions: { field?: string; value?: string } | null; created_at: string };
@@ -96,9 +120,9 @@ const localDateString = (date = new Date()) => {
 };
 const defaultInvoiceDueDate = (date = new Date()) => getEndOfNextMonthDate(date);
 
-interface Props { tab: WorkspaceTab; initialOpsTab?: (typeof opsTabs)[number]['key']; initialSupportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; onDeleteContract?: (id: string) => Promise<void>; onDeleteInvoice?: (id: string) => Promise<void>; invoices?: ManagedInvoice[]; tasks?: TaskItem[]; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void; onUpdateTask?: (task: TaskItem) => void; onDeleteTask?: (id: string) => Promise<void> | void; onOpenInvoiceDocuments?: (companyId: string, documentId?: string) => void; onNavigateTab?: (tab: string) => void; }
+interface Props { tab: WorkspaceTab; initialOpsTab?: (typeof opsTabs)[number]['key']; initialSupportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; companyId?: string; leadId?: string; dealId?: string; onClearCompanyFilter?: () => void; onOperationalRecordsChange?: (contracts: ManagedContract[], invoices: ManagedInvoice[]) => void; onMilestoneReached?: (event: { engagementId: string; milestoneId: string; milestoneTitle: string; companyId?: string; companyName?: string }) => void; onContractSigned?: (event: { id: string; title: string; companyId?: string; companyName?: string; amount?: number }) => void; onInvoiceOverdue?: (event: { id: string; title: string; invoiceNumber?: string; companyId?: string; companyName?: string; amount?: number; dueDate?: string }) => void; onDeleteContract?: (id: string) => Promise<void>; onDeleteInvoice?: (id: string) => Promise<void>; invoices?: ManagedInvoice[]; tasks?: TaskItem[]; onCreateTask?: (task: Omit<TaskItem, 'id' | 'createdAt' | 'updatedAt'>) => void; onUpdateTask?: (task: TaskItem) => void; onDeleteTask?: (id: string) => Promise<void> | void; onOpenInvoiceDocuments?: (companyId: string, documentId?: string) => void; onNavigateTab?: (tab: string) => void; onEditDocument?: (doc: RecordRow) => void; onCreateNewDocument?: () => void; }
 
-export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, initialSupportSection, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue, onDeleteContract, onDeleteInvoice, invoices = [], tasks = [], onCreateTask, onUpdateTask, onDeleteTask, onOpenInvoiceDocuments, onNavigateTab }) => {
+export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, initialSupportSection, companyId, leadId, dealId, onClearCompanyFilter, onOperationalRecordsChange, onMilestoneReached, onContractSigned, onInvoiceOverdue, onDeleteContract, onDeleteInvoice, invoices = [], tasks = [], onCreateTask, onUpdateTask, onDeleteTask, onOpenInvoiceDocuments, onNavigateTab, onEditDocument, onCreateNewDocument }) => {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [documents, setDocuments] = useState<RecordRow[]>([]);
   const [companies, setCompanies] = useState<RecordRow[]>([]);
@@ -108,8 +132,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
   const [recordProductId, setRecordProductId] = useState('');
   const [recordDealId, setRecordDealId] = useState('');
   const [recordContractId, setRecordContractId] = useState('');
-  const [editingDocumentId, setEditingDocumentId] = useState('');
-  const [editingDocumentBody, setEditingDocumentBody] = useState('');
+  const [previewModalDoc, setPreviewModalDoc] = useState<RecordRow | null>(null);
   const [pendingDeleteDocumentId, setPendingDeleteDocumentId] = useState('');
   const [records, setRecords] = useState<RecordRow[]>([]);
   const [activeOpsTab, setActiveOpsTab] = useState<(typeof opsTabs)[number]['key']>(initialOpsTab || 'contracts');
@@ -148,6 +171,21 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
   const [isGeneratingRecurring, setIsGeneratingRecurring] = useState(false);
   const [loadingRecurring, setLoadingRecurring] = useState(false);
   const [isMergingDuplicates, setIsMergingDuplicates] = useState(false);
+
+  // ─── 書類管理（顧客別・検索・ステータス・隅の送信状況）State ───
+  const [contacts, setContacts] = useState<DocumentContactRef[]>([]);
+  const [docOutboxLogs, setDocOutboxLogs] = useState<DocumentOutboxLog[]>([]);
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [docStatusFilter, setDocStatusFilter] = useState<DocumentStatusFilter>('all');
+  const [docTypeFilter, setDocTypeFilter] = useState<'all' | EffectiveDocumentType>('all');
+  const [groupDocsByCustMode, setGroupDocsByCustMode] = useState<boolean>(true);
+  const [collapsedCustomerGroups, setCollapsedCustomerGroups] = useState<Record<string, boolean>>({});
+  const [openOutboxDocId, setOpenOutboxDocId] = useState<string>('');
+
+  // ─── 請求経理（月次入金集計・入金日編集・CSV出力）State ───
+  const [accountingMonth, setAccountingMonth] = useState<string>('all');
+  const [invoiceScopeFilter, setInvoiceScopeFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [updatingPaidDateId, setUpdatingPaidDateId] = useState<string>('');
 
   const selectedOps = opsTabs.find((item) => item.key === activeOpsTab) || opsTabs[0];
   const opsDuplicateGroups = useMemo(
@@ -240,16 +278,25 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
         if (queryError) throw queryError;
         setSegments((data || []) as Segment[]);
       } else if (tab === 'documents') {
-        let documentsQuery = supabase.from('customer_documents').select('*').order('created_at', { ascending: false }).limit(100);
+        let documentsQuery = supabase.from('customer_documents').select('*').order('created_at', { ascending: false }).limit(300);
         if (leadId) documentsQuery = documentsQuery.or(`lead_id.eq.${leadId},and(lead_id.is.null,deal_id.is.null,company_id.eq.${companyId})`);
         else if (dealId) documentsQuery = documentsQuery.or(`deal_id.eq.${dealId},and(deal_id.is.null,company_id.eq.${companyId})`);
         else if (companyId) documentsQuery = documentsQuery.eq('company_id', companyId);
-        const [docs, companyResult] = await Promise.all([
+        const [docs, companyResult, contactResult, outboxResult] = await Promise.all([
           documentsQuery,
           supabase.from('companies').select('id,company_name').order('company_name'),
+          supabase.from('contacts').select('id,full_name,company_id,email,line_user_id').order('full_name'),
+          supabase
+            .from('communication_outbox')
+            .select('id,document_id,channel,status,recipient_address,subject,sent_at,created_at,error_message')
+            .not('document_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(500),
         ]);
         if (docs.error) throw docs.error;
         if (!companyResult.error) setCompanies(companyResult.data || []);
+        if (!contactResult.error) setContacts((contactResult.data || []) as DocumentContactRef[]);
+        if (!outboxResult.error) setDocOutboxLogs((outboxResult.data || []) as DocumentOutboxLog[]);
         setDocuments(docs.data || []);
       } else {
         const reconciled = await reconcilePendingWonDeals(supabase, { companyId: companyId || undefined, limit: 20 });
@@ -319,14 +366,21 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
   const updateDocumentStatus = async (documentId: string, status: string) => {
     const supabase = getSupabase(); if (!supabase) return;
     setError(''); setNotice('');
-    const { error: updateError } = await supabase.from('customer_documents').update({ status }).eq('id', documentId);
+    const { error: updateError } = await supabase.from('customer_documents').update({ status, updated_at: new Date().toISOString() }).eq('id', documentId);
     if (updateError) {
       setError(updateError.message);
       return;
     }
     if (status === 'approved') {
       setNotice('書類を確定（送付可能）にしました。「送信ドロワーで送る」から顧客へ送付できます。');
+    } else if (status === 'sent') {
+      setNotice('書類を「送信済み」に更新しました。');
+    } else if (status === 'archived') {
+      setNotice('書類を「保管」に移動しました。');
+    } else if (status === 'draft') {
+      setNotice('書類を「作成中（下書き）」に戻しました。');
     }
+    window.dispatchEvent(new CustomEvent('mst:documents-changed'));
     await load();
   };
 
@@ -350,24 +404,11 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       if (!deleted) { setError('削除対象が見つからないか、削除権限がありません。画面を再読み込みしてください。'); return; }
       setPendingDeleteDocumentId('');
       setNotice('未送信の書類を削除しました。');
-      if (editingDocumentId === doc.id) { setEditingDocumentId(''); setEditingDocumentBody(''); }
+      if (previewModalDoc?.id === doc.id) { setPreviewModalDoc(null); }
       await load();
     } catch (error) {
       setError(error instanceof Error ? `削除できませんでした: ${error.message}` : '書類を削除できませんでした。');
     }
-  };
-
-  const saveDocumentBody = async (documentId: string) => {
-    const supabase = getSupabase(); if (!supabase) return;
-    const editor = document.getElementById(`generated-document-editor-${documentId}`) as HTMLDivElement | null;
-    const bodyHtml = editor?.innerHTML ?? editingDocumentBody;
-    const { error: updateError } = await supabase.from('customer_documents')
-      .update({ body_html: bodyHtml, updated_at: new Date().toISOString() }).eq('id', documentId);
-    if (updateError) { setError(updateError.message); return; }
-    setNotice('書類本文を保存しました。確認後に承認してください。');
-    setEditingDocumentId('');
-    setEditingDocumentBody('');
-    await load();
   };
 
   const deleteOperationRecord = async (record: RecordRow) => {
@@ -505,6 +546,29 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       onInvoiceOverdue?.({id:sourceId,title:record.title||'請求書',invoiceNumber:record.invoice_number||undefined,companyId:record.company_id||undefined,companyName,amount:record.amount==null?undefined:Number(record.amount),dueDate:record.due_date||undefined});
     }
     await load();
+  };
+
+  const updateInvoicePaidDate = async (record: RecordRow, nextPaidDate: string) => {
+    if (!nextPaidDate) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setUpdatingPaidDateId(String(record.id));
+    setError('');
+    setNotice('');
+    try {
+      const nowIso = new Date().toISOString();
+      const { error: updateErr } = await supabase
+        .from('customer_invoices')
+        .update({ paid_at: nextPaidDate, updated_at: nowIso })
+        .eq('id', record.id);
+      if (updateErr) throw updateErr;
+      setNotice(`請求書「${record.title || record.invoice_number}」の入金日を ${formatJapaneseDate(nextPaidDate)} に更新しました。`);
+      await load();
+    } catch (err: any) {
+      setError(err?.message || '入金日の更新に失敗しました。');
+    } finally {
+      setUpdatingPaidDateId('');
+    }
   };
 
   const readMilestones = (record: RecordRow): RecordRow[] => {
@@ -902,192 +966,518 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
       </section>
     </div>}
 
-    {tab === 'documents' && <div className="space-y-4">
-      {companyId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs">
-        <span className="text-purple-900 font-semibold">{leadId ? `リードに関連する書類を表示中（ID: ${leadId}）` : dealId ? `商談に関連する書類を表示中（ID: ${dealId}）` : `この顧客に関連する書類を表示中（会社ID: ${companyId}）`}</span>
-        {onClearCompanyFilter && <button type="button" onClick={onClearCompanyFilter} className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-purple-800 font-semibold hover:bg-purple-100 cursor-pointer shadow-2xs">全顧客を表示</button>}
-      </div>}
-      <div className="grid gap-5 xl:grid-cols-2">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-        <h2 className="mb-2 font-bold text-slate-900 text-sm">生成済み書類</h2>
-        <p className="mb-3.5 text-xs text-slate-500">書類を選んで送信ドロワーを開き、宛先・テンプレート・プレビューを確認してから送信できます。</p>
-        {loading ? (
-          <p className="text-xs text-slate-400">読み込み中…</p>
-        ) : documents.length === 0 ? (
-          <p className="text-xs text-slate-400 py-6 text-center">書類ひな形から保存した書類がここに表示されます。</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {documents.map((doc) => {
-              const linkedCompany = doc.company_id ? companies.find((c) => c.id === doc.company_id) : undefined;
-              return (
-                <li key={doc.id} className="py-3.5 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-bold text-sm text-slate-900">{doc.title}</span>
-                    <div className="flex items-center gap-2">
-                      <select
-                        aria-label={`${doc.title}の状態`}
-                        value={doc.status === 'awaiting_approval' ? 'draft' : doc.status}
-                        onChange={(e) => void updateDocumentStatus(doc.id, e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800 focus:bg-white focus:border-purple-600 focus:outline-none"
-                      >
-                        <option value="draft">作成中（下書き）</option>
-                        <option value="approved">確定（送付可能）</option>
-                        {doc.status === 'sent' && <option value="sent">送信済み</option>}
-                        {doc.status === 'archived' && <option value="archived">保管</option>}
-                      </select>
-                      {pendingDeleteDocumentId === doc.id ? (
-                          <span className="inline-flex items-center gap-2">
-                            <span className="text-xs text-amber-700 font-semibold">削除しますか？</span>
-                            <button
-                              type="button"
-                              onClick={() => void deleteDocumentDraft(doc)}
-                              className="rounded-lg bg-rose-600 px-2 py-1 text-xs text-white font-semibold cursor-pointer"
-                            >
-                              削除確定
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPendingDeleteDocumentId('')}
-                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 cursor-pointer"
-                            >
-                              取消
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => { setError(''); setPendingDeleteDocumentId(doc.id); }}
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 cursor-pointer"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span>削除</span>
-                          </button>
-                        )}
-                    </div>
-                  </div>
+    {tab === 'documents' && (() => {
+      const outboxByDoc = summarizeOutboxByDocument(docOutboxLogs);
+      const filteredDocs = filterDocuments(documents as DocumentRecordLike[], companies as DocumentCompanyRef[], contacts, {
+        query: docSearchQuery,
+        statusFilter: docStatusFilter,
+        typeFilter: docTypeFilter,
+      });
+      const customerGroups = groupDocumentsByCustomer(filteredDocs, companies as DocumentCompanyRef[], contacts);
+      const statusCounts = {
+        all: documents.length,
+        draft: documents.filter((d) => normalizeDocumentStatus(d.status) === 'draft').length,
+        approved: documents.filter((d) => normalizeDocumentStatus(d.status) === 'approved').length,
+        sent: documents.filter((d) => normalizeDocumentStatus(d.status) === 'sent').length,
+        archived: documents.filter((d) => normalizeDocumentStatus(d.status) === 'archived').length,
+      };
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] text-purple-700 font-semibold">
-                      {(() => {
-                        const rawType = String(doc.document_type || '');
-                        const titleText = String(doc.title || '');
-                        const effectiveType =
-                          (rawType === 'proposal' || rawType === 'other') && /見積/.test(titleText)
-                            ? 'estimate'
-                            : (rawType === 'diagnosis_report' || rawType === 'report' || rawType === 'proposal' || rawType === 'other') && /(月次|月報)/.test(titleText)
-                              ? 'monthly_report'
-                              : rawType === 'report'
-                                ? 'diagnosis_report'
-                                : rawType;
-                        return effectiveType === 'diagnosis_report'
-                          ? '診断レポート'
-                          : effectiveType === 'proposal'
-                            ? '提案書（診断＋提案）'
-                            : effectiveType === 'estimate'
-                              ? '見積書'
-                              : effectiveType === 'contract'
-                                ? '契約書'
-                                : effectiveType === 'invoice'
-                                  ? '請求書'
-                                  : effectiveType === 'monthly_report'
-                                    ? '月次報告書'
-                                    : effectiveType;
-                      })()}
-                    </span>
-                    <span>{new Date(doc.created_at).toLocaleString('ja-JP')}</span>
-                    <span>·</span>
-                    <span className={linkedCompany ? 'text-purple-700 font-semibold' : 'text-slate-400'}>
-                      会社: {linkedCompany ? linkedCompany.company_name : '未紐付け（送信センターで選択可能）'}
-                    </span>
-                  </div>
+      const renderDocumentRow = (doc: RecordRow, showCompanyInline: boolean) => {
+        const linkedCompany = doc.company_id ? companies.find((c) => c.id === doc.company_id) : undefined;
+        const contactName = resolveDocumentContactName(doc, contacts);
+        const effType = resolveEffectiveDocumentType(doc);
+        const typeLabel = DOCUMENT_TYPE_LABELS[effType] || String(doc.document_type || '書類');
+        const normStatus = normalizeDocumentStatus(doc.status);
+        const outboxSummary = outboxByDoc[doc.id];
+        const isOutboxOpen = openOutboxDocId === doc.id;
+        const canEditBody = ['draft', 'awaiting_approval', 'approved'].includes(String(doc.status || ''));
 
-                  {['draft', 'awaiting_approval'].includes(doc.status) && (
-                    <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <summary className="cursor-pointer text-xs text-purple-700 font-bold hover:text-purple-800">
-                        本文を確認・直接編集
-                      </summary>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
-                        書類の見た目を確認しながら、本文を直接修正できます。文字をクリックして編集してください。
-                      </p>
-                      <div
-                        id={`generated-document-editor-${doc.id}`}
-                        aria-label={`${doc.title}の本文`}
-                        contentEditable
-                        suppressContentEditableWarning
-                        role="textbox"
-                        onFocus={() => {
-                          setEditingDocumentId(doc.id);
-                          setEditingDocumentBody(doc.body_html || '');
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html: editingDocumentId === doc.id ? editingDocumentBody : (doc.body_html || ''),
-                        }}
-                        className="mt-2 max-h-[680px] min-h-96 overflow-auto rounded-xl border border-slate-200 bg-white p-6 text-sm leading-7 text-slate-900 shadow-inner"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void saveDocumentBody(doc.id)}
-                        disabled={editingDocumentId !== doc.id}
-                        className="mt-2 rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 cursor-pointer shadow-2xs"
-                      >
-                        本文を保存
-                      </button>
-                    </details>
+        return (
+          <li key={doc.id} className="p-4 space-y-2.5 bg-white hover:bg-slate-50/40 transition-colors">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold text-sm text-slate-900">{doc.title}</span>
+                  <span className={`text-[11px] font-semibold ${
+                    normStatus === 'sent'
+                      ? 'text-emerald-700'
+                      : normStatus === 'approved'
+                        ? 'text-purple-700'
+                        : normStatus === 'archived'
+                          ? 'text-slate-500'
+                          : 'text-amber-700'
+                  }`}>
+                    · {getDocumentStatusLabel(doc.status)}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-700">{typeLabel}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">{new Date(doc.updated_at || doc.created_at).toLocaleString('ja-JP')}</span>
+                  {showCompanyInline && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className={linkedCompany ? 'text-slate-800 font-semibold' : 'text-slate-400'}>
+                        会社: {linkedCompany ? linkedCompany.company_name : '未紐付け'}
+                      </span>
+                    </>
                   )}
+                  {contactName && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-slate-700">担当: {contactName}</span>
+                    </>
+                  )}
+                </div>
+              </div>
 
-                  <div className="pt-1 flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <select
+                  aria-label={`${doc.title}の状態`}
+                  value={normStatus}
+                  onChange={(e) => void updateDocumentStatus(doc.id, e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:border-purple-600 focus:outline-none cursor-pointer"
+                >
+                  <option value="draft">作成中（下書き）</option>
+                  <option value="approved">確定（送付可能）</option>
+                  <option value="sent">送信済み</option>
+                  <option value="archived">保管</option>
+                </select>
+
+                {pendingDeleteDocumentId === doc.id ? (
+                  <span className="inline-flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={async () => {
-                        if (!['approved', 'sent'].includes(doc.status)) {
-                          await updateDocumentStatus(doc.id, 'approved');
-                        }
-                        onOpenInvoiceDocuments?.(doc.company_id || '', doc.id);
-                      }}
-                      disabled={!onOpenInvoiceDocuments}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs shadow-purple-600/20 transition-all cursor-pointer disabled:opacity-50"
-                      title="右側の送信ドロワーで宛先・テンプレート・プレビューを確認して送付します"
+                      onClick={() => void deleteDocumentDraft(doc)}
+                      className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs text-white font-semibold cursor-pointer"
                     >
-                      <Send className="h-3.5 w-3.5" />
-                      <span>送信ドロワーで送る</span>
+                      削除確定
                     </button>
-                    {['draft', 'awaiting_approval'].includes(doc.status) && (
-                      <span className="text-[11px] text-amber-700 font-medium">
-                        ※ クリックすると承認状態に更新して送信ドロワーを開きます
-                      </span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteDocumentId('')}
+                      className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 cursor-pointer"
+                    >
+                      取消
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setError(''); setPendingDeleteDocumentId(doc.id); }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50 cursor-pointer"
+                    title="未送信かつ契約・請求未紐付けの書類を削除"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>削除</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Footer actions + compact corner send-history button */}
+            <div className="pt-1 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {onEditDocument && (
+                  <button
+                    type="button"
+                    onClick={() => onEditDocument(doc)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                      canEditBody
+                        ? 'border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                    title={canEditBody ? '書類作成・編集エディタで本文やレイアウトを調整します' : '保存内容を確認し、必要に応じて複製して編集します'}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span>{canEditBody ? '編集する' : '内容確認・複製'}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalDoc(doc)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors cursor-pointer whitespace-nowrap"
+                  title="書類の仕上がりをプレビュー表示します"
+                >
+                  <Eye className="h-3.5 w-3.5 text-slate-500" />
+                  <span>プレビュー</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!['approved', 'sent'].includes(doc.status)) {
+                      await updateDocumentStatus(doc.id, 'approved');
+                    }
+                    onOpenInvoiceDocuments?.(doc.company_id || '', doc.id);
+                  }}
+                  disabled={!onOpenInvoiceDocuments}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                  title="右側の送信ドロワーで宛先・テンプレート・プレビューを確認して送付します"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>{normStatus === 'sent' ? '再送・別宛先へ送る' : '送信ドロワーで送る'}</span>
+                </button>
+                {normStatus === 'draft' && (
+                  <span className="text-[11px] text-slate-500">
+                    送信時に「確定」へ自動更新されます
+                  </span>
+                )}
+              </div>
+
+              {/* Compact corner button: inline send confirmation / outbox history */}
+              <button
+                type="button"
+                onClick={() => setOpenOutboxDocId(isOutboxOpen ? '' : doc.id)}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  outboxSummary?.sentCount
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                    : outboxSummary?.failedCount
+                      ? 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                      : normStatus === 'sent'
+                        ? 'border-emerald-200 bg-emerald-50/60 text-emerald-800 hover:bg-emerald-100'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+                title="この書類のメール・LINE送信履歴を確認"
+              >
+                <History className="h-3 w-3" />
+                <span>
+                  {outboxSummary?.sentCount
+                    ? `送信ログ (${outboxSummary.emailSentCount > 0 ? `メール${outboxSummary.emailSentCount}` : ''}${outboxSummary.emailSentCount > 0 && outboxSummary.lineSentCount > 0 ? '・' : ''}${outboxSummary.lineSentCount > 0 ? `LINE${outboxSummary.lineSentCount}` : ''})`
+                    : outboxSummary?.failedCount
+                      ? `送信失敗 (${outboxSummary.failedCount}件)`
+                      : normStatus === 'sent'
+                        ? '送信済み（手動／履歴なし）'
+                        : '送信確認（未送信）'}
+                </span>
+              </button>
+            </div>
+
+            {isOutboxOpen && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-800">この書類のメール・LINE送信状況</span>
+                  <div className="flex items-center gap-2">
+                    {onNavigateTab && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateTab('communication_send')}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 hover:underline cursor-pointer"
+                      >
+                        <span>送信管理全体を開く</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setOpenOutboxDocId('')}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                      aria-label="履歴を閉じる"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-      <section className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/50 to-white p-5 shadow-xs space-y-3">
-        <div className="flex items-center gap-2">
-          <Send className="h-4 w-4 text-purple-600" />
-          <h2 className="font-bold text-slate-900 text-sm">メール・LINE送信管理</h2>
+                </div>
+                {!outboxSummary || outboxSummary.logs.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">
+                    システム経由のメール・LINE送信履歴はまだありません。{normStatus === 'sent' ? '（手動で「送信済み」に変更されています）' : ''}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-200 bg-white rounded-lg border border-slate-200">
+                    {outboxSummary.logs.map((log) => (
+                      <li key={log.id} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {log.channel === 'line' ? (
+                            <MessageSquare className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Mail className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                          )}
+                          <span className="font-semibold text-slate-800">
+                            {log.channel === 'line' ? 'LINE' : 'メール'}
+                          </span>
+                          <span className="text-slate-600 truncate max-w-[240px]" title={log.recipient_address || ''}>
+                            宛先: {log.recipient_address || '不明'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 tabular-nums">
+                          <span className={`font-semibold ${
+                            log.status === 'sent' ? 'text-emerald-700' : log.status === 'failed' ? 'text-rose-700' : 'text-amber-700'
+                          }`}>
+                            {log.status === 'sent' ? '送信完了' : log.status === 'failed' ? '送信失敗' : log.status}
+                          </span>
+                          <span className="text-slate-400">
+                            {new Date(log.sent_at || log.created_at || '').toLocaleString('ja-JP')}
+                          </span>
+                        </div>
+                        {log.error_message && (
+                          <div className="w-full text-[11px] text-rose-700">{log.error_message}</div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </li>
+        );
+      };
+
+      return (
+        <div className="space-y-4">
+          {companyId && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs">
+              <span className="text-purple-900 font-semibold">
+                {leadId ? `リードに関連する書類を表示中（ID: ${leadId}）` : dealId ? `商談に関連する書類を表示中（ID: ${dealId}）` : `この顧客に関連する書類を表示中（会社: ${companies.find((c) => c.id === companyId)?.company_name || companyId}）`}
+              </span>
+              {onClearCompanyFilter && (
+                <button
+                  type="button"
+                  onClick={onClearCompanyFilter}
+                  className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 text-purple-800 font-semibold hover:bg-purple-100 cursor-pointer shadow-2xs"
+                >
+                  全顧客を表示
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Full-width customer document management workspace */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-slate-900 text-sm">顧客別 書類管理（生成済み書類）</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  会社名・担当者名で絞り込み、顧客ごとに書類の状態管理（作成中／確定／送信済み／保管）と送信ログ確認を行えます。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {onCreateNewDocument && (
+                  <button
+                    type="button"
+                    onClick={onCreateNewDocument}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>新規書類を作成</span>
+                  </button>
+                )}
+                <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setGroupDocsByCustMode(true)}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                      groupDocsByCustMode ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    顧客ごとにまとめる
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGroupDocsByCustMode(false)}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                      !groupDocsByCustMode ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    時系列一覧
+                  </button>
+                </div>
+                {onNavigateTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('communication_send')}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 cursor-pointer whitespace-nowrap"
+                    title="メール・LINE送信履歴の全体画面を開く"
+                  >
+                    <Send className="h-3 w-3 text-purple-600" />
+                    <span>送信管理全体</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Search & Filter Toolbar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex flex-wrap items-center gap-2 flex-1">
+                <div className="relative flex-1 min-w-[220px] max-w-sm">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={docSearchQuery}
+                    onChange={(e) => setDocSearchQuery(e.target.value)}
+                    placeholder="会社名・担当者名・書類名で検索..."
+                    className="w-full pl-8 pr-8 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:border-purple-600 focus:outline-none"
+                  />
+                  {docSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setDocSearchQuery('')}
+                      aria-label="検索クリア"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  aria-label="書類種別で絞り込み"
+                  value={docTypeFilter}
+                  onChange={(e) => setDocTypeFilter(e.target.value as any)}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:bg-white focus:border-purple-600 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">すべての書類種別</option>
+                  <option value="proposal">提案書（診断＋提案）</option>
+                  <option value="estimate">見積書</option>
+                  <option value="contract">契約書</option>
+                  <option value="invoice">請求書</option>
+                  <option value="monthly_report">月次報告書</option>
+                </select>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg text-xs">
+                {(
+                  [
+                    { key: 'all', label: `すべて (${statusCounts.all})` },
+                    { key: 'draft', label: `作成中 (${statusCounts.draft})` },
+                    { key: 'approved', label: `確定 (${statusCounts.approved})` },
+                    { key: 'sent', label: `送信済み (${statusCounts.sent})` },
+                    { key: 'archived', label: `保管 (${statusCounts.archived})` },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setDocStatusFilter(item.key)}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer whitespace-nowrap tabular-nums ${
+                      docStatusFilter === item.key
+                        ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {loading ? (
+              <p className="text-xs text-slate-400 py-8 text-center">読み込み中…</p>
+            ) : filteredDocs.length === 0 ? (
+              <div className="py-10 text-center space-y-2.5">
+                <p className="text-xs font-semibold text-slate-600">
+                  {documents.length === 0
+                    ? 'まだ生成済みの書類はありません。「新規書類を作成」から作成・保存するとここに表示されます。'
+                    : '条件に一致する書類が見つかりませんでした。'}
+                </p>
+                {documents.length === 0 && onCreateNewDocument && (
+                  <button
+                    type="button"
+                    onClick={onCreateNewDocument}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-semibold text-white cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>新規書類を作成</span>
+                  </button>
+                )}
+                {(docSearchQuery || docStatusFilter !== 'all' || docTypeFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocSearchQuery('');
+                      setDocStatusFilter('all');
+                      setDocTypeFilter('all');
+                    }}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    絞り込みをリセット
+                  </button>
+                )}
+              </div>
+            ) : groupDocsByCustMode ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span className="tabular-nums">
+                    {customerGroups.length} 社 / 全 {filteredDocs.length} 件
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedCustomerGroups({})}
+                      className="text-purple-700 font-semibold hover:underline cursor-pointer"
+                    >
+                      すべて展開
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next: Record<string, boolean> = {};
+                        customerGroups.forEach((g) => { next[g.groupKey] = true; });
+                        setCollapsedCustomerGroups(next);
+                      }}
+                      className="text-slate-600 hover:underline cursor-pointer"
+                    >
+                      すべて折りたたむ
+                    </button>
+                  </div>
+                </div>
+
+                {customerGroups.map((group) => {
+                  const isCollapsed = Boolean(collapsedCustomerGroups[group.groupKey]);
+                  return (
+                    <div key={group.groupKey} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCollapsedCustomerGroups((prev) => ({
+                            ...prev,
+                            [group.groupKey]: !prev[group.groupKey],
+                          }))
+                        }
+                        className="w-full px-4 py-3 bg-slate-50 hover:bg-slate-100/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-left transition-colors cursor-pointer"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          {isCollapsed ? (
+                            <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                          )}
+                          <Building2 className="w-4 h-4 text-purple-600 shrink-0" />
+                          <span className="font-bold text-sm text-slate-900">{group.companyName}</span>
+                          {group.contactNames.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                              <User className="w-3 h-3 text-slate-400" />
+                              <span>担当: {group.contactNames.slice(0, 3).join('、')}{group.contactNames.length > 3 ? ` 他${group.contactNames.length - 3}名` : ''}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 tabular-nums">
+                          <span className="font-semibold text-slate-900">全{group.counts.total}件</span>
+                          <span aria-hidden="true">·</span>
+                          <span>作成中 {group.counts.draft}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>確定 {group.counts.approved}</span>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-emerald-700 font-semibold">送信済 {group.counts.sent}</span>
+                        </div>
+                      </button>
+
+                      {!isCollapsed && (
+                        <ul className="divide-y divide-slate-100">
+                          {group.documents.map((doc) => renderDocumentRow(doc, false))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-200 rounded-xl border border-slate-200 overflow-hidden">
+                {filteredDocs.map((doc) => renderDocumentRow(doc, true))}
+              </ul>
+            )}
+          </section>
         </div>
-        <p className="text-xs text-slate-600 leading-relaxed">
-          書類送付（見積・請求・契約）、一斉配信、個別営業メールなどの送信履歴は、
-          全社共通の「営業・顧客管理 ＞ メール・LINE送信管理」に一元集約されています。
-        </p>
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => onNavigateTab ? onNavigateTab('communication_send') : undefined}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white shadow-xs shadow-purple-600/20 transition cursor-pointer"
-          >
-            <Send className="h-3.5 w-3.5" />
-            <span>メール・LINE送信管理を開く</span>
-          </button>
-        </div>
-        <p className="text-[11px] text-slate-400">
-          ※ 確定した書類を送信する際は、左側の「送信ドロワーで送る」ボタンから直接送付できます。
-        </p>
-      </section>
-      </div>
-    </div>}
+      );
+    })()}
 
 
     {tab === 'operations' && <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -1485,15 +1875,158 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
           契約ステータス：<strong>未締結（締結待ち）→ 締結済み → 終了・解約</strong> の3段階に集約しました（送付済みかどうかは横の「書類送付状況」で確認できます）。「締結済み」にすると顧客台帳が「契約中」になり、継続顧問の月次定期請求対象になります。
         </p>
       ) : (
-        <p className="text-xs text-slate-500">
-          請求ステータス：<strong>未発行（下書き）→ 請求済み（入金待ち）→ 入金済み ／ 取消</strong>（支払期日を過ぎると期限超過アラートが表示されます）。「入金済み」にすると商談「成約」・顧客台帳「契約中」へ自動同期されます。
-        </p>
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">
+            請求ステータス：<strong>未発行（下書き）→ 請求済み（入金待ち）→ 入金済み ／ 取消</strong>。入金日（通帳着金日）を指定・修正でき、月ごとの入金明細CSVを出力できます。
+          </p>
+
+          {/* 経理用・月次入金サマリー & CSVエクスポートバー */}
+          {(() => {
+            const managedInvoices = records.map((row) => ({
+              id: String(row.legacy_id || row.id),
+              invoiceNumber: String(row.invoice_number || ''),
+              title: String(row.title || ''),
+              companyId: row.company_id || undefined,
+              recipientName: String(row.recipient_name || ''),
+              amount: Number(row.amount || 0),
+              taxAmount: row.tax_amount == null ? undefined : Number(row.tax_amount),
+              status: row.status,
+              issueDate: String(row.issue_date || ''),
+              dueDate: String(row.due_date || ''),
+              paidDate: row.paid_at || undefined,
+              createdAt: 0,
+              updatedAt: 0,
+            }));
+            const availableMonths = Array.from(
+              new Set(
+                managedInvoices
+                  .map((inv) => (inv.status === 'paid' ? getPaidMonthKey(inv) : getUnpaidMonthKey(inv)))
+                  .filter(Boolean)
+                  .concat([getCurrentTargetMonth()]),
+              ),
+            ).sort((a, b) => b.localeCompare(a));
+
+            const paidInMonth = filterPaidInvoicesByMonth(managedInvoices, accountingMonth);
+            const paidSummary = paidInMonth.reduce(
+              (acc, inv) => {
+                const a = getInvoiceAmounts(inv);
+                acc.subtotal += a.subtotal;
+                acc.tax += a.taxAmount;
+                acc.total += a.totalWithTax;
+                return acc;
+              },
+              { subtotal: 0, tax: 0, total: 0 },
+            );
+
+            const handleExportPaidCsv = () => {
+              const csv = buildPaidInvoicesCsv(paidInMonth, (compId, fallback) => {
+                const comp = compId ? companies.find((c) => c.id === compId) : undefined;
+                return comp?.company_name || fallback || '未設定';
+              });
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `mst_paid_invoices_${accountingMonth === 'all' ? 'all' : accountingMonth}.csv`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            };
+
+            return (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="font-bold text-slate-700">経理・対象月:</span>
+                    <select
+                      aria-label="経理・月別絞り込み"
+                      value={accountingMonth}
+                      onChange={(e) => setAccountingMonth(e.target.value)}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:border-purple-600 focus:outline-none cursor-pointer"
+                    >
+                      <option value="all">全期間</option>
+                      {availableMonths.map((ym) => (
+                        <option key={ym} value={ym}>
+                          {formatYearMonthLabel(ym)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1 p-0.5 bg-white border border-slate-200 rounded-lg text-xs">
+                    {(
+                      [
+                        { key: 'all', label: 'すべて' },
+                        { key: 'paid', label: '入金済み' },
+                        { key: 'unpaid', label: '未入金・請求中' },
+                      ] as const
+                    ).map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setInvoiceScopeFilter(s.key)}
+                        className={`px-2.5 py-1 rounded-md font-medium cursor-pointer transition-colors ${
+                          invoiceScopeFilter === s.key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs tabular-nums">
+                  <div className="text-slate-600">
+                    {accountingMonth === 'all' ? '累計' : formatYearMonthLabel(accountingMonth)} 確定入金:
+                    <strong className="ml-1.5 text-emerald-700 text-sm font-mono">
+                      ¥{paidSummary.total.toLocaleString('ja-JP')}
+                    </strong>
+                    <span className="ml-1 text-[11px] text-slate-500">
+                      (税抜 ¥{paidSummary.subtotal.toLocaleString('ja-JP')} / 税 ¥{paidSummary.tax.toLocaleString('ja-JP')} · {paidInMonth.length}件)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={paidInMonth.length === 0}
+                    onClick={handleExportPaidCsv}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                    title="表示対象月の入金済み明細をCSVダウンロード（会計ソフト・税理士共有用）"
+                  >
+                    <Download className="h-3.5 w-3.5 text-purple-600" />
+                    <span>入金明細CSV出力 ({paidInMonth.length}件)</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       )}
 
-      {loading ? (
+      {(() => {
+        const displayedRecords =
+          activeOpsTab !== 'invoices'
+            ? records
+            : records.filter((rec) => {
+                const st = normalizeInvoiceUiStatus(rec.status);
+                if (invoiceScopeFilter === 'paid' && st !== 'paid') return false;
+                if (invoiceScopeFilter === 'unpaid' && st !== 'issued' && st !== 'overdue') return false;
+                if (accountingMonth !== 'all') {
+                  const key =
+                    st === 'paid'
+                      ? String(rec.paid_at || rec.issue_date || rec.due_date || '').slice(0, 7)
+                      : String(rec.due_date || rec.issue_date || '').slice(0, 7);
+                  if (key !== accountingMonth) return false;
+                }
+                return true;
+              });
+
+        return loading ? (
         <p className="text-xs text-slate-400 py-8 text-center">読み込み中…</p>
-      ) : records.length === 0 ? (
-        <p className="py-8 text-center text-xs text-slate-400">登録データはありません。</p>
+      ) : displayedRecords.length === 0 ? (
+        <p className="py-8 text-center text-xs text-slate-400">
+          {records.length === 0 ? '登録データはありません。' : '選択した月・条件に該当する請求データはありません。'}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-xs">
@@ -1505,12 +2038,12 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                 <th className="p-3">ステータス</th>
                 <th className="p-3">書類送付状況</th>
                 <th className="p-3">金額（税抜 / 税込）</th>
-                <th className="p-3">{activeOpsTab === 'contracts' ? '開始日' : '支払期日'}</th>
+                <th className="p-3">{activeOpsTab === 'contracts' ? '開始日' : '支払期日 / 入金日'}</th>
                 <th className="p-3">書類・操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
-              {records.map((record) => {
+              {displayedRecords.map((record) => {
                 const linkedCompany = companies.find((c) => c.id === record.company_id);
                 const linkedProduct = catalogProducts.find((p) => p.id === record.product_id);
                 const linkedDeal = deals.find((d) => d.id === record.deal_id) || (record.company_id ? deals.find((d) => d.company_id === record.company_id) : undefined);
@@ -1532,6 +2065,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                 // 契約種別の判定
                 const contractTypeLabel = record.contract_type === 'retainer' ? '顧問契約' : record.contract_type === 'nda' ? '秘密保持' : '構築支援契約';
                 const contractBadgeClass = record.contract_type === 'retainer' ? 'bg-purple-50 text-purple-800 border-purple-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+                const uiInvoiceStatus = activeOpsTab === 'invoices' ? normalizeInvoiceUiStatus(record.status) : '';
 
                 return (
                   <tr key={record.id} className="text-slate-800 hover:bg-slate-50/60 transition-colors">
@@ -1680,7 +2214,7 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                     </td>
 
                     {/* 金額 */}
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="p-3 whitespace-nowrap tabular-nums">
                       {record.amount == null ? (
                         '—'
                       ) : (
@@ -1690,18 +2224,33 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
                             <span className="text-[10px] text-slate-500 font-sans">(税抜)</span>
                           </div>
                           <div className="text-[11px] text-purple-700 font-semibold">
-                            ¥{Math.floor(Number(record.amount) * 1.1).toLocaleString('ja-JP')}{' '}
+                            ¥{(record.tax_amount != null ? Number(record.amount) + Number(record.tax_amount) : Math.floor(Number(record.amount) * 1.1)).toLocaleString('ja-JP')}{' '}
                             <span className="text-[10px] text-slate-500 font-sans">(税込)</span>
                           </div>
                         </div>
                       )}
                     </td>
 
-                    {/* 日付 */}
+                    {/* 日付（請求の場合は支払期日＋入金日編集） */}
                     <td className="p-3 text-slate-700 font-mono whitespace-nowrap text-xs">
-                      {record.due_date || record.start_date
-                        ? formatJapaneseDate(record.due_date || record.start_date)
-                        : '—'}
+                      <div>
+                        {record.due_date || record.start_date
+                          ? formatJapaneseDate(record.due_date || record.start_date)
+                          : '—'}
+                      </div>
+                      {activeOpsTab === 'invoices' && uiInvoiceStatus === 'paid' && (
+                        <div className="mt-1 flex items-center gap-1 font-sans">
+                          <span className="text-[10px] font-semibold text-emerald-700">入金日:</span>
+                          <input
+                            type="date"
+                            aria-label={`${record.title || record.invoice_number}の入金日`}
+                            value={record.paid_at ? String(record.paid_at).slice(0, 10) : ''}
+                            disabled={updatingPaidDateId === String(record.id)}
+                            onChange={(e) => void updateInvoicePaidDate(record, e.target.value)}
+                            className="rounded border border-emerald-200 bg-emerald-50/70 px-1.5 py-0.5 text-[11px] font-mono text-emerald-900 focus:bg-white focus:border-emerald-600 focus:outline-none"
+                          />
+                        </div>
+                      )}
                     </td>
 
                     {/* 書類・操作 */}
@@ -1733,8 +2282,118 @@ export const SalesOperationsWorkspace: React.FC<Props> = ({ tab, initialOpsTab, 
             </tbody>
           </table>
         </div>
-      )}
+      );
+      })()}
       </>}
     </section>}
+
+    {/* Read-only Document Preview Modal */}
+    {previewModalDoc && (() => {
+      const previewCompany = previewModalDoc.company_id ? companies.find((c) => c.id === previewModalDoc.company_id) : undefined;
+      const previewContactName = resolveDocumentContactName(previewModalDoc, contacts);
+      const previewEffType = resolveEffectiveDocumentType(previewModalDoc);
+      const previewTypeLabel = DOCUMENT_TYPE_LABELS[previewEffType] || String(previewModalDoc.document_type || '書類');
+      const previewNormStatus = normalizeDocumentStatus(previewModalDoc.status);
+      const canEditPreviewDoc = ['draft', 'awaiting_approval', 'approved'].includes(String(previewModalDoc.status || ''));
+
+      return (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-[2px] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${previewModalDoc.title}のプレビュー`}
+          onClick={() => setPreviewModalDoc(null)}
+        >
+          <div
+            className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200 bg-slate-50/70">
+              <div className="min-w-0 space-y-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-purple-700">{previewTypeLabel}</span>
+                  <span className="text-slate-300">/</span>
+                  <h3 className="font-bold text-sm text-slate-900 truncate">{previewModalDoc.title}</h3>
+                  <span className={`text-[11px] font-semibold ${
+                    previewNormStatus === 'sent'
+                      ? 'text-emerald-700'
+                      : previewNormStatus === 'approved'
+                        ? 'text-purple-700'
+                        : previewNormStatus === 'archived'
+                          ? 'text-slate-500'
+                          : 'text-amber-700'
+                  }`}>
+                    · {getDocumentStatusLabel(previewModalDoc.status)}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span>顧客: {previewCompany?.company_name || '未紐付け'}</span>
+                  {previewContactName && <span>· 担当: {previewContactName}</span>}
+                  <span className="tabular-nums">· 更新: {new Date(previewModalDoc.updated_at || previewModalDoc.created_at).toLocaleString('ja-JP')}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewModalDoc(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                aria-label="プレビューを閉じる"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-8">
+              <div
+                className="mx-auto max-w-[820px] rounded-xl border border-slate-200 bg-white p-6 sm:p-10 shadow-sm text-sm leading-7 text-slate-900"
+                dangerouslySetInnerHTML={{ __html: previewModalDoc.body_html || '<p class="text-slate-400">本文がありません。</p>' }}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-t border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setPreviewModalDoc(null)}
+                className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700 cursor-pointer"
+              >
+                閉じる
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {onEditDocument && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = previewModalDoc;
+                      setPreviewModalDoc(null);
+                      onEditDocument(target);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 px-3.5 py-1.5 text-xs font-semibold text-purple-800 cursor-pointer"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span>{canEditPreviewDoc ? 'この書類を編集する' : '複製して新規作成'}</span>
+                  </button>
+                )}
+                {onOpenInvoiceDocuments && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const target = previewModalDoc;
+                      if (!['approved', 'sent'].includes(target.status)) {
+                        await updateDocumentStatus(target.id, 'approved');
+                      }
+                      setPreviewModalDoc(null);
+                      onOpenInvoiceDocuments(target.company_id || '', target.id);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs cursor-pointer"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>{previewNormStatus === 'sent' ? '再送・別宛先へ送る' : '送信ドロワーで送る'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
   </div>;
 };

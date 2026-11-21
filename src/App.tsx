@@ -17,7 +17,7 @@ import { TableKey } from './types/database';
 import { getSupabase, getAuthHeaders } from './lib/supabaseClient';
 import { deleteTableRecord } from './services/dataService';
 import { ensureCustomerRegisteredFromPaidInvoice } from './services/paidInvoiceCustomerSync';
-import { Loader2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, RotateCcw, FolderOpen, FilePlus2, Inbox, Send } from 'lucide-react';
 
 // AI President Views and Modals
 const ChatView = React.lazy(() => import('./components/ai-president/ChatView').then((m) => ({ default: m.ChatView })));
@@ -290,7 +290,7 @@ function AppContent() {
     }
   };
 
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; opsTab?: 'contracts' | 'invoices' | 'services'; supportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>(initialRoute.customerWorkspaceContext as any);
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId?: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; opsTab?: 'contracts' | 'invoices' | 'services'; supportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; docView?: 'list' | 'editor'; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>(initialRoute.customerWorkspaceContext as any);
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
   const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(initialRoute.inboxTargetChannel);
   const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(initialRoute.acquisitionTargetTab);
@@ -3316,28 +3316,160 @@ function AppContent() {
         )}
 
 
-        {currentTab === 'document_templates' && (
-          <>
-            <DocumentTemplateView 
-              key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}`} 
-              initialCompanyId={customerWorkspaceCompanyId} 
-              initialLeadId={customerWorkspaceContext?.leadId} 
-              initialDealId={customerWorkspaceContext?.dealId} 
-              initialDocumentType={customerWorkspaceContext?.documentType} 
-              onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
-              onOpenSendCenter={(params) => {
-                openSendDrawer({
-                  kind: 'document',
-                  companyId: params.companyId || customerWorkspaceCompanyId || '',
-                  documentId: params.documentId,
-                  dealId: params.dealId || customerWorkspaceContext?.dealId,
-                  contactId: params.contactId || customerWorkspaceContext?.contactId,
-                });
-              }}
-            />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { openSendDrawer({ kind: 'document', companyId, documentId }); }} onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)} />
-          </>
-        )}
+        {currentTab === 'document_templates' && (() => {
+          const docSubView: 'list' | 'editor' =
+            customerWorkspaceContext?.docView ??
+            ((customerWorkspaceContext?.documentId ||
+              customerWorkspaceContext?.dealId ||
+              customerWorkspaceContext?.documentType)
+              ? 'editor'
+              : 'list');
+
+          const openDocumentList = () => {
+            handleNavigateWorkspaceTab('document_templates', {
+              context: customerWorkspaceCompanyId
+                ? { companyId: customerWorkspaceCompanyId, docView: 'list' as const }
+                : { docView: 'list' as const },
+            });
+          };
+
+          const openNewDocumentEditor = () => {
+            handleNavigateWorkspaceTab('document_templates', {
+              context: {
+                ...(customerWorkspaceCompanyId ? { companyId: customerWorkspaceCompanyId } : {}),
+                ...(customerWorkspaceContext?.leadId ? { leadId: customerWorkspaceContext.leadId } : {}),
+                ...(customerWorkspaceContext?.dealId ? { dealId: customerWorkspaceContext.dealId } : {}),
+                docView: 'editor' as const,
+              },
+            });
+          };
+
+          const openExistingDocumentEditor = (doc: Record<string, any>) => {
+            handleNavigateWorkspaceTab('document_templates', {
+              context: {
+                companyId: doc.company_id || customerWorkspaceCompanyId || undefined,
+                leadId: doc.lead_id || undefined,
+                dealId: doc.deal_id || undefined,
+                documentId: doc.id,
+                docView: 'editor' as const,
+              },
+            });
+          };
+
+          return (
+            <div className="space-y-4">
+              {/* Plan B Workspace Header + 2-Screen Mode Switcher */}
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <h1 className="text-base font-bold text-slate-900">重要書類・見積・契約</h1>
+                    <p className="text-[11px] text-slate-500">
+                      顧客ごとの書類管理と、提案書・見積書・契約書・請求書の作成編集を画面を切り替えて広く使えます
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1 text-xs" role="tablist" aria-label="書類ワークスペース切替">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={docSubView === 'list'}
+                      onClick={openDocumentList}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        docSubView === 'list'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 text-purple-600" />
+                      <span>顧客別 書類管理（一覧）</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={docSubView === 'editor'}
+                      onClick={() => {
+                        if (docSubView === 'editor') return;
+                        openNewDocumentEditor();
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                        docSubView === 'editor'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <FilePlus2 className="h-3.5 w-3.5 text-purple-600" />
+                      <span>書類作成・編集エディタ</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {docSubView === 'list' && (
+                    <button
+                      type="button"
+                      onClick={openNewDocumentEditor}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <FilePlus2 className="h-3.5 w-3.5" />
+                      <span>新規書類を作成</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateWorkspaceTab('inbox_hub')}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <Inbox className="h-3.5 w-3.5 text-slate-500" />
+                    <span>受信トレイ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateWorkspaceTab('communication_send')}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <Send className="h-3.5 w-3.5 text-purple-600" />
+                    <span>送信履歴</span>
+                  </button>
+                </div>
+              </div>
+
+              {docSubView === 'list' ? (
+                <SalesOperationsWorkspace
+                  tab="documents"
+                  companyId={customerWorkspaceCompanyId}
+                  leadId={customerWorkspaceContext?.leadId}
+                  dealId={customerWorkspaceContext?.dealId}
+                  onClearCompanyFilter={() => setCustomerWorkspaceContext({ docView: 'list' })}
+                  onCreateNewDocument={openNewDocumentEditor}
+                  onEditDocument={openExistingDocumentEditor}
+                  onOpenInvoiceDocuments={(companyId, documentId) => {
+                    openSendDrawer({ kind: 'document', companyId, documentId });
+                  }}
+                  onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
+                />
+              ) : (
+                <DocumentTemplateView
+                  key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.dealId || ''}:${customerWorkspaceContext?.documentType || ''}:${customerWorkspaceContext?.documentId || 'new'}`}
+                  initialCompanyId={customerWorkspaceCompanyId}
+                  initialLeadId={customerWorkspaceContext?.leadId}
+                  initialDealId={customerWorkspaceContext?.dealId}
+                  initialDocumentType={customerWorkspaceContext?.documentType}
+                  initialDocumentId={customerWorkspaceContext?.documentId}
+                  onBackToList={openDocumentList}
+                  onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
+                  onOpenSendCenter={(params) => {
+                    openSendDrawer({
+                      kind: 'document',
+                      companyId: params.companyId || customerWorkspaceCompanyId || '',
+                      documentId: params.documentId,
+                      dealId: params.dealId || customerWorkspaceContext?.dealId,
+                      contactId: params.contactId || customerWorkspaceContext?.contactId,
+                    });
+                  }}
+                />
+              )}
+            </div>
+          );
+        })()}
 
         {(currentTab === 'contacts' || currentTab === 'prospects') && (
           <MarketingLeadListHub

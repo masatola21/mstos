@@ -6,6 +6,12 @@ import { getStatusBadgeClass } from '../utils/statusBadges';
 import { todayJst } from '../utils/date';
 import type { TaskItem, Priority } from '../types';
 import type { ManagedContract, ManagedInvoice } from '../types/matrix';
+import { dedupeRecordsById } from '../utils/operationsDedup';
+import {
+  buildMonthlyRevenueBuckets,
+  formatYearMonthLabel,
+  getInvoiceAmounts,
+} from '../utils/monthlyRevenue';
 import { 
   Building2, 
   Target, 
@@ -16,7 +22,9 @@ import {
   FileCode2, 
   DollarSign, 
   Layers, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Users, 
   Calendar, 
   Globe, 
@@ -148,6 +156,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<DataFetchError | null>(null);
+  const [supabaseInvoices, setSupabaseInvoices] = useState<ManagedInvoice[] | null>(null);
+  const [revenueAnchorMonth, setRevenueAnchorMonth] = useState<string>(() => todayStr.slice(0, 7));
+  const [revenueMonthRange, setRevenueMonthRange] = useState<6 | 12>(6);
+  const [expandedRevenueMonth, setExpandedRevenueMonth] = useState<string>(() => todayStr.slice(0, 7));
 
   // 本日アクション用のローカル完了ステート（商談やリードの今日のアクション完了チェック用）
   const [completedItemIds, setCompletedItemIds] = useState<Set<string>>(() => {
@@ -382,6 +394,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setProspectsList(enrichedProspects);
         }
 
+        // 請求データ（入金ベース月別売上集計・回収管理用）
+        const { data: invoicesData } = await supabase
+          .from('customer_invoices')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500);
+
+        if (invoicesData) {
+          const asTime = (value: string | null | undefined) => (value ? Date.parse(value) || Date.now() : Date.now());
+          const mappedInvoices: ManagedInvoice[] = dedupeRecordsById(invoicesData).map((row: any) => ({
+            id: String(row.legacy_id || row.id),
+            invoiceNumber: String(row.invoice_number || ''),
+            title: String(row.title || '請求書'),
+            productId: row.product_id || undefined,
+            companyId: row.company_id || undefined,
+            recipientName: String(row.recipient_name || (row.company_id ? compMap.get(String(row.company_id)) : '') || ''),
+            amount: Number(row.amount || 0),
+            taxAmount: row.tax_amount == null ? undefined : Number(row.tax_amount),
+            status: (row.status || 'draft') as ManagedInvoice['status'],
+            issueDate: row.issue_date || '',
+            dueDate: row.due_date || '',
+            paidDate: row.paid_at || undefined,
+            notes: row.notes || undefined,
+            createdAt: asTime(row.created_at),
+            updatedAt: asTime(row.updated_at),
+          }));
+          setSupabaseInvoices(mappedInvoices);
+        }
+
         // LINE要返信・メール未読サマリーの取得（「⚡ 反響即応」に集約表示）
         try {
           const authHeaders = await getAuthHeaders();
@@ -411,7 +452,81 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   useEffect(() => {
     loadData();
+    const handleCrmChanged = () => {
+      void loadData();
+    };
+    window.addEventListener('mst:crm-data-changed', handleCrmChanged);
+    return () => {
+      window.removeEventListener('mst:crm-data-changed', handleCrmChanged);
+    };
   }, []);
+
+  const effectiveInvoices = useMemo(
+    () => (supabaseInvoices !== null ? supabaseInvoices : invoices),
+    [supabaseInvoices, invoices],
+  );
+
+  const monthlyRevenueBuckets = useMemo(
+    () => buildMonthlyRevenueBuckets(effectiveInvoices, revenueAnchorMonth, revenueMonthRange),
+    [effectiveInvoices, revenueAnchorMonth, revenueMonthRange],
+  );
+
+  const monthlyRevenueDisplayBuckets = useMemo(
+    () => [...monthlyRevenueBuckets].reverse(),
+    [monthlyRevenueBuckets],
+  );
+
+  const selectedMonthBucket = useMemo(
+    () =>
+      monthlyRevenueBuckets.find((b) => b.month === revenueAnchorMonth) ||
+      monthlyRevenueBuckets[monthlyRevenueBuckets.length - 1] ||
+      null,
+    [monthlyRevenueBuckets, revenueAnchorMonth],
+  );
+
+  const revenuePeriodTotals = useMemo(() => {
+    let paidSubtotal = 0;
+    let paidTax = 0;
+    let paidTotal = 0;
+    let paidCount = 0;
+    let maxMonthPaidTotal = 0;
+    for (const bucket of monthlyRevenueBuckets) {
+      paidSubtotal += bucket.paidSubtotal;
+      paidTax += bucket.paidTax;
+      paidTotal += bucket.paidTotal;
+      paidCount += bucket.paidCount;
+      if (bucket.paidTotal > maxMonthPaidTotal) maxMonthPaidTotal = bucket.paidTotal;
+    }
+    const overdueInvoices = effectiveInvoices.filter((inv) => inv.status === 'overdue');
+    const overdueTotal = overdueInvoices.reduce((sum, inv) => sum + getInvoiceAmounts(inv).totalWithTax, 0);
+    return {
+      paidSubtotal,
+      paidTax,
+      paidTotal,
+      paidCount,
+      maxMonthPaidTotal,
+      overdueCount: overdueInvoices.length,
+      overdueTotal,
+    };
+  }, [monthlyRevenueBuckets, effectiveInvoices]);
+
+  const currentMonthKey = todayStr.slice(0, 7);
+  const currentMonthIssuedSummary = useMemo(() => {
+    const issuedThisMonth = effectiveInvoices.filter(
+      (inv) => inv.issueDate && inv.issueDate.slice(0, 7) === currentMonthKey && inv.status !== 'canceled',
+    );
+    const totalSubtotal = issuedThisMonth.reduce((sum, inv) => sum + getInvoiceAmounts(inv).subtotal, 0);
+    const totalWithTax = issuedThisMonth.reduce((sum, inv) => sum + getInvoiceAmounts(inv).totalWithTax, 0);
+    const paidThisMonthCount = effectiveInvoices.filter(
+      (inv) => inv.status === 'paid' && (inv.paidDate || inv.issueDate || '').slice(0, 7) === currentMonthKey,
+    ).length;
+    return {
+      count: issuedThisMonth.length,
+      totalSubtotal,
+      totalWithTax,
+      paidThisMonthCount,
+    };
+  }, [effectiveInvoices, currentMonthKey]);
 
   // ─────────────────────────────────────────────────────────────
   // 🎯 本日の最優先アクション (Priority Actions) の集約ロジック
@@ -568,7 +683,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
 
     // 5. 請求書：本日支払期日または期限超過の未回収アラート
-    invoices.forEach((inv) => {
+    effectiveInvoices.forEach((inv) => {
       const isDueOrOverdue = (inv.status === 'issued' || inv.status === 'overdue') && inv.dueDate && inv.dueDate <= todayStr;
       if (isDueOrOverdue) {
         const isDone = completedItemIds.has(`invoice_due_${inv.id}`);
@@ -588,7 +703,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             if (onOpenCustomerWorkspace && inv.companyId) {
               onOpenCustomerWorkspace(inv.companyId, 'operations');
             } else {
-              onNavigateTab('customer_operations');
+              onNavigateTab('customer_operations', { context: { opsTab: 'invoices' } });
             }
           },
           onToggleComplete: () => toggleActionComplete(`invoice_due_${inv.id}`),
@@ -717,7 +832,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
 
     return items;
-  }, [dealsList, leadsList, prospectsList, completedItemIds, todayStr, invoices, tasks, onOpenCustomerWorkspace, onNavigateTab, onOpenSendCenter, onUpdateTask]);
+  }, [dealsList, leadsList, prospectsList, awaitingLineChats, inboxEmailUnread, completedItemIds, todayStr, effectiveInvoices, tasks, onOpenCustomerWorkspace, onNavigateTab, onOpenSendCenter, onUpdateTask]);
 
   // フィルタ後のアクション一覧
   const filteredPriorityActions = useMemo(() => {
@@ -1260,7 +1375,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {/* KPI 5: 請求・回収健全性 */}
         <div 
-          onClick={() => onNavigateTab('customer_operations')}
+          onClick={() => onNavigateTab('customer_operations', { context: { opsTab: 'invoices' } })}
           className="cursor-pointer bg-white border border-slate-200 hover:border-purple-300 hover:shadow-xs p-4 sm:p-5 rounded-2xl transition-all shadow-2xs group col-span-2 sm:col-span-1"
         >
           <div className="flex items-center justify-between">
@@ -1274,14 +1389,305 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
             <span className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight font-mono">
-              {invoices.length} 件
+              {effectiveInvoices.length} 件
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-100 pt-2">
             <span>期日超過アラート</span>
-            <span className={`font-bold ${invoices.some((i) => i.status === 'overdue') ? 'text-rose-600' : 'text-slate-700'}`}>
-              {invoices.filter((i) => i.status === 'overdue').length} 件
+            <span className={`font-bold ${revenuePeriodTotals.overdueCount > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+              {revenuePeriodTotals.overdueCount} 件
             </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          💴 3.5. 月別 売上・入金管理（入金ベース・経理連携）
+          ───────────────────────────────────────────────────────────── */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-emerald-600" />
+              <h2 className="font-bold text-sm text-slate-900">月別 売上・入金管理（入金ベース）</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              入金済み（入金日基準）の確定売上と、支払期日別の未回収残高を月ごとに把握できます
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setRevenueMonthRange(6)}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                  revenueMonthRange === 6
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                直近6ヶ月
+              </button>
+              <button
+                type="button"
+                onClick={() => setRevenueMonthRange(12)}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                  revenueMonthRange === 12
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                直近12ヶ月
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="month"
+                value={revenueAnchorMonth}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (/^\d{4}-\d{2}$/.test(val)) {
+                    setRevenueAnchorMonth(val);
+                    setExpandedRevenueMonth(val);
+                  }
+                }}
+                aria-label="基準年月を選択"
+                className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              {revenueAnchorMonth !== currentMonthKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRevenueAnchorMonth(currentMonthKey);
+                    setExpandedRevenueMonth(currentMonthKey);
+                  }}
+                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  今月
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigateTab('customer_operations', { context: { opsTab: 'invoices' } })}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>請求・入金処理を開く</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Summary KPI Strip */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>{selectedMonthBucket ? `${selectedMonthBucket.label}の確定入金売上（税込）` : '基準月の確定入金売上'}</span>
+              {selectedMonthBucket && selectedMonthBucket.momDiffTotal !== null && (
+                <span
+                  className={`font-mono font-semibold ${
+                    selectedMonthBucket.momDiffTotal > 0
+                      ? 'text-emerald-700'
+                      : selectedMonthBucket.momDiffTotal < 0
+                        ? 'text-rose-600'
+                        : 'text-slate-500'
+                  }`}
+                >
+                  前月比 {selectedMonthBucket.momDiffTotal >= 0 ? '+' : ''}
+                  ¥{selectedMonthBucket.momDiffTotal.toLocaleString()}
+                  {selectedMonthBucket.momDiffPercent !== null ? ` (${selectedMonthBucket.momDiffPercent >= 0 ? '+' : ''}${selectedMonthBucket.momDiffPercent}%)` : ''}
+                </span>
+              )}
+            </div>
+            <div className="mt-1.5 text-2xl font-black font-mono tabular-nums text-slate-900">
+              ¥{(selectedMonthBucket?.paidTotal ?? 0).toLocaleString()}
+            </div>
+            <div className="mt-1.5 text-[11px] text-slate-500 font-mono tabular-nums">
+              税抜 ¥{(selectedMonthBucket?.paidSubtotal ?? 0).toLocaleString()} ・ 消費税 ¥{(selectedMonthBucket?.paidTax ?? 0).toLocaleString()} ・ {selectedMonthBucket?.paidCount ?? 0}件
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>{selectedMonthBucket ? `${selectedMonthBucket.label}期日の未回収・予定（税込）` : '未回収・入金予定'}</span>
+              {revenuePeriodTotals.overdueCount > 0 && (
+                <span className="font-semibold text-rose-600 font-mono tabular-nums">
+                  期日超過 {revenuePeriodTotals.overdueCount}件
+                </span>
+              )}
+            </div>
+            <div className="mt-1.5 text-2xl font-black font-mono tabular-nums text-slate-900">
+              ¥{(selectedMonthBucket?.unpaidTotal ?? 0).toLocaleString()}
+            </div>
+            <div className="mt-1.5 text-[11px] text-slate-500 font-mono tabular-nums">
+              該当月 {selectedMonthBucket?.unpaidCount ?? 0}件 ・ 全体の期日超過残高 ¥{revenuePeriodTotals.overdueTotal.toLocaleString()}
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>直近{revenueMonthRange}ヶ月 累計確定入金（税込）</span>
+              <span className="font-mono tabular-nums text-slate-500">{revenuePeriodTotals.paidCount}件</span>
+            </div>
+            <div className="mt-1.5 text-2xl font-black font-mono tabular-nums text-emerald-700">
+              ¥{revenuePeriodTotals.paidTotal.toLocaleString()}
+            </div>
+            <div className="mt-1.5 text-[11px] text-slate-500 font-mono tabular-nums">
+              税抜 ¥{revenuePeriodTotals.paidSubtotal.toLocaleString()} ・ 消費税 ¥{revenuePeriodTotals.paidTax.toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly Revenue Table + Proportional Bars */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="hidden md:grid md:grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500">
+            <div className="col-span-2">年月</div>
+            <div className="col-span-3">入金推移バー</div>
+            <div className="col-span-2 text-right">税抜売上</div>
+            <div className="col-span-2 text-right">消費税</div>
+            <div className="col-span-2 text-right">税込入金額 / 前月比</div>
+            <div className="col-span-1 text-right">未回収</div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {monthlyRevenueDisplayBuckets.map((bucket) => {
+              const isExpanded = expandedRevenueMonth === bucket.month;
+              const isSelectedAnchor = bucket.month === revenueAnchorMonth;
+              const barPercent =
+                revenuePeriodTotals.maxMonthPaidTotal > 0
+                  ? Math.round((bucket.paidTotal / revenuePeriodTotals.maxMonthPaidTotal) * 100)
+                  : 0;
+
+              return (
+                <div key={bucket.month} className={isSelectedAnchor ? 'bg-emerald-50/20' : 'bg-white'}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRevenueMonth((prev) => (prev === bucket.month ? '' : bucket.month))}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50/90 transition-colors grid grid-cols-2 md:grid-cols-12 gap-2 items-center cursor-pointer"
+                  >
+                    <div className="col-span-1 md:col-span-2 flex items-center gap-1.5">
+                      {isExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      )}
+                      <span className="text-xs font-bold text-slate-900 font-mono tabular-nums">{bucket.label}</span>
+                      <span className="text-[11px] text-slate-400 font-mono">({bucket.paidCount}件)</span>
+                    </div>
+
+                    <div className="hidden md:flex md:col-span-3 items-center gap-2 pr-3">
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                          style={{ width: `${barPercent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="hidden md:block md:col-span-2 text-right text-xs font-mono tabular-nums text-slate-600">
+                      ¥{bucket.paidSubtotal.toLocaleString()}
+                    </div>
+
+                    <div className="hidden md:block md:col-span-2 text-right text-xs font-mono tabular-nums text-slate-500">
+                      ¥{bucket.paidTax.toLocaleString()}
+                    </div>
+
+                    <div className="col-span-1 md:col-span-2 text-right">
+                      <div className="text-xs font-bold font-mono tabular-nums text-slate-900">
+                        ¥{bucket.paidTotal.toLocaleString()}
+                      </div>
+                      {bucket.momDiffTotal !== null && (
+                        <div
+                          className={`text-[10px] font-mono tabular-nums ${
+                            bucket.momDiffTotal > 0
+                              ? 'text-emerald-700'
+                              : bucket.momDiffTotal < 0
+                                ? 'text-rose-600'
+                                : 'text-slate-400'
+                          }`}
+                        >
+                          {bucket.momDiffTotal >= 0 ? '+' : ''}¥{bucket.momDiffTotal.toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="hidden md:block md:col-span-1 text-right text-[11px] font-mono tabular-nums">
+                      {bucket.unpaidTotal > 0 ? (
+                        <span className={bucket.overdueCount > 0 ? 'text-rose-600 font-semibold' : 'text-amber-700'}>
+                          ¥{bucket.unpaidTotal.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-3 pt-1 bg-slate-50/80 border-t border-slate-100">
+                      {bucket.paidInvoices.length === 0 ? (
+                        <p className="text-xs text-slate-500 py-2">
+                          {bucket.label}に入金確認済みの請求明細はありません。
+                          {bucket.unpaidCount > 0 && `（同月支払期日の未入金請求が ${bucket.unpaidCount} 件・¥${bucket.unpaidTotal.toLocaleString()} あります）`}
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[11px] text-slate-500 border-b border-slate-200">
+                                <th className="text-left py-1.5 pr-3 font-medium">入金日</th>
+                                <th className="text-left py-1.5 pr-3 font-medium">請求番号</th>
+                                <th className="text-left py-1.5 pr-3 font-medium">顧客名</th>
+                                <th className="text-left py-1.5 pr-3 font-medium">件名</th>
+                                <th className="text-right py-1.5 pr-3 font-medium">税抜</th>
+                                <th className="text-right py-1.5 pr-3 font-medium">消費税</th>
+                                <th className="text-right py-1.5 font-medium">税込合計</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200/70">
+                              {bucket.paidInvoices.map((inv) => {
+                                const amounts = getInvoiceAmounts(inv);
+                                const companyName =
+                                  (inv.companyId ? companiesMap.get(String(inv.companyId)) : '') ||
+                                  inv.recipientName ||
+                                  '顧客未設定';
+                                return (
+                                  <tr key={inv.id} className="hover:bg-white/70">
+                                    <td className="py-1.5 pr-3 font-mono tabular-nums text-slate-700 whitespace-nowrap">
+                                      {inv.paidDate || inv.issueDate || '-'}
+                                    </td>
+                                    <td className="py-1.5 pr-3 font-mono text-slate-500 whitespace-nowrap">
+                                      {inv.invoiceNumber || '-'}
+                                    </td>
+                                    <td className="py-1.5 pr-3 text-slate-800 font-medium whitespace-nowrap">
+                                      {companyName}
+                                    </td>
+                                    <td className="py-1.5 pr-3 text-slate-600 max-w-[260px] truncate" title={inv.title}>
+                                      {inv.title}
+                                    </td>
+                                    <td className="py-1.5 pr-3 text-right font-mono tabular-nums text-slate-600 whitespace-nowrap">
+                                      ¥{amounts.subtotal.toLocaleString()}
+                                    </td>
+                                    <td className="py-1.5 pr-3 text-right font-mono tabular-nums text-slate-500 whitespace-nowrap">
+                                      ¥{amounts.taxAmount.toLocaleString()}
+                                    </td>
+                                    <td className="py-1.5 text-right font-mono tabular-nums font-bold text-slate-900 whitespace-nowrap">
+                                      ¥{amounts.totalWithTax.toLocaleString()}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -1620,12 +2026,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-xs text-slate-500 block">今月発行請求書</span>
-            <span className="text-xl font-black font-mono text-slate-900 mt-1 block">
-              ¥{invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0).toLocaleString()}
+            <span className="text-xs text-slate-500 block">
+              今月発行請求書 ({formatYearMonthLabel(currentMonthKey)}・税込)
             </span>
-            <span className="text-[10px] text-slate-400 mt-0.5 block">
-              発行済み: {invoices.filter(i => i.status === 'issued').length} 件 / 入金済み: {invoices.filter(i => i.status === 'paid').length} 件
+            <span className="text-xl font-black font-mono tabular-nums text-slate-900 mt-1 block">
+              ¥{currentMonthIssuedSummary.totalWithTax.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-slate-500 mt-0.5 block font-mono tabular-nums">
+              今月発行: {currentMonthIssuedSummary.count} 件 / 今月入金: {currentMonthIssuedSummary.paidThisMonthCount} 件 / 累計未入金: {effectiveInvoices.filter(i => i.status === 'issued' || i.status === 'overdue').length} 件
             </span>
           </div>
 
