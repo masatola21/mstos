@@ -889,6 +889,9 @@ export async function consolidateDuplicateCrmRows(
           supabase.from('diagnoses').update({ lead_id: canonical.id }).in('lead_id', dupIds),
           supabase.from('customer_documents').update({ lead_id: canonical.id }).in('lead_id', dupIds),
           supabase.from('communication_outbox').update({ lead_id: canonical.id }).in('lead_id', dupIds),
+          // 回答（フォーム・診断）が削除済みリードを指したままになると「リード未登録」に戻り、
+          // 再度リード化されて重複が復活してしまうため、統合先リードへ付け替える
+          supabase.from('diagnosis_submissions').update({ lead_id: canonical.id }).in('lead_id', dupIds),
         ]);
       } else {
         let mergedStatus = canonical.proposal_status || '初回面談';

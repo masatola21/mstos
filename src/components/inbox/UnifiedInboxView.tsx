@@ -29,6 +29,7 @@ import { getSupabase, getAuthHeaders } from '../../lib/supabaseClient';
 import { UnifiedNavTab } from '../UnifiedNavbar';
 import { MarketingLineInboxView } from '../marketing/MarketingLineInboxView';
 import { resolveConsultationInquiryType } from '../../utils/leadClassification';
+import { appendUniqueNote, resolveNonDowngradingLeadStatus } from '../../utils/crmPipelineFlow';
 import { MarketingEmailInboxView } from '../marketing/MarketingEmailInboxView';
 import { useSendDrawer } from '../../context/SendDrawerContext';
 import { useInboxRealtime, useVisiblePolling } from '../../hooks/useInboxRealtime';
@@ -596,8 +597,45 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
         last_contacted_at: new Date().toISOString(),
       };
 
+      // 既に同じ担当者・同じ会社のリードがある場合は新規作成せず、そのリードへ統合する
+      // （統合済みの重複リードが、回答のリード化操作のたびに復活してしまうのを防ぐ）
+      let existingLead: any = null;
+      if (contactId) {
+        const { data: byContact } = await db
+          .from('leads')
+          .select('id, status, notes')
+          .eq('contact_id', contactId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        existingLead = byContact || null;
+      }
+      if (!existingLead && companyId) {
+        const { data: byCompany } = await db
+          .from('leads')
+          .select('id, status, notes')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        existingLead = byCompany || null;
+      }
+
       let newLeadId: string | null = null;
-      for (let attempt = 0; attempt < 4; attempt++) {
+      if (existingLead?.id) {
+        const { error: mergeErr } = await db
+          .from('leads')
+          .update({
+            status: resolveNonDowngradingLeadStatus(existingLead.status, String(leadPayload.status || '')),
+            notes: appendUniqueNote(existingLead.notes, String(leadPayload.notes || '')),
+            last_contacted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingLead.id);
+        if (mergeErr) throw new Error(`既存リードの更新に失敗しました: ${mergeErr.message}`);
+        newLeadId = String(existingLead.id);
+      }
+      for (let attempt = 0; !newLeadId && attempt < 4; attempt++) {
         const { data: newLead, error: leadErr } = await db
           .from('leads')
           .insert(leadPayload)
