@@ -18,6 +18,8 @@ import {
   parseTimeRexCalendarEvent,
   syncTimeRexBookingToCrm,
   checkOverdueMeetingCompletionReminders,
+  withCrmSyncLock,
+  reconcileCompanyCrmDuplicates,
 } from './server/timerexSyncService.js';
 import { calculateBillingAmount, determineContractMonthlyFee, isContractAlreadyBilled, getEndOfNextMonthDate } from './src/utils/billingUtils.js';
 import { calculateExponentialBackoff, shouldSkipAutomationDelivery, checkSendTimeWindow, calculateDueAt, type SendTimeWindowCheck } from './src/utils/automationRuleUtils.js';
@@ -110,6 +112,7 @@ import {
   appendUniqueNote,
   resolveWebApplyDealPlanName,
   isGenericDocumentTitle,
+  planDuplicateCrmConsolidations,
 } from './src/utils/crmPipelineFlow.js';
 
 dotenv.config();
@@ -12128,6 +12131,211 @@ app.post('/api/admin/tables/:tableKey/bulk-delete', requireAuth, async (req, res
   }
 });
 
+function isIgnorableOptionalSchemaError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const msg = String(error.message || '').toLowerCase();
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    code === 'PGRST204' ||
+    code === 'PGRST205' ||
+    msg.includes('does not exist') ||
+    msg.includes('could not find the') ||
+    msg.includes('schema cache')
+  );
+}
+
+function extractMissingColumnFromPgError(error: any): string | null {
+  if (!error) return null;
+  const msg = String(error.message || '');
+  const pgrstMatch = msg.match(/Could not find the '([^']+)' column/i);
+  if (pgrstMatch) return pgrstMatch[1];
+  const pgMatch1 = msg.match(/column "([^"]+)" of relation/i);
+  if (pgMatch1) return pgMatch1[1];
+  const pgMatch2 = msg.match(/column (?:[a-zA-Z0-9_]+\.)?([a-zA-Z0-9_]+) does not exist/i);
+  if (pgMatch2) return pgMatch2[1];
+  return null;
+}
+
+async function serverSafeUpdateCanonicalCrmRow(
+  tableKey: 'leads' | 'deals',
+  canonicalId: string,
+  patch: Record<string, any>
+): Promise<{ error?: string }> {
+  if (!lineSupabase) return { error: 'DB接続が設定されていません。' };
+  const currentPatch: Record<string, any> = {
+    ...patch,
+    ...(tableKey === 'deals' ? { updated_at: new Date().toISOString() } : {}),
+  };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { error } = await lineSupabase.from(tableKey).update(currentPatch).eq('id', canonicalId);
+    if (!error) return {};
+    const missingCol = extractMissingColumnFromPgError(error);
+    if (missingCol && missingCol in currentPatch) {
+      delete currentPatch[missingCol];
+      continue;
+    }
+    return { error: error.message || String(error) };
+  }
+  return { error: '統合先レコードの更新に失敗しました。' };
+}
+
+async function serverSafeRelinkChildReferences(
+  table: string,
+  column: string,
+  canonicalId: string,
+  dupIds: string[]
+): Promise<{ ok: boolean; error?: string }> {
+  if (!lineSupabase || !dupIds.length) return { ok: true };
+  try {
+    const { error } = await lineSupabase.from(table).update({ [column]: canonicalId }).in(column, dupIds);
+    if (!error || isIgnorableOptionalSchemaError(error)) {
+      return { ok: true };
+    }
+    return { ok: false, error: `${table}: ${error.message || String(error)}` };
+  } catch (err: any) {
+    return { ok: false, error: `${table}: ${err?.message || String(err)}` };
+  }
+}
+
+// ─── 管理者向け 同じ会社の重複レコード原子統合 API (leads / deals) ───
+app.post('/api/admin/tables/:tableKey/consolidate-duplicates', requireAuth, async (req, res) => {
+  if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
+  const user = (req as any).user;
+  if (!checkIsAdminUser(user)) {
+    return res.status(403).json({ error: '管理者権限（admin）が必要です。一般ユーザーはこの操作を実行できません。' });
+  }
+
+  const { tableKey } = req.params;
+  if (tableKey !== 'leads' && tableKey !== 'deals') {
+    return res.status(400).json({ error: '重複統合はリード管理または商談パイプラインのみ対応しています。' });
+  }
+
+  try {
+    const result = await withCrmSyncLock(`consolidate:${tableKey}`, async () => {
+      const allRows: any[] = [];
+      const pageSize = 1000;
+      for (let from = 0; from < 20000; from += pageSize) {
+        const { data, error } = await lineSupabase!
+          .from(tableKey)
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) {
+          throw new Error(error.message || 'データ取得に失敗しました。');
+        }
+        if (!data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < pageSize) break;
+      }
+
+      const plans = planDuplicateCrmConsolidations(tableKey, allRows);
+      let mergedCompanies = 0;
+      let removedRows = 0;
+      let failedRows = 0;
+      const failureReasons: string[] = [];
+
+      for (const plan of plans) {
+        const { companyId, canonical, dupIds, mergedPatch } = plan;
+
+        const updRes = await serverSafeUpdateCanonicalCrmRow(tableKey, String(canonical.id), mergedPatch);
+        if (updRes.error) {
+          failedRows += dupIds.length;
+          if (failureReasons.length < 3 && !failureReasons.includes(updRes.error)) {
+            failureReasons.push(updRes.error);
+          }
+          continue;
+        }
+
+        const relinkChecks =
+          tableKey === 'leads'
+            ? await Promise.all([
+                serverSafeRelinkChildReferences('deals', 'lead_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('diagnoses', 'lead_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('customer_documents', 'lead_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('communication_outbox', 'lead_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('diagnosis_submissions', 'lead_id', String(canonical.id), dupIds),
+              ])
+            : await Promise.all([
+                serverSafeRelinkChildReferences('customer_contracts', 'deal_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('customer_documents', 'deal_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('communication_outbox', 'deal_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('hearing_sheets', 'deal_id', String(canonical.id), dupIds),
+                serverSafeRelinkChildReferences('proposal_drafts', 'deal_id', String(canonical.id), dupIds),
+              ]);
+
+        const relinkErrors = relinkChecks.filter((r) => !r.ok).map((r) => r.error || '参照付け替え失敗');
+        if (relinkErrors.length > 0) {
+          failedRows += dupIds.length;
+          for (const msg of relinkErrors) {
+            if (failureReasons.length < 3 && !failureReasons.includes(msg)) failureReasons.push(msg);
+          }
+          continue;
+        }
+
+        let deletedForGroup = 0;
+        const { data: batchDel, error: batchDelErr } = await lineSupabase!
+          .from(tableKey)
+          .delete()
+          .in('id', dupIds)
+          .select('id');
+
+        if (!batchDelErr && batchDel) {
+          deletedForGroup = batchDel.length;
+        } else {
+          for (const dupId of dupIds) {
+            const { data: singleDel, error: singleDelErr } = await lineSupabase!
+              .from(tableKey)
+              .delete()
+              .eq('id', dupId)
+              .select('id');
+            if (!singleDelErr && singleDel && singleDel.length > 0) {
+              deletedForGroup += 1;
+            } else if (singleDelErr && failureReasons.length < 3) {
+              const friendly = formatForeignKeyError(tableKey, singleDelErr);
+              if (!failureReasons.includes(friendly)) failureReasons.push(friendly);
+            }
+          }
+        }
+
+        const { data: remainingForCompany } = await lineSupabase!
+          .from(tableKey)
+          .select('id')
+          .eq('company_id', companyId)
+          .in('id', dupIds);
+
+        const remainingDupCount = remainingForCompany?.length || 0;
+        if (remainingDupCount === 0 && deletedForGroup > 0) {
+          mergedCompanies += 1;
+          removedRows += deletedForGroup;
+        } else if (remainingDupCount > 0) {
+          failedRows += remainingDupCount;
+          if (deletedForGroup > 0) {
+            mergedCompanies += 1;
+            removedRows += deletedForGroup;
+          }
+          if (failureReasons.length < 3 && failureReasons.length === 0) {
+            failureReasons.push('重複行の一部を削除できませんでした（サービスロール権限または参照制約をご確認ください）。');
+          }
+        }
+      }
+
+      return {
+        success: failedRows === 0,
+        mergedCompanies,
+        removedRows,
+        failedRows,
+        failureReasons,
+      };
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || '重複統合処理中にエラーが発生しました。' });
+  }
+});
+
 // ─── ダミー・テストデータ一括リセット / 全削除 API（依存関係の深い順に安全に削除） ───
 app.post('/api/admin/clean-dummy-data', requireAuth, async (req, res) => {
   if (!lineSupabase) return res.status(503).json({ error: 'DB接続が設定されていません。' });
@@ -13127,28 +13335,6 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       : { data: null as any };
     const compLabel = compData?.company_name || '顧客企業';
 
-    let finalDealId = doc.deal_id || null;
-    if (!finalDealId && doc.lead_id) {
-      const { data: leadDeal } = await lineSupabase
-        .from('deals')
-        .select('id')
-        .eq('lead_id', doc.lead_id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (leadDeal?.id) finalDealId = leadDeal.id;
-    }
-    if (!finalDealId && resolvedCompanyId) {
-      const { data: companyDeal } = await lineSupabase
-        .from('deals')
-        .select('id')
-        .eq('company_id', resolvedCompanyId)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (companyDeal?.id) finalDealId = companyDeal.id;
-    }
-
     const evidenceLog = [
       '【Web申込・電子承諾エビデンス】',
       '・承諾方式: ' + consentMethod,
@@ -13158,62 +13344,115 @@ app.post('/api/public/documents/:id/apply', async (req, res) => {
       '・合意文面: ' + consentEvidenceText,
     ].join('\n');
 
-    // 商談の更新または自動起票（1社1商談への重複統合を保証。「業務委託基本契約書」等の汎用書類タイトルは使わない）
-    let currentDealRow: any = null;
-    let resolvedPlanName = resolveWebApplyDealPlanName({
-      docTitle: doc.title,
-      bodyHtml: doc.body_html,
-      companyName: compLabel,
-    });
-    if (finalDealId) {
-      const { data: currentDeal } = await lineSupabase
-        .from('deals')
-        .select('id, memo, total_amount, initial_fee, monthly_fee, product_id, proposal_plan_name, proposal_status')
-        .eq('id', finalDealId)
-        .maybeSingle();
-      currentDealRow = currentDeal || null;
-      resolvedPlanName = resolveWebApplyDealPlanName({
-        existingPlanName: currentDeal?.proposal_plan_name,
+    // 商談の更新または自動起票（1社1商談への重複統合・排他制御を保証。「業務委託基本契約書」等の汎用書類タイトルは使わない）
+    const dealSyncOutcome = await withCrmSyncLock(`doc-apply:${resolvedCompanyId || doc.id}`, async () => {
+      let lockedDealId = doc.deal_id || null;
+      if (!lockedDealId && doc.lead_id) {
+        const { data: leadDeal } = await lineSupabase!
+          .from('deals')
+          .select('id')
+          .eq('lead_id', doc.lead_id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (leadDeal?.id) lockedDealId = leadDeal.id;
+      }
+      if (!lockedDealId && resolvedCompanyId) {
+        const { data: companyDeal } = await lineSupabase!
+          .from('deals')
+          .select('id')
+          .eq('company_id', resolvedCompanyId)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (companyDeal?.id) lockedDealId = companyDeal.id;
+      }
+
+      let currentDealRow: any = null;
+      let resolvedPlanName = resolveWebApplyDealPlanName({
         docTitle: doc.title,
         bodyHtml: doc.body_html,
         companyName: compLabel,
       });
-      const shouldUpdatePlanName = Boolean(
-        resolvedPlanName &&
-        (!currentDeal?.proposal_plan_name || isGenericDocumentTitle(currentDeal?.proposal_plan_name))
-      );
-      const newMemo = appendUniqueNote(currentDeal?.memo, evidenceLog);
-      const nextDealStatus = resolveNonDowngradingDealStatus(currentDeal?.proposal_status, '成約');
-      const { error: dealUpdErr } = await lineSupabase.from('deals').update({
-        proposal_status: nextDealStatus,
-        ...(shouldUpdatePlanName ? { proposal_plan_name: resolvedPlanName } : {}),
-        ...(totalAmount > 0 && !currentDeal?.total_amount ? { total_amount: totalAmount } : {}),
-        ...(doc.lead_id ? { lead_id: doc.lead_id } : {}),
-        memo: newMemo,
-        updated_at: nowIso,
-      }).eq('id', finalDealId);
-      if (dealUpdErr) {
-        await lineSupabase.from('deals').update({
+      if (lockedDealId) {
+        const { data: currentDeal } = await lineSupabase!
+          .from('deals')
+          .select('id, memo, total_amount, initial_fee, monthly_fee, product_id, proposal_plan_name, proposal_status')
+          .eq('id', lockedDealId)
+          .maybeSingle();
+        currentDealRow = currentDeal || null;
+        resolvedPlanName = resolveWebApplyDealPlanName({
+          existingPlanName: currentDeal?.proposal_plan_name,
+          docTitle: doc.title,
+          bodyHtml: doc.body_html,
+          companyName: compLabel,
+        });
+        const shouldUpdatePlanName = Boolean(
+          resolvedPlanName &&
+          (!currentDeal?.proposal_plan_name || isGenericDocumentTitle(currentDeal?.proposal_plan_name))
+        );
+        const newMemo = appendUniqueNote(currentDeal?.memo, evidenceLog);
+        const nextDealStatus = resolveNonDowngradingDealStatus(currentDeal?.proposal_status, '成約');
+        const { error: dealUpdErr } = await lineSupabase!.from('deals').update({
           proposal_status: nextDealStatus,
+          ...(shouldUpdatePlanName ? { proposal_plan_name: resolvedPlanName } : {}),
+          ...(totalAmount > 0 && !currentDeal?.total_amount ? { total_amount: totalAmount } : {}),
+          ...(doc.lead_id ? { lead_id: doc.lead_id } : {}),
           memo: newMemo,
-        }).eq('id', finalDealId);
+          updated_at: nowIso,
+        }).eq('id', lockedDealId);
+        if (dealUpdErr) {
+          await lineSupabase!.from('deals').update({
+            proposal_status: nextDealStatus,
+            memo: newMemo,
+          }).eq('id', lockedDealId);
+        }
+      } else {
+        lockedDealId = 'DEAL-WEB-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+        const { error: insertDealErr } = await lineSupabase!.from('deals').insert({
+          id: lockedDealId,
+          company_id: resolvedCompanyId,
+          lead_id: doc.lead_id || null,
+          proposal_plan_name: resolvedPlanName,
+          proposal_status: '成約',
+          proposal_date: todayStr,
+          total_amount: totalAmount > 0 ? totalAmount : null,
+          memo: '【Web申込自動起票・即時成約】書類「' + doc.title + '」（ID: ' + doc.id + '）の末尾ボタンより顧客が直接発注\n\n' + evidenceLog,
+          created_at: nowIso,
+          updated_at: nowIso,
+        });
+        if (insertDealErr) {
+          const isUnique =
+            String(insertDealErr.code || '') === '23505' ||
+            String(insertDealErr.message || '').toLowerCase().includes('unique');
+          if (isUnique && resolvedCompanyId) {
+            const canonical = await reconcileCompanyCrmDuplicates(lineSupabase!, 'deals', resolvedCompanyId, {
+              leadId: doc.lead_id || null,
+            });
+            if (canonical?.id) {
+              lockedDealId = String(canonical.id);
+              currentDealRow = canonical;
+            } else {
+              throw insertDealErr;
+            }
+          } else {
+            throw insertDealErr;
+          }
+        } else if (resolvedCompanyId) {
+          const canonical = await reconcileCompanyCrmDuplicates(lineSupabase!, 'deals', resolvedCompanyId, {
+            leadId: doc.lead_id || null,
+          });
+          if (canonical?.id) {
+            lockedDealId = String(canonical.id);
+            currentDealRow = canonical;
+          }
+        }
       }
-    } else {
-      finalDealId = 'DEAL-WEB-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
-      const { error: insertDealErr } = await lineSupabase.from('deals').insert({
-        id: finalDealId,
-        company_id: resolvedCompanyId,
-        lead_id: doc.lead_id || null,
-        proposal_plan_name: resolvedPlanName,
-        proposal_status: '成約',
-        proposal_date: todayStr,
-        total_amount: totalAmount > 0 ? totalAmount : null,
-        memo: '【Web申込自動起票・即時成約】書類「' + doc.title + '」（ID: ' + doc.id + '）の末尾ボタンより顧客が直接発注\n\n' + evidenceLog,
-        created_at: nowIso,
-        updated_at: nowIso,
-      });
-      if (insertDealErr) throw insertDealErr;
-    }
+      return { finalDealId: lockedDealId, currentDealRow, resolvedPlanName };
+    });
+    let finalDealId = dealSyncOutcome.finalDealId;
+    const currentDealRow = dealSyncOutcome.currentDealRow;
+    const resolvedPlanName = dealSyncOutcome.resolvedPlanName;
 
     // 書類のステータス更新 (approved = 承認・成約完了) および電子承諾ログの記録
     const { error: docUpdErr } = await lineSupabase.from('customer_documents').update({
@@ -14158,30 +14397,32 @@ async function syncTimeRexEventsFromIcalEvents(
   ownerEmail: string | null
 ): Promise<number> {
   if (!lineSupabase) return 0;
-  let syncedTimeRexCount = 0;
-  const todayJstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const ownerHostEmail = ownerEmail ? [String(ownerEmail).toLowerCase()] : [];
-  try {
-    for (const ev of events) {
-      if (ev.date < todayJstStr) continue;
-      const booking = parseTimeRexCalendarEvent(ev, ownerHostEmail);
-      if (booking) {
-        const resSync = await syncTimeRexBookingToCrm(booking, lineSupabase, ownerId);
-        if (resSync.success && resSync.action !== 'skipped_no_change') {
-          syncedTimeRexCount++;
-          if (
-            resSync.contactId &&
-            (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
-          ) {
-            await enqueueScenariosForContact(resSync.contactId, 'booking_created', ownerId);
+  return withCrmSyncLock(`ical-sync:${ownerId}`, async () => {
+    let syncedTimeRexCount = 0;
+    const todayJstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const ownerHostEmail = ownerEmail ? [String(ownerEmail).toLowerCase()] : [];
+    try {
+      for (const ev of events) {
+        if (ev.date < todayJstStr) continue;
+        const booking = parseTimeRexCalendarEvent(ev, ownerHostEmail);
+        if (booking) {
+          const resSync = await syncTimeRexBookingToCrm(booking, lineSupabase, ownerId);
+          if (resSync.success && resSync.action !== 'skipped_no_change') {
+            syncedTimeRexCount++;
+            if (
+              resSync.contactId &&
+              (booking.bookingAction === 'confirmed' || booking.bookingAction === 'rescheduled')
+            ) {
+              await enqueueScenariosForContact(resSync.contactId, 'booking_created', ownerId);
+            }
           }
         }
       }
+    } catch (calSyncErr) {
+      console.warn('[CalendarSync] TimeRex calendar sync warning:', calSyncErr);
     }
-  } catch (calSyncErr) {
-    console.warn('[CalendarSync] TimeRex calendar sync warning:', calSyncErr);
-  }
-  return syncedTimeRexCount;
+    return syncedTimeRexCount;
+  });
 }
 
 async function saveGoogleCalendarSyncConfig(config: SavedGoogleCalendarConfig): Promise<void> {
@@ -14253,65 +14494,88 @@ async function loadGoogleCalendarSyncConfig(ownerId: string): Promise<SavedGoogl
   }
 }
 
+let scheduledCalendarSyncInFlight: Promise<{ syncedCalendars: number; syncedBookings: number }> | null = null;
+
 async function runScheduledGoogleCalendarSync(): Promise<{ syncedCalendars: number; syncedBookings: number }> {
   if (!lineSupabase) return { syncedCalendars: 0, syncedBookings: 0 };
-  let syncedCalendars = 0;
-  let syncedBookings = 0;
-  try {
-    const { data: configs } = await lineSupabase
-      .from('automation_controls')
-      .select('id, reason, paused, updated_at')
-      .like('id', 'google_calendar_ical_%')
-      .eq('paused', false)
-      .limit(20);
-
-    for (const row of configs || []) {
-      try {
-        if (!row.reason) continue;
-        const parsed = typeof row.reason === 'string' ? JSON.parse(row.reason) : row.reason;
-        const icalUrl = String(parsed?.icalUrl || '').trim();
-        const ownerId = String(parsed?.ownerId || String(row.id).replace(/^google_calendar_ical_/, '')).trim();
-        if (!icalUrl || !ownerId || isDisallowedSsrfUrl(icalUrl)) continue;
-
-        const lastMs = parsed?.lastSyncedAt ? Date.parse(String(parsed.lastSyncedAt)) : 0;
-        if (lastMs && Date.now() - lastMs < SCHEDULED_CALENDAR_MIN_INTERVAL_MS) {
-          continue;
-        }
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
-        const response = await fetch(icalUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MST-AI-OS-Calendar/1.0',
-            Accept: 'text/calendar, text/plain, */*',
-          },
-        }).finally(() => clearTimeout(timeout));
-        if (!response.ok) continue;
-
-        const icsText = await response.text();
-        if (!icsText.includes('BEGIN:VCALENDAR')) continue;
-
-        const { calendarName, events } = parseIcalendar(icsText);
-        const bookings = await syncTimeRexEventsFromIcalEvents(events, ownerId, parsed?.ownerEmail || null);
-        syncedCalendars++;
-        syncedBookings += bookings;
-
-        await saveGoogleCalendarSyncConfig({
-          ownerId,
-          ownerEmail: parsed?.ownerEmail || null,
-          icalUrl,
-          calendarName,
-          lastSyncedAt: new Date().toISOString(),
-        });
-      } catch (singleErr) {
-        console.warn('[CalendarSync] Scheduled single feed warning:', singleErr);
-      }
-    }
-  } catch (err) {
-    console.warn('[CalendarSync] Scheduled calendar sync warning:', err);
+  if (scheduledCalendarSyncInFlight) {
+    return scheduledCalendarSyncInFlight;
   }
-  return { syncedCalendars, syncedBookings };
+
+  scheduledCalendarSyncInFlight = (async () => {
+    let syncedCalendars = 0;
+    let syncedBookings = 0;
+    try {
+      const { data: configs } = await lineSupabase!
+        .from('automation_controls')
+        .select('id, reason, paused, updated_at')
+        .like('id', 'google_calendar_ical_%')
+        .eq('paused', false)
+        .limit(20);
+
+      for (const row of configs || []) {
+        try {
+          if (!row.reason) continue;
+          const parsed = typeof row.reason === 'string' ? JSON.parse(row.reason) : row.reason;
+          const icalUrl = String(parsed?.icalUrl || '').trim();
+          const ownerId = String(parsed?.ownerId || String(row.id).replace(/^google_calendar_ical_/, '')).trim();
+          if (!icalUrl || !ownerId || isDisallowedSsrfUrl(icalUrl)) continue;
+
+          const lastMs = parsed?.lastSyncedAt ? Date.parse(String(parsed.lastSyncedAt)) : 0;
+          if (lastMs && Date.now() - lastMs < SCHEDULED_CALENDAR_MIN_INTERVAL_MS) {
+            continue;
+          }
+
+          // 先行して lastSyncedAt を更新し、別インスタンス(Cron/Loop)との同時多重同期を防ぐ
+          await saveGoogleCalendarSyncConfig({
+            ownerId,
+            ownerEmail: parsed?.ownerEmail || null,
+            icalUrl,
+            calendarName: String(parsed?.calendarName || '事業用Googleカレンダー'),
+            lastSyncedAt: new Date().toISOString(),
+          });
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 12000);
+          const response = await fetch(icalUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MST-AI-OS-Calendar/1.0',
+              Accept: 'text/calendar, text/plain, */*',
+            },
+          }).finally(() => clearTimeout(timeout));
+          if (!response.ok) continue;
+
+          const icsText = await response.text();
+          if (!icsText.includes('BEGIN:VCALENDAR')) continue;
+
+          const { calendarName, events } = parseIcalendar(icsText);
+          const bookings = await syncTimeRexEventsFromIcalEvents(events, ownerId, parsed?.ownerEmail || null);
+          syncedCalendars++;
+          syncedBookings += bookings;
+
+          await saveGoogleCalendarSyncConfig({
+            ownerId,
+            ownerEmail: parsed?.ownerEmail || null,
+            icalUrl,
+            calendarName,
+            lastSyncedAt: new Date().toISOString(),
+          });
+        } catch (singleErr) {
+          console.warn('[CalendarSync] Scheduled single feed warning:', singleErr);
+        }
+      }
+    } catch (err) {
+      console.warn('[CalendarSync] Scheduled calendar sync warning:', err);
+    }
+    return { syncedCalendars, syncedBookings };
+  })();
+
+  try {
+    return await scheduledCalendarSyncInFlight;
+  } finally {
+    scheduledCalendarSyncInFlight = null;
+  }
 }
 
 app.get('/api/calendar/sync-config', requireAuth, async (req, res) => {

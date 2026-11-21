@@ -7,6 +7,9 @@ import {
   getLeadFlowSteps,
   isGenericDocumentTitle,
   resolveWebApplyDealPlanName,
+  sortCrmRowsForCanonical,
+  buildConsolidatedCrmPatch,
+  planDuplicateCrmConsolidations,
 } from '../src/utils/crmPipelineFlow';
 import { splitTextWithUrls } from '../src/utils/linkify';
 import {
@@ -187,4 +190,60 @@ assert.equal(normalizeInvoiceUiStatus('overdue'), 'overdue');
 assert.equal(normalizeInvoiceUiStatus('canceled'), 'canceled');
 console.log('  -> PASSED: Slimmed status normalization verified.');
 
+// Test 9: CRM Deal & Lead duplicate consolidation planning
+console.log('Test 9: sortCrmRowsForCanonical, buildConsolidatedCrmPatch & planDuplicateCrmConsolidations');
+const dealPlans = planDuplicateCrmConsolidations('deals', [
+  {
+    id: 'DEAL-1',
+    company_id: 'CID-001',
+    lead_id: 'lead-1',
+    proposal_status: '日程確定',
+    meeting_date: '2026-11-20',
+    memo: 'TimeRex予約メモ',
+    total_amount: null,
+    updated_at: '2026-11-12T01:00:00Z',
+  },
+  {
+    id: 'DEAL-2',
+    company_id: 'CID-001',
+    lead_id: null,
+    proposal_status: '見積提示',
+    meeting_date: null,
+    memo: '見積送付済み',
+    total_amount: 550000,
+    updated_at: '2026-11-11T10:00:00Z',
+  },
+  {
+    id: 'DEAL-SINGLE',
+    company_id: 'CID-002',
+    proposal_status: '初回面談',
+    updated_at: '2026-11-11T10:00:00Z',
+  },
+  {
+    id: 'DEAL-NO-CID',
+    company_id: null,
+    proposal_status: '初回面談',
+  },
+]);
+assert.equal(dealPlans.length, 1);
+assert.equal(dealPlans[0].companyId, 'CID-001');
+assert.equal(dealPlans[0].canonical.id, 'DEAL-2', 'Higher stage rank deal must be chosen as canonical');
+assert.deepEqual(dealPlans[0].dupIds, ['DEAL-1']);
+assert.equal(dealPlans[0].mergedPatch.proposal_status, '見積提示');
+assert.equal(dealPlans[0].mergedPatch.lead_id, 'lead-1', 'Missing lead_id must be backfilled from duplicate');
+assert.equal(dealPlans[0].mergedPatch.meeting_date, '2026-11-20', 'Missing meeting_date must be backfilled');
+assert.equal(dealPlans[0].mergedPatch.total_amount, 550000);
+assert.ok(String(dealPlans[0].mergedPatch.memo).includes('見積送付済み'));
+assert.ok(String(dealPlans[0].mergedPatch.memo).includes('TimeRex予約メモ'));
+
+const sortedLeads = sortCrmRowsForCanonical('leads', [
+  { id: 'L-1', company_id: 'CID-001', status: '資料請求', updated_at: '2026-11-12T00:00:00Z' },
+  { id: 'L-2', company_id: 'CID-001', status: '面談予約済', updated_at: '2026-11-10T00:00:00Z' },
+]);
+assert.equal(sortedLeads[0].id, 'L-2');
+const leadPatch = buildConsolidatedCrmPatch('leads', sortedLeads[0], [sortedLeads[1]]);
+assert.equal(leadPatch.status, '面談予約済');
+console.log('  -> PASSED: CRM duplicate consolidation planning verified.');
+
 console.log('=== All CRM Pipeline Flow, Deduplication & Preview Linkify Tests Passed! ===');
+

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { getSupabase, getSupabaseConfig, SupabaseConfigInfo } from '../lib/supabaseClient';
+import { clearPersistedWorkspaceRoute } from '../utils/workspaceRoutePersistence';
 
 export interface SignInResult {
   error?: string;
@@ -58,8 +59,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 認証リスナー
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
-      setSession(session);
-      setUser(session?.user ?? null);
+      setSession((prev) =>
+        prev?.access_token === session?.access_token && prev?.user?.id === session?.user?.id
+          ? prev
+          : session
+      );
+      setUser((prev) => {
+        const nextUser = session?.user ?? null;
+        if (
+          prev &&
+          nextUser &&
+          prev.id === nextUser.id &&
+          prev.email === nextUser.email &&
+          prev.updated_at === nextUser.updated_at
+        ) {
+          return prev;
+        }
+        return nextUser;
+      });
       setIsLoading(false);
     });
 
@@ -166,6 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (supabase) {
       await supabase.auth.signOut();
     }
+    clearPersistedWorkspaceRoute();
     setSession(null);
     setUser(null);
   };

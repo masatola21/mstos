@@ -14,6 +14,10 @@
  * - tasks (タスク): creates deduplicated high-priority prep/cancel-followup tasks
  */
 import { cancelSupersededQueuedJobs } from './funnelOrchestration.js';
+import {
+  sortCrmRowsForCanonical,
+  buildConsolidatedCrmPatch,
+} from '../src/utils/crmPipelineFlow.js';
 
 export type TimeRexBookingAction = 'confirmed' | 'rescheduled' | 'cancelled' | 'reminder';
 
@@ -587,6 +591,138 @@ async function ensureTaskDeduplicated(
   }
 }
 
+const crmSyncKeyQueues = new Map<string, Promise<unknown>>();
+
+export async function withCrmSyncLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
+  const previous = crmSyncKeyQueues.get(lockKey) || Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const chained = previous.then(() => current, () => current);
+  crmSyncKeyQueues.set(lockKey, chained);
+  try {
+    await previous.catch(() => undefined);
+    return await fn();
+  } finally {
+    release();
+    if (crmSyncKeyQueues.get(lockKey) === chained) {
+      crmSyncKeyQueues.delete(lockKey);
+    }
+  }
+}
+
+function isUniqueViolationError(err: any): boolean {
+  if (!err) return false;
+  const code = String(err.code || '');
+  const msg = String(err.message || '').toLowerCase();
+  return code === '23505' || msg.includes('duplicate key') || msg.includes('unique constraint');
+}
+
+async function safeRelinkChildTable(
+  db: any,
+  table: string,
+  column: string,
+  canonicalId: string,
+  dupIds: string[]
+): Promise<boolean> {
+  if (!dupIds.length) return true;
+  try {
+    const { error } = await db.from(table).update({ [column]: canonicalId }).in(column, dupIds);
+    if (!error) return true;
+    const msg = String(error.message || '').toLowerCase();
+    const code = String(error.code || '');
+    if (
+      code === '42P01' ||
+      code === '42703' ||
+      code === 'PGRST204' ||
+      code === 'PGRST205' ||
+      msg.includes('does not exist') ||
+      msg.includes('could not find the') ||
+      msg.includes('schema cache')
+    ) {
+      return true;
+    }
+    console.warn(`[TimeRexSync] Child relink warning (${table}.${column}):`, error.message || error);
+    return false;
+  } catch (err) {
+    console.warn(`[TimeRexSync] Child relink exception (${table}.${column}):`, err);
+    return false;
+  }
+}
+
+export async function reconcileCompanyCrmDuplicates(
+  db: any,
+  tableKey: 'leads' | 'deals',
+  companyId: string | null | undefined,
+  extraMatchIds: { leadId?: string | null; contactId?: string | null } = {}
+): Promise<any | null> {
+  if (!db) return null;
+  const cleanCompanyId = String(companyId || '').trim();
+  if (!cleanCompanyId) {
+    if (tableKey === 'deals' && extraMatchIds.leadId) {
+      const { data } = await db.from('deals').select('*').eq('lead_id', extraMatchIds.leadId).limit(20);
+      return sortCrmRowsForCanonical('deals', data || [])[0] || null;
+    }
+    if (tableKey === 'leads' && extraMatchIds.contactId) {
+      const { data } = await db.from('leads').select('*').eq('contact_id', extraMatchIds.contactId).limit(20);
+      return sortCrmRowsForCanonical('leads', data || [])[0] || null;
+    }
+    return null;
+  }
+
+  const { data: rows, error } = await db
+    .from(tableKey)
+    .select('*')
+    .eq('company_id', cleanCompanyId)
+    .limit(50);
+
+  if (error || !rows || rows.length === 0) return null;
+  if (rows.length === 1) return rows[0];
+
+  const sorted = sortCrmRowsForCanonical(tableKey, rows);
+  const canonical = sorted[0];
+  const duplicates = sorted.slice(1);
+  const dupIds = duplicates.map((d: any) => String(d.id)).filter(Boolean);
+  if (!canonical?.id || dupIds.length === 0) return canonical || null;
+
+  const mergedPatch = buildConsolidatedCrmPatch(tableKey, canonical, duplicates);
+  if (tableKey === 'deals') {
+    mergedPatch.updated_at = new Date().toISOString();
+  }
+  const { error: updErr } = await db.from(tableKey).update(mergedPatch).eq('id', canonical.id);
+  if (updErr) {
+    console.warn(`[TimeRexSync] Reconcile update warning (${tableKey}/${canonical.id}):`, updErr.message || updErr);
+    return canonical;
+  }
+
+  const relinkResults =
+    tableKey === 'leads'
+      ? await Promise.all([
+          safeRelinkChildTable(db, 'deals', 'lead_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'diagnoses', 'lead_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'customer_documents', 'lead_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'communication_outbox', 'lead_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'diagnosis_submissions', 'lead_id', String(canonical.id), dupIds),
+        ])
+      : await Promise.all([
+          safeRelinkChildTable(db, 'customer_contracts', 'deal_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'customer_documents', 'deal_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'communication_outbox', 'deal_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'hearing_sheets', 'deal_id', String(canonical.id), dupIds),
+          safeRelinkChildTable(db, 'proposal_drafts', 'deal_id', String(canonical.id), dupIds),
+        ]);
+
+  if (relinkResults.every(Boolean)) {
+    const { error: delErr } = await db.from(tableKey).delete().in('id', dupIds);
+    if (delErr) {
+      console.warn(`[TimeRexSync] Reconcile delete warning (${tableKey}):`, delErr.message || delErr);
+    }
+  }
+
+  return { ...canonical, ...mergedPatch };
+}
+
 /**
  * Synchronizes parsed TimeRex booking data into Leads, Deals, Contact Tags, and Tasks.
  */
@@ -605,30 +741,47 @@ export async function syncTimeRexBookingToCrm(
     };
   }
 
+  const cleanEmail = booking.guestEmail.trim().toLowerCase();
+  return withCrmSyncLock<TimeRexSyncResult>(`email:${cleanEmail}`, async (): Promise<TimeRexSyncResult> => {
   try {
-    const cleanEmail = booking.guestEmail.trim().toLowerCase();
     const resolvedOwnerId = ownerId || null;
 
-    // 1. Find or create Contact
+    // 1. Find or create Contact (prefer contacts that already have company_id linked)
     let contactId = '';
     let companyId: string | null = null;
     let contactName = booking.guestName;
 
     const { data: existingContacts, error: contactSelectErr } = await db
       .from('contacts')
-      .select('id, full_name, company_id')
+      .select('id, full_name, company_id, created_at')
       .ilike('email', cleanEmail)
-      .limit(1);
+      .limit(10);
 
     if (contactSelectErr) {
       console.warn('[TimeRexSync] Contact lookup warning:', contactSelectErr);
     }
 
     if (existingContacts && existingContacts.length > 0) {
-      contactId = existingContacts[0].id;
-      companyId = existingContacts[0].company_id || null;
-      if (existingContacts[0].full_name && existingContacts[0].full_name !== '予約ゲスト') {
-        contactName = existingContacts[0].full_name;
+      const sortedContacts = [...existingContacts].sort((a: any, b: any) => {
+        const compDiff = (b.company_id ? 1 : 0) - (a.company_id ? 1 : 0);
+        if (compDiff !== 0) return compDiff;
+        const nameDiff =
+          (b.full_name && b.full_name !== '予約ゲスト' && b.full_name !== 'カレンダー予約者' ? 1 : 0) -
+          (a.full_name && a.full_name !== '予約ゲスト' && a.full_name !== 'カレンダー予約者' ? 1 : 0);
+        if (nameDiff !== 0) return nameDiff;
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      });
+      const primaryContact = sortedContacts[0];
+      contactId = primaryContact.id;
+      companyId = primaryContact.company_id || sortedContacts.find((c: any) => c.company_id)?.company_id || null;
+      const bestNamed = sortedContacts.find(
+        (c: any) => c.full_name && c.full_name !== '予約ゲスト' && c.full_name !== 'カレンダー予約者'
+      );
+      if (bestNamed?.full_name) {
+        contactName = bestNamed.full_name;
+      }
+      if (companyId && !primaryContact.company_id) {
+        await db.from('contacts').update({ company_id: companyId }).eq('id', contactId);
       }
     } else {
       if (actionKind === 'cancelled' || actionKind === 'reminder') {
@@ -675,6 +828,18 @@ export async function syncTimeRexBookingToCrm(
     }
 
     // If company exists or can be matched / created (flexible handling for sole proprietors / no company name)
+    if (!companyId && actionKind !== 'cancelled') {
+      // Fallback: check existing companies by contact email before creating a placeholder company
+      const { data: compByEmail } = await db
+        .from('companies')
+        .select('id')
+        .ilike('email', cleanEmail)
+        .limit(1);
+      if (compByEmail && compByEmail.length > 0) {
+        companyId = compByEmail[0].id;
+      }
+    }
+
     if (!companyId && actionKind !== 'cancelled') {
       const rawCompany = (booking.companyName || '').trim();
       const lowerCompany = rawCompany.toLowerCase();
@@ -728,57 +893,58 @@ export async function syncTimeRexBookingToCrm(
       }
     }
 
-    // Load existing Lead & Deal (check contact/lead first, then fallback to company_id so company rows never duplicate)
+    const executeCompanyPipelineSync = async (): Promise<TimeRexSyncResult> => {
+    // Load existing Lead & Deal (merge candidates from contact/lead and company_id, pick canonical so rows never duplicate)
     let leadId = '';
-    let existingLeads: any[] | null = null;
+    const leadCandidatesMap = new Map<string, any>();
     if (contactId) {
       const { data } = await db
         .from('leads')
-        .select('id, notes, status, company_id, meeting_date, meeting_start_time')
+        .select('*')
         .eq('contact_id', contactId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      existingLeads = data;
+        .limit(20);
+      for (const row of data || []) {
+        if (row?.id) leadCandidatesMap.set(String(row.id), row);
+      }
     }
-    if ((!existingLeads || existingLeads.length === 0) && companyId) {
+    if (companyId) {
       const { data } = await db
         .from('leads')
-        .select('id, notes, status, company_id, meeting_date, meeting_start_time')
+        .select('*')
         .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      existingLeads = data;
+        .limit(20);
+      for (const row of data || []) {
+        if (row?.id) leadCandidatesMap.set(String(row.id), row);
+      }
     }
 
-    const existingLead = existingLeads?.[0] || null;
+    const existingLead = sortCrmRowsForCanonical('leads', Array.from(leadCandidatesMap.values()))[0] || null;
     if (existingLead) leadId = existingLead.id;
 
     let dealId = '';
-    let existingDeal: any = null;
+    const dealCandidatesMap = new Map<string, any>();
     if (leadId) {
       const { data: existingDeals } = await db
         .from('deals')
-        .select('id, proposal_status, meeting_date, memo, lead_id, company_id')
+        .select('*')
         .eq('lead_id', leadId)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-      if (existingDeals && existingDeals.length > 0) {
-        existingDeal = existingDeals[0];
-        dealId = existingDeal.id;
+        .limit(20);
+      for (const row of existingDeals || []) {
+        if (row?.id) dealCandidatesMap.set(String(row.id), row);
       }
     }
-    if (!existingDeal && companyId) {
+    if (companyId) {
       const { data: companyDeals } = await db
         .from('deals')
-        .select('id, proposal_status, meeting_date, memo, lead_id, company_id')
+        .select('*')
         .eq('company_id', companyId)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-      if (companyDeals && companyDeals.length > 0) {
-        existingDeal = companyDeals[0];
-        dealId = existingDeal.id;
+        .limit(20);
+      for (const row of companyDeals || []) {
+        if (row?.id) dealCandidatesMap.set(String(row.id), row);
       }
     }
+    const existingDeal = sortCrmRowsForCanonical('deals', Array.from(dealCandidatesMap.values()))[0] || null;
+    if (existingDeal) dealId = existingDeal.id;
 
     // Handle Cancellation cleanly
     if (actionKind === 'cancelled') {
@@ -911,11 +1077,23 @@ export async function syncTimeRexBookingToCrm(
         .single();
 
       if (leadInsErr) {
-        leadErrorMsg = leadInsErr.message || String(leadInsErr);
-        console.warn('[TimeRexSync] Lead insert warning:', leadInsErr);
+        if (isUniqueViolationError(leadInsErr) && companyId) {
+          const reconciledLead = await reconcileCompanyCrmDuplicates(db, 'leads', companyId, { contactId });
+          if (reconciledLead?.id) {
+            leadId = reconciledLead.id;
+            changedSomething = true;
+          }
+        } else {
+          leadErrorMsg = leadInsErr.message || String(leadInsErr);
+          console.warn('[TimeRexSync] Lead insert warning:', leadInsErr);
+        }
       } else if (createdLead) {
         leadId = createdLead.id;
         changedSomething = true;
+        if (companyId) {
+          const canonicalLead = await reconcileCompanyCrmDuplicates(db, 'leads', companyId, { contactId });
+          if (canonicalLead?.id) leadId = String(canonicalLead.id);
+        }
       }
     }
 
@@ -935,17 +1113,25 @@ export async function syncTimeRexBookingToCrm(
       const shouldUpdateDealStatus =
         (!isDealProgressed && currentDealStatus !== '日程確定') ||
         (actionKind === 'rescheduled' && isDateChanged && !isDealClosed);
+      const needsCompanyLink = Boolean(companyId && !existingDeal.company_id);
+      const needsLeadLink = Boolean(leadId && !existingDeal.lead_id);
 
-      if (!isDealClosed && (shouldUpdateDealStatus || isDateChanged || !hasSameMemo)) {
+      if (
+        (!isDealClosed && (shouldUpdateDealStatus || isDateChanged || !hasSameMemo)) ||
+        needsCompanyLink ||
+        needsLeadLink
+      ) {
         const nextMemo = hasSameMemo ? priorMemo : `${priorMemo}\n${dealUpdateLine}`.trim().slice(-12_000);
         const dealPatch: any = {
           memo: nextMemo,
           updated_at: new Date().toISOString(),
+          ...(needsCompanyLink ? { company_id: companyId } : {}),
+          ...(needsLeadLink ? { lead_id: leadId } : {}),
         };
-        if (shouldUpdateDealStatus) {
+        if (!isDealClosed && shouldUpdateDealStatus) {
           dealPatch.proposal_status = '日程確定';
         }
-        if (isDateChanged || !existingDeal.meeting_date) {
+        if (!isDealClosed && (isDateChanged || !existingDeal.meeting_date)) {
           dealPatch.meeting_date = booking.meetingDate;
         }
         const { error: dealUpdErr } = await db.from('deals').update(dealPatch).eq('id', dealId);
@@ -955,6 +1141,10 @@ export async function syncTimeRexBookingToCrm(
         } else {
           changedSomething = true;
         }
+      }
+      if (companyId && dealCandidatesMap.size > 1) {
+        const canonicalDeal = await reconcileCompanyCrmDuplicates(db, 'deals', companyId, { leadId });
+        if (canonicalDeal?.id) dealId = String(canonicalDeal.id);
       }
     } else {
       const dealTitle = `【面談予約】${contactName || booking.companyName || '新規個別面談'} 様`;
@@ -976,25 +1166,39 @@ export async function syncTimeRexBookingToCrm(
         .select('id')
         .single();
 
-      if (dealInsertRes.error) {
+      if (dealInsertRes.error && !isUniqueViolationError(dealInsertRes.error)) {
         const fallbackDealId = `DEAL-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
         const retryDealRes = await db
           .from('deals')
           .insert({ id: fallbackDealId, ...newDealPayload })
           .select('id')
           .single();
-        if (!retryDealRes.error) {
+        if (!retryDealRes.error || isUniqueViolationError(retryDealRes.error)) {
           dealInsertRes = retryDealRes;
         }
       }
 
       if (dealInsertRes.error) {
-        dealErrorMsg = dealInsertRes.error.message || String(dealInsertRes.error);
-        console.warn('[TimeRexSync] Deal insert error:', dealInsertRes.error);
+        if (isUniqueViolationError(dealInsertRes.error) && companyId) {
+          const reconciledDeal = await reconcileCompanyCrmDuplicates(db, 'deals', companyId, { leadId });
+          if (reconciledDeal?.id) {
+            dealId = String(reconciledDeal.id);
+            changedSomething = true;
+          } else {
+            dealErrorMsg = dealInsertRes.error.message || String(dealInsertRes.error);
+          }
+        } else {
+          dealErrorMsg = dealInsertRes.error.message || String(dealInsertRes.error);
+          console.warn('[TimeRexSync] Deal insert error:', dealInsertRes.error);
+        }
       } else if (dealInsertRes.data) {
         dealId = dealInsertRes.data.id;
         createdDealNow = true;
         changedSomething = true;
+        if (companyId) {
+          const canonicalDeal = await reconcileCompanyCrmDuplicates(db, 'deals', companyId, { leadId });
+          if (canonicalDeal?.id) dealId = String(canonicalDeal.id);
+        }
       }
     }
 
@@ -1080,6 +1284,11 @@ export async function syncTimeRexBookingToCrm(
       action: resultAction,
       details: `リード(${leadId})・商談(${dealId})へ面談日(${booking.meetingDate})を自動同期しました。`,
     };
+    }; // end executeCompanyPipelineSync
+
+    return companyId
+      ? await withCrmSyncLock<TimeRexSyncResult>(`company:${companyId}`, executeCompanyPipelineSync)
+      : await executeCompanyPipelineSync();
   } catch (err: any) {
     console.error('[TimeRexSync] Exception syncing to CRM:', err);
     return {
@@ -1089,6 +1298,7 @@ export async function syncTimeRexBookingToCrm(
       action: 'skipped_no_change',
     };
   }
+  }); // end withCrmSyncLock email
 }
 
 /**

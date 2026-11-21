@@ -299,3 +299,159 @@ export function resolveWebApplyDealPlanName(params: {
   return 'Web申込 業務改善支援プラン';
 }
 
+export interface DuplicateCrmConsolidationPlan {
+  companyId: string;
+  canonical: any;
+  duplicates: any[];
+  dupIds: string[];
+  mergedPatch: Record<string, any>;
+}
+
+const LEAD_FILL_FIELDS = [
+  'contact_id',
+  'line_user_id',
+  'interested_product_id',
+  'service_type',
+  'inquiry_type',
+  'meeting_date',
+  'meeting_start_time',
+  'priority_channel',
+  'source',
+  'first_registered_at',
+  'last_contacted_at',
+  'next_action_at',
+  'report_url',
+] as const;
+
+const DEAL_FILL_FIELDS = [
+  'lead_id',
+  'contact_id',
+  'product_id',
+  'proposal_plan_template_id',
+  'proposal_plan_name',
+  'proposal_type',
+  'deal_name',
+  'initial_fee',
+  'monthly_fee',
+  'total_amount',
+  'amount',
+  'proposal_date',
+  'meeting_date',
+  'meeting_start_time',
+  'next_followup_at',
+  'won_automation_completed_at',
+] as const;
+
+function isEmptyCrmField(val: unknown): boolean {
+  return val === null || val === undefined || val === '';
+}
+
+export function sortCrmRowsForCanonical(tableKey: 'leads' | 'deals', rows: any[]): any[] {
+  return [...(rows || [])].sort((a, b) => {
+    if (tableKey === 'deals') {
+      const rankDiff = getDealStatusRank(b?.proposal_status) - getDealStatusRank(a?.proposal_status);
+      if (rankDiff !== 0) return rankDiff;
+      const wonDiff = (b?.won_automation_completed_at ? 1 : 0) - (a?.won_automation_completed_at ? 1 : 0);
+      if (wonDiff !== 0) return wonDiff;
+    } else {
+      const rankDiff = getLeadStatusRank(b?.status) - getLeadStatusRank(a?.status);
+      if (rankDiff !== 0) return rankDiff;
+    }
+    const updatedDiff =
+      new Date(b?.updated_at || b?.created_at || 0).getTime() -
+      new Date(a?.updated_at || a?.created_at || 0).getTime();
+    if (updatedDiff !== 0) return updatedDiff;
+    const createdDiff =
+      new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime();
+    if (createdDiff !== 0) return createdDiff;
+    return String(a?.id || '').localeCompare(String(b?.id || ''));
+  });
+}
+
+export function buildConsolidatedCrmPatch(
+  tableKey: 'leads' | 'deals',
+  canonical: any,
+  duplicates: any[]
+): Record<string, any> {
+  const allRows = [canonical, ...(duplicates || [])];
+  const hasColumn = (key: string) => allRows.some((row) => row && Object.prototype.hasOwnProperty.call(row, key));
+
+  if (tableKey === 'leads') {
+    let mergedStatus = canonical?.status || '新規';
+    let mergedNotes = canonical?.notes || '';
+    const mergedPatch: Record<string, any> = {};
+    for (const key of LEAD_FILL_FIELDS) {
+      if (hasColumn(key)) {
+        mergedPatch[key] = canonical?.[key] ?? null;
+      }
+    }
+
+    for (const dup of duplicates || []) {
+      mergedStatus = resolveNonDowngradingLeadStatus(mergedStatus, dup?.status);
+      mergedNotes = appendUniqueNote(mergedNotes, dup?.notes);
+      for (const key of Object.keys(mergedPatch)) {
+        if (isEmptyCrmField(mergedPatch[key]) && !isEmptyCrmField(dup?.[key])) {
+          mergedPatch[key] = dup[key];
+        }
+      }
+    }
+    mergedPatch.status = mergedStatus;
+    mergedPatch.notes = mergedNotes || null;
+    return mergedPatch;
+  }
+
+  let mergedStatus = canonical?.proposal_status || '日程確定';
+  let mergedMemo = canonical?.memo || '';
+  const mergedPatch: Record<string, any> = {};
+  for (const key of DEAL_FILL_FIELDS) {
+    if (hasColumn(key)) {
+      mergedPatch[key] = canonical?.[key] ?? null;
+    }
+  }
+
+  for (const dup of duplicates || []) {
+    mergedStatus = resolveNonDowngradingDealStatus(mergedStatus, dup?.proposal_status);
+    mergedMemo = appendUniqueNote(mergedMemo, dup?.memo);
+    for (const key of Object.keys(mergedPatch)) {
+      if (isEmptyCrmField(mergedPatch[key]) && !isEmptyCrmField(dup?.[key])) {
+        mergedPatch[key] = dup[key];
+      }
+    }
+  }
+  mergedPatch.proposal_status = mergedStatus;
+  mergedPatch.memo = mergedMemo || null;
+  return mergedPatch;
+}
+
+export function planDuplicateCrmConsolidations(
+  tableKey: 'leads' | 'deals',
+  rows: any[]
+): DuplicateCrmConsolidationPlan[] {
+  const byCompany = new Map<string, any[]>();
+  for (const row of rows || []) {
+    const cid = String(row?.company_id || '').trim();
+    if (!cid) continue;
+    const list = byCompany.get(cid) || [];
+    list.push(row);
+    byCompany.set(cid, list);
+  }
+
+  const plans: DuplicateCrmConsolidationPlan[] = [];
+  for (const [companyId, group] of byCompany.entries()) {
+    if (group.length <= 1) continue;
+    const sorted = sortCrmRowsForCanonical(tableKey, group);
+    const canonical = sorted[0];
+    const duplicates = sorted.slice(1);
+    const dupIds = duplicates.map((d) => String(d.id)).filter(Boolean);
+    if (!canonical?.id || dupIds.length === 0) continue;
+    plans.push({
+      companyId,
+      canonical,
+      duplicates,
+      dupIds,
+      mergedPatch: buildConsolidatedCrmPatch(tableKey, canonical, duplicates),
+    });
+  }
+  return plans;
+}
+

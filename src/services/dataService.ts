@@ -9,6 +9,9 @@ import {
   appendUniqueNote,
   getLeadStatusRank,
   getDealStatusRank,
+  sortCrmRowsForCanonical,
+  buildConsolidatedCrmPatch,
+  planDuplicateCrmConsolidations,
 } from '../utils/crmPipelineFlow';
 
 export type ErrorType = 'PERMISSION_DENIED' | 'SCHEMA_MISMATCH' | 'CONNECTION_ERROR' | 'NOT_CONFIGURED' | 'UNKNOWN';
@@ -186,11 +189,11 @@ export async function fetchTableData(
     const columns = TABLE_SELECT_COLUMNS[tableKey] || '*';
     let query = supabase.from(tableKey).select(columns);
     query = query.order('created_at', { ascending: false });
-    let { data, error } = (await query.limit(200)) as { data: any[] | null; error: any };
+    let { data, error } = (await query.limit(1000)) as { data: any[] | null; error: any };
     
     // リモートDBに未マイグレーションの列がある場合は select('*') で安全にフォールバック取得
     if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
-      const fallback = (await supabase.from(tableKey).select('*').order('created_at', { ascending: false }).limit(200)) as { data: any[] | null; error: any };
+      const fallback = (await supabase.from(tableKey).select('*').order('created_at', { ascending: false }).limit(1000)) as { data: any[] | null; error: any };
       if (!fallback.error) {
         data = fallback.data;
         error = null;
@@ -802,6 +805,40 @@ export async function findExistingDealForCompanyOrLead(
   return null;
 }
 
+function isIgnorableClientOptionalSchemaError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error.code || '');
+  const msg = String(error.message || '').toLowerCase();
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    code === 'PGRST204' ||
+    code === 'PGRST205' ||
+    msg.includes('does not exist') ||
+    msg.includes('could not find the') ||
+    msg.includes('schema cache')
+  );
+}
+
+async function safeClientRelinkChildTable(
+  supabase: any,
+  table: string,
+  column: string,
+  canonicalId: string,
+  dupIds: string[]
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!dupIds.length) return { ok: true };
+  try {
+    const { error } = await supabase.from(table).update({ [column]: canonicalId }).in(column, dupIds);
+    if (!error || isIgnorableClientOptionalSchemaError(error)) {
+      return { ok: true };
+    }
+    return { ok: false, reason: `${table}: ${parseSupabaseError(error).message}` };
+  } catch (err: any) {
+    return { ok: false, reason: `${table}: ${err?.message || '参照付け替えエラー'}` };
+  }
+}
+
 export async function consolidateDuplicateCrmRows(
   tableKey: 'leads' | 'deals'
 ): Promise<{
@@ -815,125 +852,107 @@ export async function consolidateDuplicateCrmRows(
   }
 
   try {
-    const { data: rows, error } = await supabase.from(tableKey).select('*');
-    if (error) {
-      return { mergedCompanies: 0, removedRows: 0, error: parseSupabaseError(error).message };
+    // 1. サーバーサイドの原子統合API（サービスロール権限・全ページ走査・排他制御）を優先実行
+    try {
+      const authHeaders = await getAuthHeaders();
+      const resp = await fetch(`/api/admin/tables/${encodeURIComponent(tableKey)}/consolidate-duplicates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+      });
+      if (resp.ok) {
+        const resJson = await resp.json().catch(() => null);
+        if (resJson && typeof resJson.mergedCompanies === 'number' && typeof resJson.removedRows === 'number') {
+          if (resJson.removedRows > 0) {
+            emitCrmDataChanged({ tableKey });
+          }
+          if ((resJson.failedRows || 0) > 0) {
+            const reasons = Array.isArray(resJson.failureReasons) && resJson.failureReasons.length > 0
+              ? resJson.failureReasons.join(' / ')
+              : '一部レコードを削除できませんでした。';
+            return {
+              mergedCompanies: resJson.mergedCompanies,
+              removedRows: resJson.removedRows,
+              error: `重複${resJson.failedRows}行を削除できず、画面に残っています。理由: ${reasons}`,
+            };
+          }
+          return {
+            mergedCompanies: resJson.mergedCompanies,
+            removedRows: resJson.removedRows,
+          };
+        }
+      } else if (resp.status === 400 || resp.status === 401 || resp.status === 403) {
+        const errJson = await resp.json().catch(() => null);
+        if (errJson?.error) {
+          return { mergedCompanies: 0, removedRows: 0, error: errJson.error };
+        }
+      }
+    } catch {
+      // ネットワーク未接続・ローカルテスト時はクライアントフォールバックへ進む
     }
-    if (!rows || rows.length === 0) {
+
+    // 2. クライアントフォールバック（全件ページング取得 + エラー検証付き）
+    const rows: any[] = [];
+    const pageSize = 1000;
+    for (let from = 0; from < 10000; from += pageSize) {
+      const { data: pageRows, error } = await supabase
+        .from(tableKey)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) {
+        return { mergedCompanies: 0, removedRows: 0, error: parseSupabaseError(error).message };
+      }
+      if (!pageRows || pageRows.length === 0) break;
+      rows.push(...pageRows);
+      if (pageRows.length < pageSize) break;
+    }
+
+    if (rows.length === 0) {
       return { mergedCompanies: 0, removedRows: 0 };
     }
 
-    const byCompany = new Map<string, any[]>();
-    for (const row of rows) {
-      const cid = String(row.company_id || '').trim();
-      if (!cid) continue;
-      const list = byCompany.get(cid) || [];
-      list.push(row);
-      byCompany.set(cid, list);
-    }
-
+    const plans = planDuplicateCrmConsolidations(tableKey, rows);
     let mergedCompanies = 0;
     let removedRows = 0;
     let failedRows = 0;
     const failureReasons: string[] = [];
 
-    for (const [, group] of byCompany.entries()) {
-      if (group.length <= 1) continue;
+    for (const plan of plans) {
+      const { canonical, dupIds, mergedPatch } = plan;
 
-      const sorted = [...group].sort((a, b) => {
-        if (tableKey === 'deals') {
-          const rankDiff = getDealStatusRank(b.proposal_status) - getDealStatusRank(a.proposal_status);
-          if (rankDiff !== 0) return rankDiff;
-          const wonDiff = (b.won_automation_completed_at ? 1 : 0) - (a.won_automation_completed_at ? 1 : 0);
-          if (wonDiff !== 0) return wonDiff;
-        } else {
-          const rankDiff = getLeadStatusRank(b.status) - getLeadStatusRank(a.status);
-          if (rankDiff !== 0) return rankDiff;
+      const updRes = await updateRecord(tableKey, canonical.id, mergedPatch);
+      if (updRes.error) {
+        failedRows += dupIds.length;
+        if (failureReasons.length < 3 && !failureReasons.includes(updRes.error.message)) {
+          failureReasons.push(updRes.error.message);
         }
-        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
-      });
+        continue;
+      }
 
-      const canonical = sorted[0];
-      const duplicates = sorted.slice(1);
-      const dupIds = duplicates.map((d) => String(d.id));
+      const relinkResults =
+        tableKey === 'leads'
+          ? await Promise.all([
+              safeClientRelinkChildTable(supabase, 'deals', 'lead_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'diagnoses', 'lead_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'customer_documents', 'lead_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'communication_outbox', 'lead_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'diagnosis_submissions', 'lead_id', String(canonical.id), dupIds),
+            ])
+          : await Promise.all([
+              safeClientRelinkChildTable(supabase, 'customer_contracts', 'deal_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'customer_documents', 'deal_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'communication_outbox', 'deal_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'hearing_sheets', 'deal_id', String(canonical.id), dupIds),
+              safeClientRelinkChildTable(supabase, 'proposal_drafts', 'deal_id', String(canonical.id), dupIds),
+            ]);
 
-      if (tableKey === 'leads') {
-        let mergedStatus = canonical.status || '新規';
-        let mergedNotes = canonical.notes || '';
-        const mergedPatch: Record<string, any> = {
-          contact_id: canonical.contact_id || null,
-          line_user_id: canonical.line_user_id || null,
-          interested_product_id: canonical.interested_product_id || null,
-          service_type: canonical.service_type || null,
-          inquiry_type: canonical.inquiry_type || null,
-          meeting_date: canonical.meeting_date || null,
-          meeting_start_time: canonical.meeting_start_time || null,
-          priority_channel: canonical.priority_channel || null,
-          source: canonical.source || null,
-        };
-
-        for (const dup of duplicates) {
-          mergedStatus = resolveNonDowngradingLeadStatus(mergedStatus, dup.status);
-          mergedNotes = appendUniqueNote(mergedNotes, dup.notes);
-          for (const key of Object.keys(mergedPatch)) {
-            if (!mergedPatch[key] && dup[key]) {
-              mergedPatch[key] = dup[key];
-            }
-          }
+      const relinkFailure = relinkResults.find((r) => !r.ok);
+      if (relinkFailure) {
+        failedRows += dupIds.length;
+        if (relinkFailure.reason && failureReasons.length < 3 && !failureReasons.includes(relinkFailure.reason)) {
+          failureReasons.push(relinkFailure.reason);
         }
-        mergedPatch.status = mergedStatus;
-        mergedPatch.notes = mergedNotes || null;
-
-        await updateRecord('leads', canonical.id, mergedPatch);
-
-        await Promise.allSettled([
-          supabase.from('deals').update({ lead_id: canonical.id }).in('lead_id', dupIds),
-          supabase.from('diagnoses').update({ lead_id: canonical.id }).in('lead_id', dupIds),
-          supabase.from('customer_documents').update({ lead_id: canonical.id }).in('lead_id', dupIds),
-          supabase.from('communication_outbox').update({ lead_id: canonical.id }).in('lead_id', dupIds),
-          // 回答（フォーム・診断）が削除済みリードを指したままになると「リード未登録」に戻り、
-          // 再度リード化されて重複が復活してしまうため、統合先リードへ付け替える
-          supabase.from('diagnosis_submissions').update({ lead_id: canonical.id }).in('lead_id', dupIds),
-        ]);
-      } else {
-        let mergedStatus = canonical.proposal_status || '初回面談';
-        let mergedMemo = canonical.memo || '';
-        const mergedPatch: Record<string, any> = {
-          lead_id: canonical.lead_id || null,
-          contact_id: canonical.contact_id || null,
-          product_id: canonical.product_id || null,
-          proposal_plan_template_id: canonical.proposal_plan_template_id || null,
-          proposal_plan_name: canonical.proposal_plan_name || null,
-          proposal_type: canonical.proposal_type || null,
-          initial_fee: canonical.initial_fee ?? null,
-          monthly_fee: canonical.monthly_fee ?? null,
-          total_amount: canonical.total_amount ?? null,
-          proposal_date: canonical.proposal_date || null,
-          meeting_date: canonical.meeting_date || null,
-          meeting_start_time: canonical.meeting_start_time || null,
-          won_automation_completed_at: canonical.won_automation_completed_at || null,
-        };
-
-        for (const dup of duplicates) {
-          mergedStatus = resolveNonDowngradingDealStatus(mergedStatus, dup.proposal_status);
-          mergedMemo = appendUniqueNote(mergedMemo, dup.memo);
-          for (const key of Object.keys(mergedPatch)) {
-            if ((mergedPatch[key] === null || mergedPatch[key] === undefined || mergedPatch[key] === '') &&
-                dup[key] !== null && dup[key] !== undefined && dup[key] !== '') {
-              mergedPatch[key] = dup[key];
-            }
-          }
-        }
-        mergedPatch.proposal_status = mergedStatus;
-        mergedPatch.memo = mergedMemo || null;
-
-        await updateRecord('deals', canonical.id, mergedPatch);
-
-        await Promise.allSettled([
-          supabase.from('customer_contracts').update({ deal_id: canonical.id }).in('deal_id', dupIds),
-          supabase.from('customer_documents').update({ deal_id: canonical.id }).in('deal_id', dupIds),
-          supabase.from('communication_outbox').update({ deal_id: canonical.id }).in('deal_id', dupIds),
-        ]);
+        continue;
       }
 
       const delRes = await bulkDeleteTableRecords(tableKey, dupIds, {
@@ -942,19 +961,16 @@ export async function consolidateDuplicateCrmRows(
         deleteLinkedCrm: false,
       });
       let deletedForGroup = delRes.successCount;
-      if (deletedForGroup > 0) {
-        mergedCompanies += 1;
-        removedRows += deletedForGroup;
-      } else {
-        // Direct fallback if admin API unavailable
+      if (deletedForGroup === 0) {
         const { data: directDel } = await supabase.from(tableKey).delete().in('id', dupIds).select('id');
         if (directDel && directDel.length > 0) {
           deletedForGroup = directDel.length;
-          mergedCompanies += 1;
-          removedRows += directDel.length;
         }
       }
-      // 削除できなかった重複行は画面に残り続け、「統合したのに戻った」ように見えるため、成功扱いにせず理由を報告する
+      if (deletedForGroup > 0) {
+        mergedCompanies += 1;
+        removedRows += deletedForGroup;
+      }
       if (deletedForGroup < dupIds.length) {
         failedRows += dupIds.length - deletedForGroup;
         const reason = delRes.failedDetails?.[0]?.reason || delRes.error?.message || '削除権限がないか、他のデータと紐付いています。';
@@ -1124,26 +1140,46 @@ export async function insertRecord(
 
       lastError = result.error;
 
-      // 主キー重複（deals_pkey, companies_pkey, 23505）が発生した場合は自動で番号を繰り上げて再試行
+      // 主キー重複（deals_pkey, companies_pkey, 23505）が発生した場合は番号を繰り上げて再試行。
+      // ただし company_id の一意制約違反は別レコード作成ではなく既存行への統合へ切り替える。
       if (
-        (tableKey === 'deals' || tableKey === 'companies') &&
+        (tableKey === 'deals' || tableKey === 'companies' || tableKey === 'leads') &&
         (lastError.code === '23505' ||
          lastError.message?.includes('duplicate key') ||
          lastError.message?.includes('unique constraint') ||
          lastError.message?.includes('pkey'))
       ) {
-        const prefix = tableKey === 'deals' ? 'DEAL' : 'CID';
-        const regex = tableKey === 'deals' ? /^DEAL-(\d+)$/ : /^CID-(\d+)$/;
-        const { data: latestRows } = await supabase
-          .from(tableKey)
-          .select('id')
-          .like('id', `${prefix}-%`)
-          .limit(2000);
-        const highestNum = Math.max(0, ...(latestRows || []).map((row: any) => Number(String(row.id).match(regex)?.[1] || 0)));
-        const currentNum = Number(String(currentPayload.id).match(regex)?.[1] || 0);
-        const nextNum = Math.max(highestNum, currentNum) + 1 + attempt;
-        currentPayload.id = `${prefix}-${String(nextNum).padStart(3, '0')}`;
-        continue;
+        const errText = `${lastError.message || ''} ${lastError.details || ''}`.toLowerCase();
+        if (
+          !__allowDuplicate &&
+          (tableKey === 'deals' || tableKey === 'leads') &&
+          payload.company_id &&
+          (errText.includes('company_id') || errText.includes('uq_deals_company') || errText.includes('uq_leads_company'))
+        ) {
+          const fallbackExisting =
+            tableKey === 'deals'
+              ? await findExistingDealForCompanyOrLead(payload.company_id, payload.lead_id)
+              : await findExistingLeadForCompanyOrContact(payload.company_id, payload.contact_id);
+          if (fallbackExisting?.id) {
+            const patch = buildConsolidatedCrmPatch(tableKey, fallbackExisting, [payload]);
+            const updated = await updateRecord(tableKey, fallbackExisting.id, patch);
+            return { ...updated, mergedExisting: true };
+          }
+        }
+        if (tableKey === 'deals' || tableKey === 'companies') {
+          const prefix = tableKey === 'deals' ? 'DEAL' : 'CID';
+          const regex = tableKey === 'deals' ? /^DEAL-(\d+)$/ : /^CID-(\d+)$/;
+          const { data: latestRows } = await supabase
+            .from(tableKey)
+            .select('id')
+            .like('id', `${prefix}-%`)
+            .limit(2000);
+          const highestNum = Math.max(0, ...(latestRows || []).map((row: any) => Number(String(row.id).match(regex)?.[1] || 0)));
+          const currentNum = Number(String(currentPayload.id).match(regex)?.[1] || 0);
+          const nextNum = Math.max(highestNum, currentNum) + 1 + attempt;
+          currentPayload.id = `${prefix}-${String(nextNum).padStart(3, '0')}`;
+          continue;
+        }
       }
 
       const missingCol = extractMissingColumn(lastError);
@@ -1173,6 +1209,55 @@ export async function insertRecord(
       return { error: parseSupabaseError(lastError) };
     }
 
+    // 同時登録競合による同一 company_id の重複を挿入直後に即時解消
+    let mergedAfterInsert = false;
+    if (!__allowDuplicate && (tableKey === 'deals' || tableKey === 'leads') && data?.company_id) {
+      const { data: sameCompanyRows } = await supabase
+        .from(tableKey)
+        .select('*')
+        .eq('company_id', data.company_id)
+        .limit(20);
+      if (sameCompanyRows && sameCompanyRows.length > 1) {
+        const sorted = sortCrmRowsForCanonical(tableKey, sameCompanyRows);
+        const canonical = sorted[0];
+        const dups = sorted.slice(1);
+        const dupIds = dups.map((r: any) => String(r.id)).filter(Boolean);
+        if (canonical?.id && dupIds.length > 0) {
+          const patch = buildConsolidatedCrmPatch(tableKey, canonical, dups);
+          const upd = await updateRecord(tableKey, canonical.id, patch);
+          if (!upd.error) {
+            if (tableKey === 'leads') {
+              await Promise.all([
+                safeClientRelinkChildTable(supabase, 'deals', 'lead_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'diagnoses', 'lead_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'customer_documents', 'lead_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'communication_outbox', 'lead_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'diagnosis_submissions', 'lead_id', String(canonical.id), dupIds),
+              ]);
+            } else {
+              await Promise.all([
+                safeClientRelinkChildTable(supabase, 'customer_contracts', 'deal_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'customer_documents', 'deal_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'communication_outbox', 'deal_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'hearing_sheets', 'deal_id', String(canonical.id), dupIds),
+                safeClientRelinkChildTable(supabase, 'proposal_drafts', 'deal_id', String(canonical.id), dupIds),
+              ]);
+            }
+            const delRes = await bulkDeleteTableRecords(tableKey, dupIds, {
+              force: true,
+              deleteDocuments: false,
+              deleteLinkedCrm: false,
+            });
+            if (delRes.successCount === 0) {
+              await supabase.from(tableKey).delete().in('id', dupIds);
+            }
+            mergedAfterInsert = String(canonical.id) !== String(data.id);
+            data = upd.data || { ...canonical, ...patch };
+          }
+        }
+      }
+    }
+
     if (tableKey === 'products' && data) {
       const localProducts = matrixService.loadProducts();
       const local = localProducts.find(p => p.id === String(data.id));
@@ -1186,13 +1271,13 @@ export async function insertRecord(
       }
     }
 
-    if (tableKey === 'deals' && data?.id && (payload.proposal_status === '成約' || payload.proposal_status === 'Won')) {
+    if (tableKey === 'deals' && data?.id && (data.proposal_status === '成約' || data.proposal_status === 'Won' || payload.proposal_status === '成約' || payload.proposal_status === 'Won')) {
       void executeDealWonAutomation(String(data.id)).catch((err) => {
         console.warn('Auto deal-won automation warning on insert:', err);
       });
     }
 
-    return { data };
+    return mergedAfterInsert ? { data, mergedExisting: true } : { data };
   } catch (err: any) {
     return { error: parseSupabaseError(err) };
   }

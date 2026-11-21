@@ -51,6 +51,12 @@ const UnifiedInboxView = React.lazy(() => import('./components/inbox/UnifiedInbo
 const QuickPresidentDrawer = React.lazy(() => import('./components/matrix/QuickPresidentDrawer').then((m) => ({ default: m.QuickPresidentDrawer })));
 import { SendDrawerProvider, useSendDrawer } from './context/SendDrawerContext';
 import { getPageAssistantProfile } from './utils/pageAssistantProfiles';
+import {
+  resolveInitialWorkspaceRoute,
+  persistWorkspaceRoute,
+  buildWorkspaceUrlWithTab,
+  normalizeWorkspaceTab,
+} from './utils/workspaceRoutePersistence';
 
 // Storage and Types
 import {
@@ -250,7 +256,12 @@ interface AppHistoryState {
 function AppContent() {
   const { user, isLoading } = useAuth();
   const { openSendDrawer, showToast } = useSendDrawer();
-  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>('mst_dashboard');
+  const initialRouteRef = useRef<ReturnType<typeof resolveInitialWorkspaceRoute> | null>(null);
+  if (!initialRouteRef.current) {
+    initialRouteRef.current = resolveInitialWorkspaceRoute();
+  }
+  const initialRoute = initialRouteRef.current;
+  const [currentTab, setCurrentTab] = useState<UnifiedNavTab>(initialRoute.tab);
   const [sendOriginContext, setSendOriginContext] = useState<{
     tab: UnifiedNavTab;
     tabLabel: string;
@@ -279,10 +290,10 @@ function AppContent() {
     }
   };
 
-  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; opsTab?: 'contracts' | 'invoices' | 'services'; supportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>();
+  const [customerWorkspaceContext, setCustomerWorkspaceContext] = useState<{ companyId: string; leadId?: string; dealId?: string; section?: 'forms' | 'diagnoses' | 'answers' | 'materials'; opsTab?: 'contracts' | 'invoices' | 'services'; supportSection?: 'overview' | 'meetings' | 'tasks' | 'delivery'; documentType?: 'invoice' | 'proposal' | 'estimate' | 'contract' | 'monthly_report'; documentId?: string; sendKind?: 'document'|'form'|'diagnosis'|'deal'|'customer_meeting'|'announcement'; formId?: string; contactId?: string } | undefined>(initialRoute.customerWorkspaceContext as any);
   const [lineInboxContact, setLineInboxContact] = useState<{ contactId: string; lineUserId: string } | undefined>();
-  const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(undefined);
-  const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(undefined);
+  const [inboxTargetChannel, setInboxTargetChannel] = useState<'line' | 'email' | 'forms' | undefined>(initialRoute.inboxTargetChannel);
+  const [acquisitionTargetTab, setAcquisitionTargetTab] = useState<string | undefined>(initialRoute.acquisitionTargetTab);
 
   const [inboxAlertSummary, setInboxAlertSummary] = useState<InboxAlertSummary>({
     lineUnread: 0,
@@ -305,9 +316,10 @@ function AppContent() {
       acquisitionTab?: string;
       studioMode?: 'broadcast' | 'dm_sales';
       context?: any;
+      clearContext?: boolean;
     }
   ) => {
-    const targetTab = tab as UnifiedNavTab;
+    const targetTab = normalizeWorkspaceTab(String(tab)) || (tab as UnifiedNavTab);
     if (targetTab === 'communication_send' && currentTab !== 'communication_send') {
       setSendOriginContext({
         tab: currentTab,
@@ -316,6 +328,7 @@ function AppContent() {
         customerWorkspaceContext,
       });
     }
+    const nextInboxChannel = options?.inboxChannel ?? inboxTargetChannel;
     if (options?.inboxChannel) {
       setInboxTargetChannel(options.inboxChannel);
       try {
@@ -325,6 +338,7 @@ function AppContent() {
     if (options?.lineUserId) {
       setLineInboxContact({ contactId: '', lineUserId: options.lineUserId });
     }
+    const nextAcquisitionTab = options?.acquisitionTab ?? acquisitionTargetTab;
     if (options?.acquisitionTab) {
       setAcquisitionTargetTab(options.acquisitionTab);
       try {
@@ -336,21 +350,36 @@ function AppContent() {
         localStorage.setItem('social_studio_mode', options.studioMode);
       } catch {}
     }
-    if (options?.context !== undefined) {
-      setCustomerWorkspaceContext(options.context);
+    const hasContextOverride = Boolean(options?.clearContext || (options && 'context' in options));
+    const nextContext = options?.clearContext
+      ? undefined
+      : options && 'context' in options
+        ? options.context
+        : customerWorkspaceContext;
+    if (hasContextOverride) {
+      setCustomerWorkspaceContext(nextContext);
     }
     if (targetTab === 'ai_tasks') setSelectedTaskWorkspaceSection('tasks');
     if (targetTab === 'marketing_automation') setLineInboxContact(undefined);
 
     setCurrentTab(targetTab);
+    persistWorkspaceRoute({
+      tab: targetTab,
+      acquisitionTargetTab: nextAcquisitionTab,
+      inboxTargetChannel: nextInboxChannel,
+      customerWorkspaceContext: nextContext,
+    });
 
     if (!isPopStateRef.current && typeof window !== 'undefined') {
       const cur = window.history.state as AppHistoryState | null;
+      const sameContext =
+        JSON.stringify(cur?.customerWorkspaceContext ?? null) === JSON.stringify(nextContext ?? null);
       if (
         cur?.mst &&
         cur.tab === targetTab &&
-        cur.acquisitionTargetTab === (options?.acquisitionTab ?? acquisitionTargetTab) &&
-        cur.inboxTargetChannel === (options?.inboxChannel ?? inboxTargetChannel) &&
+        cur.acquisitionTargetTab === nextAcquisitionTab &&
+        cur.inboxTargetChannel === nextInboxChannel &&
+        sameContext &&
         !cur.modal
       ) {
         return;
@@ -358,12 +387,12 @@ function AppContent() {
       const nextState: AppHistoryState = {
         mst: true,
         tab: targetTab,
-        acquisitionTargetTab: options?.acquisitionTab ?? acquisitionTargetTab,
-        inboxTargetChannel: options?.inboxChannel ?? inboxTargetChannel,
-        customerWorkspaceContext: options?.context ?? customerWorkspaceContext,
+        acquisitionTargetTab: nextAcquisitionTab,
+        inboxTargetChannel: nextInboxChannel,
+        customerWorkspaceContext: nextContext,
         modal: null,
       };
-      window.history.pushState(nextState, '', window.location.href);
+      window.history.pushState(nextState, '', buildWorkspaceUrlWithTab(window.location.href, targetTab));
     }
   };
 
@@ -578,25 +607,20 @@ function AppContent() {
 
     const initialState: AppHistoryState = {
       mst: true,
-      tab: currentTab,
-      acquisitionTargetTab,
-      inboxTargetChannel,
-      customerWorkspaceContext,
+      tab: initialRoute.tab,
+      acquisitionTargetTab: initialRoute.acquisitionTargetTab,
+      inboxTargetChannel: initialRoute.inboxTargetChannel,
+      customerWorkspaceContext: initialRoute.customerWorkspaceContext,
       modal: null,
     };
-    if (!window.history.state?.mst) {
-      window.history.replaceState(initialState, '', window.location.href);
-    } else {
-      const s = window.history.state as AppHistoryState;
-      if (s.tab && s.tab !== 'ai_dashboard') {
-        setCurrentTab(s.tab);
-      } else {
-        setCurrentTab('mst_dashboard');
-      }
-      if (s.acquisitionTargetTab) setAcquisitionTargetTab(s.acquisitionTargetTab);
-      if (s.inboxTargetChannel) setInboxTargetChannel(s.inboxTargetChannel);
-      if (s.customerWorkspaceContext) setCustomerWorkspaceContext(s.customerWorkspaceContext);
+    const existingState = window.history.state as AppHistoryState | null;
+    const syncedUrl = buildWorkspaceUrlWithTab(window.location.href, initialRoute.tab);
+    if (!existingState?.mst || normalizeWorkspaceTab(existingState.tab) !== initialRoute.tab) {
+      window.history.replaceState(initialState, '', syncedUrl);
+    } else if (syncedUrl !== window.location.href) {
+      window.history.replaceState({ ...existingState, tab: initialRoute.tab }, '', syncedUrl);
     }
+    persistWorkspaceRoute(initialRoute);
 
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state as AppHistoryState | undefined;
@@ -605,9 +629,8 @@ function AppContent() {
       }
       isPopStateRef.current = true;
 
-      if (state.tab) {
-        setCurrentTab(state.tab === 'ai_dashboard' ? 'mst_dashboard' : state.tab);
-      }
+      const resolvedTab = normalizeWorkspaceTab(state.tab) || 'mst_dashboard';
+      setCurrentTab(resolvedTab);
       if (state.acquisitionTargetTab !== undefined) {
         setAcquisitionTargetTab(state.acquisitionTargetTab);
         try {
@@ -625,6 +648,12 @@ function AppContent() {
         } catch {}
       }
       setCustomerWorkspaceContext(state.customerWorkspaceContext);
+      persistWorkspaceRoute({
+        tab: resolvedTab,
+        acquisitionTargetTab: state.acquisitionTargetTab,
+        inboxTargetChannel: state.inboxTargetChannel,
+        customerWorkspaceContext: state.customerWorkspaceContext,
+      });
 
       setIsConfigOpen(state.modal === 'config');
       setIsRlsOpen(state.modal === 'rls');
@@ -652,6 +681,34 @@ function AppContent() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // Keep persisted route & history.state synchronized with current tab/context at all times
+  useEffect(() => {
+    persistWorkspaceRoute({
+      tab: currentTab,
+      acquisitionTargetTab,
+      inboxTargetChannel,
+      customerWorkspaceContext,
+    });
+    if (typeof window === 'undefined' || isPopStateRef.current) return;
+    const cur = window.history.state as AppHistoryState | null;
+    if (cur?.mst && !cur.modal) {
+      const nextUrl = buildWorkspaceUrlWithTab(window.location.href, currentTab);
+      if (cur.tab !== currentTab || nextUrl !== window.location.href) {
+        window.history.replaceState(
+          {
+            ...cur,
+            tab: currentTab,
+            acquisitionTargetTab,
+            inboxTargetChannel,
+            customerWorkspaceContext,
+          },
+          '',
+          nextUrl
+        );
+      }
+    }
+  }, [currentTab, acquisitionTargetTab, inboxTargetChannel, customerWorkspaceContext]);
 
   // Matrix & Product States
   const [products, setProducts] = useState<ManagedProduct[]>(() => matrixService.loadProducts());
@@ -2167,7 +2224,7 @@ function AppContent() {
     );
     setActivityLogs(loadActivityLogs());
     setActivePlanForModal(null);
-    setCurrentTab('ai_tasks');
+    handleNavigateWorkspaceTab('ai_tasks');
   };
 
   // --- Chat Messaging & Streaming ---
@@ -2940,11 +2997,11 @@ function AppContent() {
         {(currentTab === 'mst_dashboard' || currentTab === 'inflow_dashboard') && (
           <Dashboard
             onNavigateTab={(tab, options) => {
-              if (tab === 'diagnoses') setCurrentTab('mst_diagnoses');
+              if (tab === 'diagnoses') handleNavigateWorkspaceTab('mst_diagnoses', options);
               else handleNavigateWorkspaceTab(tab, options);
             }}
             onOpenCreate={handleOpenCreate}
-            onOpenRls={() => setIsRlsOpen(true)}
+            onOpenRls={() => openModalWithHistory('rls')}
             onStageTransitionTask={handleCrmStageTransition}
           />
         )}
@@ -2970,17 +3027,18 @@ function AppContent() {
             }}
             onOpenCustomerWorkspace={(companyId, destination) => {
               if (destination === 'deals') {
-                setCustomerWorkspaceContext({ companyId });
-                setCurrentTab('deals');
+                handleNavigateWorkspaceTab('deals', { context: { companyId } });
                 return;
               }
               if (destination === 'support_meetings') {
-                setCustomerWorkspaceContext({ companyId, opsTab: 'services', supportSection: 'meetings' });
-                setCurrentTab('customer_operations');
+                handleNavigateWorkspaceTab('customer_operations', {
+                  context: { companyId, opsTab: 'services', supportSection: 'meetings' },
+                });
                 return;
               }
-              setCustomerWorkspaceContext({ companyId, opsTab: destination === 'services' ? 'services' : undefined });
-              setCurrentTab('customer_operations');
+              handleNavigateWorkspaceTab('customer_operations', {
+                context: { companyId, opsTab: destination === 'services' ? 'services' : undefined },
+              });
             }}
           />
         )}
@@ -2990,7 +3048,7 @@ function AppContent() {
             invoices={invoices}
             contracts={contracts}
             tasks={tasks}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
               if (destination === 'send') {
                 openSendDrawer({
@@ -3000,20 +3058,21 @@ function AppContent() {
                 });
                 return;
               }
-              setCustomerWorkspaceContext({
-                companyId,
-                leadId: recordContext?.leadId,
-                dealId: recordContext?.dealId,
-              });
-              setCurrentTab(
+              const nextTab =
                 destination === 'deals'
                   ? 'deals'
                   : destination === 'customer_operations'
                   ? 'customer_operations'
                   : destination === 'documents'
                   ? 'document_templates'
-                  : 'customer_operations'
-              );
+                  : 'customer_operations';
+              handleNavigateWorkspaceTab(nextTab, {
+                context: {
+                  companyId,
+                  leadId: recordContext?.leadId,
+                  dealId: recordContext?.dealId,
+                },
+              });
             }}
           />
         )}
@@ -3021,7 +3080,7 @@ function AppContent() {
         {currentTab === 'mst_diagnoses' && (
           <DiagnosisManager
             key={`${customerWorkspaceCompanyId || 'all'}:${customerWorkspaceContext?.leadId || ''}:${customerWorkspaceContext?.section || ''}`}
-            onOpenRls={() => setIsRlsOpen(true)}
+            onOpenRls={() => openModalWithHistory('rls')}
             initialLeadId={customerWorkspaceContext?.leadId}
             initialCompanyId={customerWorkspaceContext?.companyId}
             initialSection={customerWorkspaceContext?.section}
@@ -3032,12 +3091,12 @@ function AppContent() {
                 formId,
               });
             }}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
           />
         )}
 
-        {currentTab === 'deal_invitations' && <CommunicationSendCenter variant="page" initialKind="deal" initialMode="send" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
-        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter variant="page" initialKind="customer_meeting" initialMode="send" onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />}
+        {currentTab === 'deal_invitations' && <CommunicationSendCenter variant="page" initialKind="deal" initialMode="send" onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)} />}
+        {currentTab === 'customer_meeting_invitations' && <CommunicationSendCenter variant="page" initialKind="customer_meeting" initialMode="send" onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)} />}
         {currentTab === 'communication_send' && (
           <CommunicationSendCenter
             variant="page"
@@ -3052,25 +3111,25 @@ function AppContent() {
             originTabLabel={sendOriginContext?.tabLabel}
             onReturnToOrigin={() => {
               if (sendOriginContext) {
-                setCurrentTab(sendOriginContext.tab);
-                if (sendOriginContext.customerWorkspaceContext) {
-                  setCustomerWorkspaceContext(sendOriginContext.customerWorkspaceContext);
-                }
-                if (typeof window !== 'undefined') {
-                  window.scrollTo({ top: sendOriginContext.scrollY || 0, behavior: 'smooth' });
-                }
+                const origin = sendOriginContext;
                 setSendOriginContext(null);
+                handleNavigateWorkspaceTab(origin.tab, {
+                  context: origin.customerWorkspaceContext,
+                });
+                if (typeof window !== 'undefined') {
+                  window.scrollTo({ top: origin.scrollY || 0, behavior: 'smooth' });
+                }
               }
             }}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
           />
         )}
 
         {['companies', 'products'].includes(currentTab) && (
           <TableManager
             currentTable={currentTab as TableKey}
-            onTableChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
-            onOpenRls={() => setIsRlsOpen(true)}
+            onTableChange={(tab) => handleNavigateWorkspaceTab(tab)}
+            onOpenRls={() => openModalWithHistory('rls')}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
               if (destination === 'send') {
                 openSendDrawer({
@@ -3092,25 +3151,25 @@ function AppContent() {
                   ? 'invoice'
                   : undefined;
 
-              setCustomerWorkspaceContext({
+              const nextContext = {
                 companyId,
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
-                opsTab: destination === 'support_meetings' ? 'services' : undefined,
-                supportSection: destination === 'support_meetings' ? 'meetings' : undefined,
+                opsTab: destination === 'support_meetings' ? ('services' as const) : undefined,
+                supportSection: destination === 'support_meetings' ? ('meetings' as const) : undefined,
                 section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
-              });
+              };
               if (destination === 'forms') {
-                setInboxTargetChannel('forms');
-                setCurrentTab('inbox_hub');
+                handleNavigateWorkspaceTab('inbox_hub', { inboxChannel: 'forms', context: nextContext });
               } else {
-                setCurrentTab(
+                handleNavigateWorkspaceTab(
                   destination === 'documents' || destination === 'diagnoses'
                     ? 'document_templates'
-                    : 'customer_operations'
+                    : 'customer_operations',
+                  { context: nextContext }
                 );
               }
             }}
@@ -3120,8 +3179,8 @@ function AppContent() {
         {(currentTab === 'leads' || currentTab === 'deals' || currentTab === 'customers') && (
           <SalesPipelineHub
             activeTab={currentTab}
-            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
-            onOpenRls={() => setIsRlsOpen(true)}
+            onTabChange={(tab) => handleNavigateWorkspaceTab(tab)}
+            onOpenRls={() => openModalWithHistory('rls')}
             onOpenCustomerWorkspace={(companyId, destination, recordContext) => {
               if (destination === 'send') {
                 openSendDrawer({
@@ -3143,29 +3202,29 @@ function AppContent() {
                   ? 'invoice'
                   : undefined;
 
-              setCustomerWorkspaceContext({
+              const nextContext = {
                 companyId,
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
                 documentType: docType,
-                opsTab: destination === 'support_meetings' ? 'services' : undefined,
-                supportSection: destination === 'support_meetings' ? 'meetings' : undefined,
+                opsTab: destination === 'support_meetings' ? ('services' as const) : undefined,
+                supportSection: destination === 'support_meetings' ? ('meetings' as const) : undefined,
                 section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
-              });
+              };
               if (destination === 'forms') {
-                setInboxTargetChannel('forms');
-                setCurrentTab('inbox_hub');
+                handleNavigateWorkspaceTab('inbox_hub', { inboxChannel: 'forms', context: nextContext });
               } else {
-                setCurrentTab(
+                handleNavigateWorkspaceTab(
                   destination === 'documents' || destination === 'diagnoses'
                     ? 'document_templates'
-                    : 'customer_operations'
+                    : 'customer_operations',
+                  { context: nextContext }
                 );
               }
             }}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
           />
         )}
 
@@ -3173,7 +3232,7 @@ function AppContent() {
         {(currentTab === 'product_hub' || currentTab === 'ai_projects') && (
           <ProductProjectHub
             activeTab={currentTab === 'ai_projects' ? 'ai_projects' : 'product_hub'}
-            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onTabChange={(tab) => handleNavigateWorkspaceTab(tab)}
             products={products}
             contracts={contracts}
             invoices={invoices}
@@ -3203,9 +3262,9 @@ function AppContent() {
             onNavigateToTasksWithFilter={(projId) => {
               setSelectedProjectIdForTasks(projId);
               setSelectedTaskWorkspaceSection('tasks');
-              setCurrentTab('ai_tasks');
+              handleNavigateWorkspaceTab('ai_tasks');
             }}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
           />
         )}
 
@@ -3219,7 +3278,7 @@ function AppContent() {
             projects={projects}
             approvals={approvals}
             topGoal={topGoal}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
           />
         )}
 
@@ -3265,7 +3324,7 @@ function AppContent() {
               initialLeadId={customerWorkspaceContext?.leadId} 
               initialDealId={customerWorkspaceContext?.dealId} 
               initialDocumentType={customerWorkspaceContext?.documentType} 
-              onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+              onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
               onOpenSendCenter={(params) => {
                 openSendDrawer({
                   kind: 'document',
@@ -3276,17 +3335,17 @@ function AppContent() {
                 });
               }}
             />
-            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { openSendDrawer({ kind: 'document', companyId, documentId }); }} onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)} />
+            <SalesOperationsWorkspace tab="documents" companyId={customerWorkspaceCompanyId} leadId={customerWorkspaceContext?.leadId} dealId={customerWorkspaceContext?.dealId} onClearCompanyFilter={() => setCustomerWorkspaceContext(undefined)} onOpenInvoiceDocuments={(companyId, documentId) => { openSendDrawer({ kind: 'document', companyId, documentId }); }} onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)} />
           </>
         )}
 
         {(currentTab === 'contacts' || currentTab === 'prospects') && (
           <MarketingLeadListHub
             activeTab={currentTab === 'prospects' ? 'prospects' : 'contacts'}
-            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onTabChange={(tab) => handleNavigateWorkspaceTab(tab)}
             onOpenLineInbox={(contactId, lineUserId) => {
+              handleNavigateWorkspaceTab('inbox_hub', { inboxChannel: 'line', lineUserId });
               setLineInboxContact({ contactId, lineUserId });
-              setCurrentTab('inbox_hub');
             }}
             onOpenEmailSend={(contactId, companyId) => {
               openSendDrawer({
@@ -3317,7 +3376,7 @@ function AppContent() {
                   ? 'invoice'
                   : undefined;
 
-              setCustomerWorkspaceContext({
+              const nextContext = {
                 companyId,
                 leadId: resolvedLeadId,
                 dealId: resolvedDealId,
@@ -3325,20 +3384,20 @@ function AppContent() {
                 section: undefined,
                 formId: undefined,
                 contactId: recordContext?.contactId,
-              });
+              };
               if (destination === 'forms') {
-                setInboxTargetChannel('forms');
-                setCurrentTab('inbox_hub');
+                handleNavigateWorkspaceTab('inbox_hub', { inboxChannel: 'forms', context: nextContext });
               } else {
-                setCurrentTab(
+                handleNavigateWorkspaceTab(
                   destination === 'documents' || destination === 'diagnoses'
                     ? 'document_templates'
-                    : 'customer_operations'
+                    : 'customer_operations',
+                  { context: nextContext }
                 );
               }
             }}
-            onOpenRls={() => setIsRlsOpen(true)}
-            onNavigateTab={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onOpenRls={() => openModalWithHistory('rls')}
+            onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)}
           />
         )}
 
@@ -3351,7 +3410,7 @@ function AppContent() {
               'strategy'
             }
             onSendPresidentSummary={(summary) => {
-              setCurrentTab('ai_chat');
+              handleNavigateWorkspaceTab('ai_chat');
               void handleSendMessage(summary, 'president');
             }}
             onCreateTask={handleCreateTask}
@@ -3360,7 +3419,7 @@ function AppContent() {
         )}
 
         {currentTab === 'marketing_automation' && (
-          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={handleUpdateMarketingScenarios} onNavigateTab={(tab) => setCurrentTab(tab)} lineInboxContact={lineInboxContact} />
+          <MarketingAutomationPrototypeView scenarios={marketingScenarios} onScenariosChange={handleUpdateMarketingScenarios} onNavigateTab={(tab) => handleNavigateWorkspaceTab(tab)} lineInboxContact={lineInboxContact} />
         )}
 
         {/* ================= SECTION 3: AI PRESIDENT & STRATEGY ================= */}
@@ -3381,7 +3440,10 @@ function AppContent() {
             onUpdateUserProfile={handleUpdateUserProfile}
             isStreaming={isStreaming}
             onStopStreaming={handleStopStreaming}
-            onOpenPlanProposal={(plan) => setActivePlanForModal(plan)}
+            onOpenPlanProposal={(plan) => {
+              setActivePlanForModal(plan);
+              openModalWithHistory('plan');
+            }}
             onRecordUsage={handleRecordUsage}
           />
         )}
@@ -3418,7 +3480,7 @@ function AppContent() {
             onDeleteAttachment={handleRemoveTaskAttachment}
             onOpenKnowledgeItem={(id) => {
               setSelectedKnowledgeItemId(id);
-              setCurrentTab('ai_knowledge');
+              handleNavigateWorkspaceTab('ai_knowledge');
             }}
             onRequestApproval={handleRequestApproval}
             approvals={approvals}
@@ -3439,28 +3501,31 @@ function AppContent() {
         {(currentTab === 'ai_presets' || currentTab === 'automations') && (
           <AiPresetsAutomationsHub
             activeTab={currentTab === 'automations' ? 'automations' : 'ai_presets'}
-            onTabChange={(tab) => setCurrentTab(tab as UnifiedNavTab)}
+            onTabChange={(tab) => handleNavigateWorkspaceTab(tab)}
             characters={characters}
             activeCharacterId={activeCharacterId}
             activeWorkModeId={activeWorkModeId}
             onSelectCharacter={(id) => {
               handleSelectChatCharacter(id);
-              setCurrentTab('ai_chat');
+              handleNavigateWorkspaceTab('ai_chat');
             }}
             onSelectWorkMode={(id) => {
               if (id === 'president') handleSelectChatCharacter('preset-ceo');
               else handleSelectWorkMode(id);
-              setCurrentTab('ai_chat');
+              handleNavigateWorkspaceTab('ai_chat');
             }}
             onCreateCharacter={handleCreateNewCharacter}
             onEditCharacter={(id) => {
               setEditingCharacterId(id);
-              setIsCharacterEditorOpen(true);
+              openModalWithHistory('character_editor');
             }}
             roleOverrides={aiModelSettings.roleOverrides}
             defaultModelSetting={aiModelSettings.defaultSetting}
-            onEditRole={setEditingRoleId}
-            onOpenModelSettings={() => setIsModelSettingsOpen(true)}
+            onEditRole={(roleId) => {
+              setEditingRoleId(roleId);
+              if (roleId) openModalWithHistory('role_editor');
+            }}
+            onOpenModelSettings={() => openModalWithHistory('model_settings')}
             onDeleteCharacter={handleDeleteCharacter}
             automations={automations}
             activityLogs={activityLogs}

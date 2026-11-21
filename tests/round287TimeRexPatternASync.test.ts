@@ -8,6 +8,7 @@ import {
   diagnoseTimeRexParseFailure,
   parseTimeRexCalendarEvent,
   syncTimeRexBookingToCrm,
+  reconcileCompanyCrmDuplicates,
   isMeetingOverdueForCompletionCheck,
   checkOverdueMeetingCompletionReminders,
   type TimeRexBookingInfo,
@@ -147,15 +148,7 @@ console.log('  ✓ parseTimeRexCalendarEvent passed');
 // Test 4+: syncTimeRexBookingToCrm mock execution
 console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, reschedule, cancel, reminder)');
 (async () => {
-  const mockDbState: {
-    contacts: any[];
-    leads: any[];
-    deals: any[];
-    contact_tags: any[];
-    tasks: any[];
-    companies: any[];
-    marketing_automation_jobs: any[];
-  } = {
+  const mockDbState: Record<string, any[]> = {
     contacts: [
       { id: 'cnt-1', full_name: '既存リード客', email: 'lead.customer@example.com', company_id: 'comp-1' },
     ],
@@ -169,6 +162,13 @@ console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, r
       { id: 'comp-1', company_name: '既存株式会社' },
     ],
     marketing_automation_jobs: [],
+    customer_contracts: [],
+    customer_documents: [],
+    communication_outbox: [],
+    hearing_sheets: [],
+    proposal_drafts: [],
+    diagnoses: [],
+    diagnosis_submissions: [],
   };
 
   const createMockQuery = (table: string) => {
@@ -244,15 +244,16 @@ console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, r
           return { data: rows, error: null };
         },
       }),
-      then: (resolve: any) => {
+      then: async (resolve: any) => {
+        await Promise.resolve();
+        const arr = ((mockDbState as any)[table] ||= []) as any[];
         if (isDelete) {
-          const arr = (mockDbState as any)[table] as any[];
           const kept = arr.filter((r) => !filters.every((f) => f(r)));
           (mockDbState as any)[table] = kept;
           resolve({ data: null, error: null });
           return;
         }
-        let rows = (mockDbState as any)[table].filter((r: any) => filters.every((f) => f(r)));
+        let rows = arr.filter((r: any) => filters.every((f) => f(r)));
         if (limitCount) rows = rows.slice(0, limitCount);
         resolve({ data: rows, error: null });
       },
@@ -486,6 +487,123 @@ console.log('Test 4: syncTimeRexBookingToCrm (confirmed, dedup, non-downgrade, r
   assert.strictEqual(mockDbState.deals[0].proposal_plan_name, '【面談予約】大橋真人 様');
   assert.strictEqual(mockDbState.tasks.length, 1);
   console.log('  ✓ notifications@timerex.net HTML table & owner self-test passed');
+
+  // Test 8: Concurrent TimeRex sync calls (cron + calendar + webhook) must never create duplicate deals/leads
+  console.log('Test 8: Concurrent syncTimeRexBookingToCrm serialization & zero duplicates');
+  mockDbState.contacts = [];
+  mockDbState.companies = [];
+  mockDbState.leads = [];
+  mockDbState.deals = [];
+  mockDbState.tasks = [];
+  const concurrentBooking: TimeRexBookingInfo = {
+    guestName: '並行テスト太郎',
+    guestEmail: 'concurrent.test@example.co.jp',
+    companyName: '並行テスト株式会社',
+    meetingDate: '2026-12-01',
+    meetingStartTime: '13:00',
+    meetUrl: 'https://meet.google.com/aaa-bbbb-ccc',
+    sourceType: 'calendar',
+  };
+  const concurrentResults = await Promise.all([
+    syncTimeRexBookingToCrm({ ...concurrentBooking, sourceType: 'email' }, mockDb, 'owner-1'),
+    syncTimeRexBookingToCrm({ ...concurrentBooking, sourceType: 'calendar' }, mockDb, 'owner-1'),
+    syncTimeRexBookingToCrm({ ...concurrentBooking, sourceType: 'webhook' }, mockDb, 'owner-1'),
+    syncTimeRexBookingToCrm({ ...concurrentBooking, sourceType: 'calendar' }, mockDb, 'owner-1'),
+  ]);
+  assert(concurrentResults.every((r) => r.success), 'All concurrent syncs must succeed cleanly');
+  assert.strictEqual(mockDbState.companies.length, 1, 'Must create exactly 1 company');
+  assert.strictEqual(mockDbState.leads.length, 1, 'Must create exactly 1 lead');
+  assert.strictEqual(mockDbState.deals.length, 1, 'Must create exactly 1 deal');
+  assert.strictEqual(mockDbState.tasks.length, 1, 'Must create exactly 1 task');
+  console.log('  ✓ Concurrent TimeRex sync deduplication passed');
+
+  // Test 9: Multi-contact same-email lookup prefers contact with company_id, preventing duplicate deals
+  console.log('Test 9: Multiple contacts with same email prefer linked company_id');
+  mockDbState.contacts = [
+    { id: 'cnt-unlinked', full_name: '田中様', email: 'tanaka@corp-real.jp', company_id: null, created_at: '2026-11-01T00:00:00Z' },
+    { id: 'cnt-linked', full_name: '田中 一郎', email: 'tanaka@corp-real.jp', company_id: 'CID-REAL', created_at: '2026-11-02T00:00:00Z' },
+  ];
+  mockDbState.companies = [
+    { id: 'CID-REAL', company_name: '株式会社リアル企業' },
+  ];
+  mockDbState.leads = [
+    { id: 'lead-real', contact_id: 'cnt-linked', company_id: 'CID-REAL', status: '面談予約済', notes: '既存リード' },
+  ];
+  mockDbState.deals = [
+    { id: 'DEAL-REAL', lead_id: 'lead-real', company_id: 'CID-REAL', proposal_status: '見積提示', meeting_date: '2026-12-05', memo: '既存見積メモ' },
+  ];
+  mockDbState.tasks = [];
+
+  const multiContactSync = await syncTimeRexBookingToCrm(
+    {
+      guestName: 'カレンダー予約者',
+      guestEmail: 'tanaka@corp-real.jp',
+      meetingDate: '2026-12-05',
+      meetingStartTime: '14:00',
+      sourceType: 'calendar',
+    },
+    mockDb,
+    'owner-1'
+  );
+  assert.strictEqual(multiContactSync.success, true);
+  assert.strictEqual(multiContactSync.companyId, 'CID-REAL');
+  assert.strictEqual(multiContactSync.dealId, 'DEAL-REAL');
+  assert.strictEqual(mockDbState.companies.length, 1, 'Must NOT create placeholder personal company');
+  assert.strictEqual(mockDbState.deals.length, 1, 'Must NOT create duplicate deal');
+  assert.strictEqual(mockDbState.deals[0].proposal_status, '見積提示', 'Must preserve progressed status');
+  console.log('  ✓ Multi-contact company resolution passed');
+
+  // Test 10: Reconcile pre-existing duplicate deals, relink children, and stay deduplicated after repeat sync
+  console.log('Test 10: reconcileCompanyCrmDuplicates + repeat sync keeps 1 canonical deal');
+  mockDbState.deals = [
+    {
+      id: 'DEAL-DUP-OLD',
+      company_id: 'CID-REAL',
+      lead_id: 'lead-real',
+      proposal_status: '日程確定',
+      meeting_date: '2026-12-05',
+      memo: '旧メモ',
+      updated_at: '2026-11-10T00:00:00Z',
+    },
+    {
+      id: 'DEAL-CANON',
+      company_id: 'CID-REAL',
+      lead_id: null,
+      proposal_status: '見積提示',
+      meeting_date: null,
+      memo: '見積メモ',
+      updated_at: '2026-11-11T00:00:00Z',
+    },
+  ];
+  mockDbState.customer_contracts = [{ id: 'ctr-1', deal_id: 'DEAL-DUP-OLD' }];
+  mockDbState.customer_documents = [{ id: 'doc-1', deal_id: 'DEAL-DUP-OLD' }];
+  mockDbState.communication_outbox = [{ id: 'out-1', deal_id: 'DEAL-DUP-OLD' }];
+
+  const canonical = await reconcileCompanyCrmDuplicates(mockDb, 'deals', 'CID-REAL');
+  assert(canonical && canonical.id === 'DEAL-CANON', 'Canonical higher-stage deal must survive');
+  assert.strictEqual(mockDbState.deals.length, 1, 'Duplicate deal row must be removed');
+  assert.strictEqual(mockDbState.deals[0].lead_id, 'lead-real', 'lead_id must be merged from duplicate');
+  assert.strictEqual(mockDbState.deals[0].meeting_date, '2026-12-05', 'meeting_date must be merged from duplicate');
+  assert.ok(String(mockDbState.deals[0].memo).includes('旧メモ'));
+  assert.strictEqual(mockDbState.customer_contracts[0].deal_id, 'DEAL-CANON');
+  assert.strictEqual(mockDbState.customer_documents[0].deal_id, 'DEAL-CANON');
+  assert.strictEqual(mockDbState.communication_outbox[0].deal_id, 'DEAL-CANON');
+
+  // Now simulate scheduled calendar sync running again later!
+  await syncTimeRexBookingToCrm(
+    {
+      guestName: '田中 一郎',
+      guestEmail: 'tanaka@corp-real.jp',
+      meetingDate: '2026-12-05',
+      meetingStartTime: '14:00',
+      sourceType: 'calendar',
+    },
+    mockDb,
+    'owner-1'
+  );
+  assert.strictEqual(mockDbState.deals.length, 1, 'Subsequent calendar sync must NOT bring back duplicate deal');
+  assert.strictEqual(mockDbState.deals[0].id, 'DEAL-CANON');
+  console.log('  ✓ Post-consolidation repeat sync stability passed');
 
   console.log('\n=== All Round 2-8-7 TimeRex Pattern A Sync Tests Passed! ===\n');
 })();

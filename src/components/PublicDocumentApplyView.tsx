@@ -341,7 +341,58 @@ export const PublicDocumentApplyView: React.FC<PublicDocumentApplyViewProps> = (
             created_at: nowIso,
             updated_at: nowIso,
           });
-          if (insDealErr) throw insDealErr;
+          if (insDealErr) {
+            const isUnique =
+              String(insDealErr.code || '') === '23505' ||
+              String(insDealErr.message || '').toLowerCase().includes('unique');
+            if (isUnique && targetCompanyId) {
+              const { data: compDeal } = await supabase
+                .from('deals')
+                .select('id, memo')
+                .eq('company_id', targetCompanyId)
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (compDeal?.id) {
+                appliedDealId = String(compDeal.id);
+                await supabase.from('deals').update({
+                  proposal_status: '成約',
+                  memo: appendUniqueNote(
+                    compDeal.memo,
+                    `【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ${nowIso} / 書類: ${doc?.title || documentId}）`
+                  ),
+                  updated_at: nowIso,
+                }).eq('id', appliedDealId);
+              } else {
+                throw insDealErr;
+              }
+            } else {
+              throw insDealErr;
+            }
+          } else if (targetCompanyId) {
+            const { data: sameCompanyDeals } = await supabase
+              .from('deals')
+              .select('id, proposal_status, memo, created_at')
+              .eq('company_id', targetCompanyId)
+              .order('created_at', { ascending: true })
+              .limit(10);
+            if (sameCompanyDeals && sameCompanyDeals.length > 1) {
+              const keeper = sameCompanyDeals.find((d: any) => String(d.id) !== appliedDealId) || sameCompanyDeals[0];
+              if (keeper?.id && String(keeper.id) !== appliedDealId) {
+                const extraIds = sameCompanyDeals.filter((d: any) => String(d.id) !== String(keeper.id)).map((d: any) => String(d.id));
+                await supabase.from('deals').update({
+                  proposal_status: '成約',
+                  memo: appendUniqueNote(
+                    keeper.memo,
+                    `【Web申込】顧客がWeb上で「この内容で申し込む」をタップして即時成約（日時: ${nowIso} / 書類: ${doc?.title || documentId}）`
+                  ),
+                  updated_at: nowIso,
+                }).eq('id', keeper.id);
+                await supabase.from('deals').delete().in('id', extraIds);
+                appliedDealId = String(keeper.id);
+              }
+            }
+          }
         }
 
         const consentEvidenceText = '上記の内容（金額、委託範囲、支払条件等）を確認し、本内容での発注および申し込みに同意します。';
