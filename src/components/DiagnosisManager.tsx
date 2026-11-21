@@ -877,7 +877,7 @@ const DiagnosisDetailModal: React.FC<DiagnosisDetailModalProps> = ({
           categoryScores: diagnosis.questionnaire_version.startsWith('form-') ? null : diagnosis.category_scores ?? currentScores.categoryScores,
         },
       };
-      const prompt = `あなたは有限会社MSTの「経営の仕組み化 × 利益改善」専門の経営診断レポート作成パートナーです。
+      const prompt = `あなたは有限会社MSTの「経営の仕組み化 × 利益改善」専門の経営診断レポート作成パートナーです。MSTは、自社で自分のために実践・検証してきた仕組みをもとに、経営者と一緒に会社を成長させていく伴走パートナーです。
 以下の社内CRM情報と診断回答をもとに、結論から簡潔に要点を整理した経営診断レポート草案を作成してください。
 
 【記述ルール（必須）】

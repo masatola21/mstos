@@ -1,12 +1,16 @@
 import type { KnowledgeItem } from '../types/ai-president';
 
-export const DEFAULT_KNOWLEDGE_SEED_VERSION = '2026-11-20-mst-v1';
+export const DEFAULT_KNOWLEDGE_SEED_VERSION = '2026-11-21-mst-v2';
 
 /**
- * 全AIに共通前提として常時共有する「有限会社MST ＆ 経営OS」の軽量コアプロフィール（約650字）
+ * 全AIに共通前提として常時共有する「有限会社MST ＆ 経営OS」の軽量コアプロフィール
  */
 export const MST_CORE_BUSINESS_PROFILE = `・会社名: 有限会社MST（代表取締役: 大橋真人 / 設立: 2005年 / 所在地: 岐阜県大垣市）
 ・事業の軸: 「経営の仕組み化 × 利益改善」。代表自身も実店舗サロン経営や介護保険外生活支援サービス「アシスタ大垣」等を直営し、戦略設計から現場で機能する仕組み構築・定着まで伴走する。
+・MSTの最大の強み・原点:
+  1) これまで自社で「自分のため」に本気で試行錯誤し、実際に機能させてきた仕組みと実業ノウハウそのものを提供できること。
+  2) お客様と「一緒に会社を成長させていく」対等な伴走姿勢。
+  3) 「この領域（経営の仕組み化・利益改善・現場実装）では必ず役に立てる」という強い確信と熱い想い。
 ・主力4サービス:
   1) 経営戦略・利益改善顧問（案件別粗利・採算可視化、利益構造改善、経営と現場の一体支援）
   2) 業務改善・IT・DX・AI顧問（業務棚卸し・標準化・属人化解消、身の丈DX・生成AI定着）
@@ -18,16 +22,7 @@ export const MST_CORE_BUSINESS_PROFILE = `・会社名: 有限会社MST（代表
 
 const BASE_TIMESTAMP = 1760000000000;
 
-export const DEFAULT_KNOWLEDGE_ITEMS: KnowledgeItem[] = [
-  {
-    id: 'mst-default-company-profile',
-    title: '有限会社MST 会社概要・代表方針（公式HPベース）',
-    category: 'business',
-    tags: ['MST', '会社概要', '代表方針', '公式HP'],
-    knowledgeAccess: { scope: 'all', roleIds: [] },
-    createdAt: BASE_TIMESTAMP,
-    updatedAt: BASE_TIMESTAMP,
-    content: `■ 会社基本情報
+const COMPANY_PROFILE_CONTENT_V1 = `■ 会社基本情報
 ・会社名: 有限会社MST（MST Co., Ltd.）
 ・代表者: 代表取締役 大橋 真人
 ・設立: 平成17年（2005年）6月16日 / 資本金: 3,000,000円
@@ -37,7 +32,26 @@ export const DEFAULT_KNOWLEDGE_ITEMS: KnowledgeItem[] = [
 ■ 代表の実務背景と支援スタンス
 代表自身がWeb事業起業、スクール運営、自動車流通、M&Aによる事業承継、実店舗サロン経営、介護保険外生活支援サービス「アシスタ大垣」の直営など、多様な現場で事業立ち上げと経営改善を実践。
 ・コア方針: 「経営の仕組み化 × 利益改善」
-・基本スタンス: すべてをシステム化するのではなく、人が担うべきことと仕組みで効率化すべきことを見極め、中小企業が無理なく運用・自走できる形に落とし込む。`,
+・基本スタンス: すべてをシステム化するのではなく、人が担うべきことと仕組みで効率化すべきことを見極め、中小企業が無理なく運用・自走できる形に落とし込む。`;
+
+export const DEFAULT_KNOWLEDGE_ITEMS: KnowledgeItem[] = [
+  {
+    id: 'mst-default-company-profile',
+    title: '有限会社MST 会社概要・代表方針・強み（公式HPベース）',
+    category: 'business',
+    tags: ['MST', '会社概要', '代表方針', '強み', '公式HP'],
+    knowledgeAccess: { scope: 'all', roleIds: [] },
+    createdAt: BASE_TIMESTAMP,
+    updatedAt: BASE_TIMESTAMP,
+    content: `${COMPANY_PROFILE_CONTENT_V1}
+
+■ 有限会社MSTの最大の強み・原点
+1. これまで自社で「自分のため」に実践・検証してきた仕組みそのもの
+・外部の理論や評論ではなく、自社グループ・直営現場（Web、店舗サロン、介護保険外サービス等）を実際に成長させるために「自分のため」に作り込み、使い倒してきた営業・業務・数値・AI活用の仕組みをそのまま提供できること。
+2. お客様と「一緒に会社を成長させていく」伴走姿勢
+・一方的にやり方を押し付けるのではなく、経営者と同じ目線に立ち、試行錯誤しながら一緒に会社を成長させていくパートナーであること。
+3. 「この領域では必ず役に立てる」という熱い想いと確信
+・経営の仕組み化・利益改善・現場のDX/AI定着という領域において、実体験に裏打ちされた「必ずお役に立てる」という強い情熱と責任感を持って向き合うこと。`,
   },
   {
     id: 'mst-default-services-overview',
@@ -132,13 +146,30 @@ export const DEFAULT_KNOWLEDGE_ITEMS: KnowledgeItem[] = [
 export const DEFAULT_KNOWLEDGE_ID_PREFIX = 'mst-default-';
 
 /**
- * 既存一覧にまだ公式デフォルトナレッジが1件も入っていない場合のみ補完する。
- * ユーザーが意図的に一部削除したあとの再復活を防ぐため、既に mst-default-* が1件でもあれば補完しない。
+ * 既存一覧にまだ公式デフォルトナレッジが1件も入っていない場合は不足分を補完する。
+ * また、既存の「会社概要(v1)」が未編集のまま残っている場合のみ強み追記版(v2)へ安全に更新する。
+ * ユーザーが意図的に削除・編集した項目はそのまま尊重する。
  */
 export function seedMissingDefaultKnowledge(existingItems: KnowledgeItem[]): KnowledgeItem[] {
+  const latestProfile = DEFAULT_KNOWLEDGE_ITEMS[0];
   const hasAnyOfficialDefault = existingItems.some((item) => item.id.startsWith(DEFAULT_KNOWLEDGE_ID_PREFIX));
   if (hasAnyOfficialDefault) {
-    return existingItems;
+    let changed = false;
+    const upgraded = existingItems.map((item) => {
+      if (item.id === latestProfile.id && item.content === COMPANY_PROFILE_CONTENT_V1) {
+        changed = true;
+        return {
+          ...item,
+          title: latestProfile.title,
+          tags: [...latestProfile.tags],
+          content: latestProfile.content,
+          embedding: undefined,
+          updatedAt: Date.now(),
+        };
+      }
+      return item;
+    });
+    return changed ? upgraded : existingItems;
   }
   const existingIds = new Set(existingItems.map((item) => item.id));
   const missing = DEFAULT_KNOWLEDGE_ITEMS

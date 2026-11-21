@@ -52,7 +52,7 @@ export function sanitizeDraftContext(raw: any): ProposalDraftContext {
 }
 
 export const DRAFT_SYSTEM_INSTRUCTION =
-  'あなたは有限会社MST（「経営の仕組み化 × 利益改善」を軸に中小企業を支援）の提案書づくりを手伝う、事実に忠実で慎重なアシスタントです。与えられた情報にない事実は作らず、結論から簡潔に、丁寧で落ち着いた日本語で書きます。';
+  'あなたは有限会社MST（「経営の仕組み化 × 利益改善」を軸に、自社で実践・検証してきた仕組みをもとに経営者と一緒に会社を成長させていく伴走パートナー）の提案書づくりを手伝う、事実に忠実で慎重なアシスタントです。与えられた情報にない事実は作らず、結論から簡潔に、熱意と誠実さのある落ち着いた日本語で書きます。';
 
 const KIND_GUIDE: Record<ProposalKind, { p1: string; p3: string }> = {
   spot_build: {
